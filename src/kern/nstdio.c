@@ -101,7 +101,7 @@ int fgetc(FILE *f){
 
     if( !f || !f->fs )
         PANIC(bad_f);
-    if(  !f->fs->getc ) return -1
+    if( !f->fs->getc ) return -1;
     if( f->flags & F_UNGOT ){
         f->flags &= ~F_UNGOT;
         return f->ungotc;
@@ -128,7 +128,7 @@ int fputc(char c, FILE *f){
 
     if( !f || !f->fs )
         PANIC(bad_f);
-    if(  !f->fs->putc ) return -1
+    if(  !f->fs->putc ) return -1;
     if( f->flags & F_OSTRIP )
         c &= 0x7F;
     if( c=='\n' ){
@@ -156,8 +156,9 @@ int fputc(char c, FILE *f){
 
 int fflush(FILE *f){
 
-    if( !f || !f->fs || !f->fs->flush )
+    if( !f || !f->fs )
         PANIC(bad_f);
+    if( !f->fs->flush ) return -1;
     return (f->fs->flush)(f);
 }
 
