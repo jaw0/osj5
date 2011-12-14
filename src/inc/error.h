@@ -7,6 +7,18 @@
 
 #define PANIC(m)            panic(m, __LINE__, __FILE__)
 
+extern void diag(const char *file, const char *func, int line, const char *fmt, ...);
+
+
+#define _DIAG_ARGS		__FILE__, __FUNCTION__, __LINE__
+
+#ifdef KDEBUG
+#  define DEBUG(args...)	diag(_DIAG_ARGS, args)
+#else
+#  define DEBUG(args...)
+#endif
+
+#  define DIAG(args...)	diag(_DIAG_ARGS, args)
 
 
 #endif /* __error_h__ */

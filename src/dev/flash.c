@@ -33,7 +33,6 @@ struct Flash_Disk {
     lock_t 	lock;
     int 	manuf;
     int 	devid;
-    u_long 	offset;
 
     u_char 	*addr;
     int 	size;
@@ -43,14 +42,9 @@ struct Flash_Disk {
 } fldsk[ N_FLASHDEV ];
 
 
-int flash_noop(FILE*);
-int flash_read(FILE*,char*,int);
-int flash_write(FILE*,const char*,int);
-int flash_bread(FILE*,char*,int,int);
-int flash_bwrite(FILE*,const char*,int,int);
+int flash_bread(FILE*,char*,int,offset_t);
+int flash_bwrite(FILE*,const char*,int,offset_t);
 int flash_stat(FILE*, struct stat*);
-int flash_seek(FILE*, long, int);
-long flash_tell(FILE*);
 int flash_ioctl(FILE*, int, void*);
 static int flash_learn(int);
 static int erase(struct Flash_Disk *, int);
@@ -81,13 +75,11 @@ flash_init(struct Device_Conf *dev){
         fldsk[i].blksz  = flash_device[i].blksz;
         fldsk[i].addr   = flash_device[i].addr;
         fldsk[i].flags  = flash_device[i].flags;
-        fldsk[i].offset = 0;
 
         if( ! flash_learn( i ) ){
             finit( & fldsk[i].file );
             fldsk[i].file.d = (void*)& fldsk[i];
             fldsk[i].file.fs = & flash_port_fs;
-            fldsk[i].offset = 0;
 
             if( fldsk[i].flags & SSF_NOERASE ){
                 /* RAM - alloc and format it */
@@ -103,16 +95,16 @@ flash_init(struct Device_Conf *dev){
 
             /* mount filesystem */
             if( flash_device[i].mntpt ){
-                mount( & fldsk[i].file, nm=flash_device[i].mntpt, 0, type );
+                fmount( & fldsk[i].file, nm=flash_device[i].mntpt, type );
             }else{
                 /* mount point not specified, use mem# */
                 snprintf(mntpt, 16, "mem%d:", i);
-                mount( & fldsk[i].file, nm=mntpt, 0, type );
+                fmount( & fldsk[i].file, nm=mntpt, type );
             }
 
             /* also create special device file */
             snprintf(mntpt, 16, "mem%d", i);
-            mount( & fldsk[i].file, mntpt, 1, 0 );
+            fmount( & fldsk[i].file, mntpt, 0 );
 
             if( fldsk[i].addr ){
                 bootmsg("mem%d %d bytes @ 0x%X mounted on %s type %s\n",
@@ -143,28 +135,8 @@ int flash_stat(FILE *f, struct stat *s){
     return 0;
 }
 
-#ifdef PLATFORM_EMUL
-//extern int lseek(int, off_t, int);
-#endif
-
 int
-flash_read(FILE *f, char *buf, int len){
-    struct Flash_Disk *d = f->d;
-    int i = flash_bread(f, buf, len, d->offset);
-    if(i>0) d->offset += i;
-    return i;
-}
-
-int
-flash_write(FILE *f, const char *buf, int len){
-    struct Flash_Disk *d = f->d;
-    int i = flash_bwrite(f, buf, len, d->offset);
-    if(i>0) d->offset += i;
-    return i;
-}
-
-int
-flash_bread(FILE *f, char *buf, int len, int offset){
+flash_bread(FILE *f, char *buf, int len, offset_t offset){
     struct Flash_Disk *d;
     int fd, i;
 
@@ -187,7 +159,7 @@ flash_bread(FILE *f, char *buf, int len, int offset){
 }
 
 int
-flash_bwrite(FILE *f, const char *b, int len, int offset){
+flash_bwrite(FILE *f, const char *b, int len, offset_t offset){
     struct Flash_Disk *d;
     const u_char *buf = b;
     int fd, i;

@@ -551,7 +551,7 @@ DEFALIAS(copy, cp)
     fstat(fr, &st);
     attr = st.mode;
 
-    dev = deviceofname(argv[2]);
+    dev = find_mount(argv[2]);
     if( dev && !(dev->flags & SSF_SPECIAL) && !strcmp(argv[2], dev->name)){
         /* cp file dev */
         snprintf(buf, sizeof(buf), "%s%s", argv[2], basenameoffile(argv[1]));

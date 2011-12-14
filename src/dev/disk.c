@@ -2,7 +2,7 @@
   Copyright (c) 1998
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 1998
-  Function: 
+  Function: disk partitions
  
   $Id$
 
@@ -24,28 +24,22 @@
 
 extern struct Disk_Conf disk_device[];
 
-struct Disk {
-    struct Disk_Conf *conf;
+struct DiskPart {
+    struct DiskPart_Conf *conf;
     int 	unit;			/* unit number on controller */
     int 	part;			/* partition number */
     u_long 	flags;
 
-    u_long 	part_offset;		/* offset of partition */
-    u_long 	part_len;		/* length of partition */
-
-    u_long 	filepos;
+    offset_t 	part_offset;		/* offset of partition */
+    offset_t 	part_len;		/* length of partition */
 
     FILE 	file;			/* this device */
-    FILE 	*fcont;			/* underlying device */
-} disk [ N_DISK ];
+    FILE 	*fdev;			/* underlying device */
+};
 
-int disk_read(FILE*,char*,int);
-int disk_write(FILE*,const char*,int);
-int disk_bread(FILE*,char*,int,int);
-int disk_bwrite(FILE*,const char*,int,int);
+int disk_bread(FILE*,char*,int,offset_t);
+int disk_bwrite(FILE*,const char*,int,offset_t);
 int disk_stat(FILE*, struct stat*);
-int disk_seek(FILE*, long, int);
-long disk_tell(FILE*);
 int disk_ioctl(FILE*, int, void*);
 int disk_flush(FILE*);
 
@@ -55,29 +49,33 @@ static const struct io_fs disk_fs = {
     0, /* close */
     0, /* flush */
     0, /* status */
-    disk_read,
-    disk_write,
+    0, 0, /* read, write */
     disk_bread,
     disk_bwrite,
-    disk_seek,
-    disk_tell,
+    0, 0, /* seek, tell */
     disk_stat,
     disk_ioctl,
 };
 
 
+int
+disk_learn(struct Device_Conf *cf, FILE *dev){
 
+    // read part table
+
+    // disk_init()
+}
 
 int
 disk_init(int unit, int start, int len, FILE *cont){
-    struct Disk_Conf *cf = disk_device + unit;
-    struct Disk      *dk = disk + unit;
+    struct DiskPart_Conf *cf = disk_device + unit;
+    struct DiskPart      *dk = disk + unit;
 
-    dk->unit  = unit;
-    dk->part  = cf->part;
-    dk->flags = cf->flags;
+    dk->unit    = unit;
+    dk->part    = cf->part;
+    dk->flags   = cf->flags;
     dk->filepos = 0;
-    dk->fcont   = cont;
+    dk->fdev    = cont;
     dk->conf    = cf;
 
     dk->part_offset = start;
@@ -87,6 +85,7 @@ disk_init(int unit, int start, int len, FILE *cont){
     dk->file.d = (void*)dk;
     dk->file.fs = &disk_fs;
 
+    // change this table
     mount( & dk->file, cf->mntpt, 0, cf->fstype );
 
     bootmsg( "%s unit %d mounted on %s type %s\n",
@@ -104,89 +103,42 @@ disk_init(int unit, int start, int len, FILE *cont){
 
 }
 
-int
-disk_read(FILE *f, char *buf, int len){
-    struct Disk *dev;
-    int r;
-
-    if(!f) return;
-    dev = (struct Disk *)f->d;
-    r = disk_bread(f, buf, len, dev->filepos);
-    dev->filepos += len;
-    return r;
-}
 
 int
-disk_write(FILE *f, const char *buf, int len){
-    struct Disk *dev;
-    int r;
+disk_bread(FILE *f, char *buf, int len, offset_t pos){
+    struct DiskPart *dev;
 
     if(!f) return;
-    dev = (struct Disk *)f->d;
-    r = disk_bwrite(f, buf, len, dev->filepos);
-    dev->filepos += len;
-    return r;
-}
-
-int
-disk_bread(FILE *f, char *buf, int len, int pos){
-    struct Disk *dev;
-
-    if(!f) return;
-    dev = (struct Disk *)f->d;
+    dev = (struct DiskPart *)f->d;
 
     if( pos + len > dev->part_len ){
 	kprintf("%s unit %d: attempt to read past end of device\n", dev->conf->cntrlnm, dev->unit);
 	return -1;
     }
 
-    return fbread(dev->fcont, buf, len, pos + dev->part_offset);
+    return fbread(dev->fdev, buf, len, pos + dev->part_offset);
 }
 
 int
-disk_bwrite(FILE *f, const char *buf, int len, int pos){
-    struct Disk *dev;
+disk_bwrite(FILE *f, const char *buf, int len, offset_t pos){
+    struct DiskPart *dev;
 
     if(!f) return;
-    dev = (struct Disk *)f->d;
+    dev = (struct DiskPart *)f->d;
 
     if( pos + len > dev->part_len ){
 	kprintf("%s unit %d: attempt to write past end of device\n", dev->conf->cntrlnm, dev->unit);
 	return -1;
     }
 
-    return fbwrite(dev->fcont, buf, len, pos + dev->part_offset);
-
+    return fbwrite(dev->fdev, buf, len, pos + dev->part_offset);
 }
 
 
-int
-disk_seek(FILE *f, long off, int how){
-    struct Disk *d;
-
-    d = f->d;
-
-    if( how == 0 ){
-        d->filepos = off;
-    }else if( how == 1 ){
-        d->filepos += off;
-    }else{
-        d->filepos = d->part_len - off;
-    }
-    return 0;
-}
-
-long
-disk_tell(FILE *f){
-    struct Disk *d;
-
-    d = f->d;
-    return d->filepos;
-}
 
 int
 disk_stat(FILE *f, struct stat *s){
-    struct Disk *d;
+    struct DiskPart *d;
 
     d = f->d;
 

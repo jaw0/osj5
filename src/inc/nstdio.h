@@ -14,6 +14,8 @@
 struct FILE;
 struct stat;
 
+typedef long long offset_t;
+
 struct io_fs {
 	int  (*putc)(struct FILE*, char);
 	int  (*getc)(struct FILE*);
@@ -22,8 +24,8 @@ struct io_fs {
 	int  (*status)(struct FILE*);
 	int  (*read)(struct FILE*, char*, int);
 	int  (*write)(struct FILE*, const char*, int);
-        int  (*bread)(struct FILE*, char*, int, int);
-        int  (*bwrite)(struct FILE*, const char*, int, int);
+        int  (*bread)(struct FILE*, char*, int, offset_t);
+        int  (*bwrite)(struct FILE*, const char*, int, offset_t);
 	int  (*seek)(struct FILE*, long, int);
 	long (*tell)(struct FILE*);
 	int  (*stat)(struct FILE*, struct stat*);
@@ -62,7 +64,7 @@ struct stat {
 	struct MountEntry *dev;
 	u_long mode;
 
-	u_long size;
+	offset_t size;
 	time_t ctime;
 	int blksize;
 	u_long flags;
@@ -95,8 +97,8 @@ extern u_short getWord(void);
 extern int fclose(FILE *);
 extern int fread(FILE*, char*, int);
 extern int fwrite(FILE*, const char*, int);
-extern int fbread(FILE*, char*, int, int);
-extern int fbwrite(FILE*, const char*, int, int);
+extern int fbread(FILE*, char*, int, offset_t);
+extern int fbwrite(FILE*, const char*, int, offset_t);
 extern int fseek(FILE*, long, int);	/* 0=from begining; 1=from current; 2=from end */
 extern long ftell(FILE*);
 extern int fstat(FILE*, struct stat *);

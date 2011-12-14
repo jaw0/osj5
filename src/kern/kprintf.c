@@ -38,8 +38,8 @@ static kbuflen = 0;
 static kflushp = 0;
 static redp = 0;
 
-static int kprintffnc_con(void *, char);
-static int kprintffnc_buf(void *, char);
+static int kprintffnc_con(char);
+static int kprintffnc_buf(char);
 void kflush(int);
 
 /* xterm: 7 = inverse, 1 = bold, 4 = underline, 0 = normal */
@@ -53,6 +53,17 @@ void kflush(int);
 
 #define KBUF_MAX	2048	/* no more than this much if the console is up */
 
+static void
+red_on(){
+    if( redp ) return;
+    if(kconsole_port){ fputs(RED, kconsole_port); redp = 1; }
+}
+static void
+red_off(){
+    if( !redp ) return;
+    if(kconsole_port){ fputs(WHT, kconsole_port); redp = 0; }
+}
+
 void
 kflush(int colorp){
     int len = kbuflen;
@@ -64,30 +75,20 @@ kflush(int colorp){
     if( kflushp )
         return;
 
-    if( !redp ){
-        fputs(RED, kconsole_port);
-        redp = 1;
-    }
+    red_on();
 
     kflushp = 1;
     for(i=0; i<len; i++){
-        kprintffnc_con(0, kbuf[i]);
+        kprintffnc_con(kbuf[i]);
     }
 
-    if( !colorp ){
-        fputs(WHT, kconsole_port);
-        redp = 0;
-    }
+    if( !colorp ) red_off();
 }
 
+
 static int
-kprintffnc_con(void *a, char c){
+kprintffnc_con(char c){
 
-
-    if( !redp ){
-        fputs(RED, kconsole_port);
-        redp = 1;
-    }
     fputc(c, kconsole_port);
 #ifdef N_LCD
     fputc(c, klcd_port);
@@ -96,12 +97,12 @@ kprintffnc_con(void *a, char c){
 }
 
 static int
-kprintffnc_e9(void *a, char c){
+kprintffnc_e9(char c){
     /* outb(0xE9, c); */
 }
 
 static int
-kprintffnc_buf(void *a, char c){
+kprintffnc_buf(char c){
 
     if( kbufsz < kbuflen + 2 ){
         char *buf;
@@ -119,31 +120,48 @@ kprintffnc_buf(void *a, char c){
     kbuf[ kbuflen ] = 0;
 }
 
-void
-kprintf(const char *fmt, ...){
-    va_list ap;
+static int
+kprintffnc(void *a, char c){
 
-    va_start(ap,fmt);
-
-    if( kconsole_port
+    if(kconsole_port
 #ifdef N_LCD
         && klcd_port
 #endif
         ){
         if( kbuflen && !kflushp )
             kflush(1);
-        vprintf(kprintffnc_con, 0, fmt, ap);
+        kprintffnc_con(c);
         if( kbufsz < KBUF_MAX )
             /* also to buffer if room */
-            vprintf(kprintffnc_buf, 0, fmt, ap);
+            kprintffnc_buf(c);
     }else{
-        vprintf(kprintffnc_buf, 0, fmt, ap);
+        kprintffnc_buf(c);
     }
+}
 
-    if( redp ){
-        fputs(WHT, kconsole_port);
-        redp = 0;
-    }
+
+void
+kprintf(const char *fmt, ...){
+    va_list ap;
+
+    red_on();
+    va_start(ap,fmt);
+    vprintf(kprintffnc, 0, fmt, ap);
+
+    red_off();
+}
+
+void
+diag(const char *file, const char *func, int line, const char *fmt, ...){
+    va_list ap;
+
+    red_on();
+    va_start(ap,fmt);
+
+    kprintf("%s:%d in %s(): ", file, line, func);
+    vprintf(kprintffnc, 0, fmt, ap);
+
+    red_off();
 }
 
 #ifdef USE_CLI

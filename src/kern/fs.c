@@ -37,80 +37,109 @@ MountEntry *mountlist = 0;		/* the mount table */
 extern int n_fsys;
 extern struct FSType_Conf filesystems[];
 
-int
-mount(FILE *f, const char *n, int flag, const char *type){
-    MountEntry *m;
-    struct stat s;
-    struct FSType_Conf *fst = 0;
+
+static struct FSType_Conf *
+find_fstype(const char *type){
     int i;
 
-    if( !type )
-        flag = 1;
-    else{
-        /* find fs type in table */
-        for(i=0; i<n_fsys; i++){
-            if( !strcmp(type, filesystems[i].name) ){
-                fst = filesystems + i;
-                break;
-            }
+    /* find fs type in table */
+    for(i=0; i<n_fsys; i++){
+        if( !strcmp(type, filesystems[i].name) ){
+            return filesystems + i;
         }
+    }
+    return 0;
+}
+
+static int
+_mount(FILE *fdev, const char *name, const char *type){
+    MountEntry *me;
+    struct FSType_Conf *fst = 0;
+
+    if( type ){
+        fst = find_fstype(type);
         if( !fst ){
-            fsmsg("unknown fstype '%s' mounting %s\n", type, n);
+            kprintf("unknown fstype '%s' mounting %s\n", type, name);
             return -1;
         }
     }
 
-    for(m=mountlist; m; m=m->next){
-        if( m->f == f && !flag ){
-            fsmsg("attempt to remount %s on %s\n", m->name, n);
+    for(me=mountlist; me; me=me->next){
+        if( me->fdev == fdev && me->fscf == fst ){
+            kprintf("attempt to remount %s on %s\n", me->name, name);
             return -1;
         }
     }
 
-    m = alloc(sizeof(MountEntry));
+    me = alloc(sizeof(MountEntry));
 
-    m->f     = f;
-    m->lock  = 0;
-    m->lastfreeoffset = 0;
-    m->fs    = fst;
-    m->pmdata = 0;
+    me->fdev   = fdev;
+    me->fscf   = fst;
+    me->fsdat  = 0;
 
-    if( flag ){
-        /* mount special device in dev: */
-        m->name = alloc( strlen(n) + sizeof(DEVPREFIX) );
-        strcpy(m->name, DEVPREFIX);
-        strcat(m->name, n);
-
-        m->flags    = SSF_SPECIAL;
-        m->pblksize = 1;
-        m->fblksize = 1;
-        m->totaldiskspace = 0;
+    if( type ){
+        strncpy(me->name, name, sizeof(me->name));
+        me->flags   = MNTE_F_FS;
+        (me->fscf->init)(me);
     }else{
-        m->name = alloc( strlen(n) + 1 );
-        strcpy(m->name, n);
-
-        fstat(f, &s);
-        m->pblksize = s.blksize;
-        m->fblksize = FBLOCKSIZE;
-        m->flags    = s.flags;
-        m->totaldiskspace = s.size;
-
-        m->flags    = s.flags;
-
-        (m->fs->init)(m);
+        /* mount special device in dev: */
+        strncpy(me->name, DEVPREFIX, sizeof(me->name));
+        strncat(me->name, name, sizeof(me->name) - sizeof(DEVPREFIX) );
+        me->flags   = MNTE_F_DEV;
     }
 
-    m->next = mountlist;
-    mountlist = m;
-
-    // kprintf("mount &ml %X, m %X\n", &mountlist, m);
+    int plx = splhigh();
+    me->prev = 0;
+    if(mountlist) mountlist->prev = me;
+    me->next  = mountlist;
+    mountlist = me;
+    splx(plx);
 
     return 0;
 }
 
+int
+unmount(MountEntry *me){
+
+    if(!me) return -1;
+    // RSN - open files?
+    if( me->fscf && me->fscf->unmount ) me->fscf->unmount(me);
+
+    int plx = splhigh();
+    if( me->next ) me->next->prev = me->prev;
+    if( me->prev ) me->prev->next = me->next;
+    me->prev = me->next = 0;
+    splx(plx);
+
+    free(me, sizeof(MountEntry));
+    return 0;
+}
+
+
+int
+fmount(FILE *fdev, const char *name, const char *type){
+    return _mount(fdev, name, type);
+}
+
+int
+devmount(FILE *fdev, const char *name){
+    return _mount(fdev, name, 0);
+}
+
+int
+mount(const char *dev, const char *name, const char *type){
+    MountEntry *me = find_mount(dev);
+
+    if( ! me ) return -1;			// not found
+    if( me->flags & MNTE_F_FS ) return -1;	// not a device
+    if( ! me->fdev->fs->bread ) return -1;	// not a block device
+
+    return _mount(me->fdev, name, type );
+}
+
 
 MountEntry *
-deviceofname(const char *name){
+find_mount(const char *name){
     char *p;
     MountEntry *m = mountlist;
 
@@ -128,7 +157,7 @@ basenameoffile(const char *name){
     MountEntry *dev;
     int n;
 
-    dev = deviceofname(name);
+    dev = find_mount(name);
     if( dev && !strncmp(name, dev->name, n=strlen(dev->name)) ){
         name += n;
     }
@@ -137,35 +166,35 @@ basenameoffile(const char *name){
 
 FILE *
 fopen(const char *name, const char *how){
-    MountEntry *dev;
+    MountEntry *me;
 
-    dev = deviceofname(name);
+    me = find_mount(name);
 #ifdef USE_PROC
-    if( !dev )
-        dev = currproc->cwd;
+    if( !me )
+        me = currproc->cwd;
 #endif
-    if( !dev )
+    if( !me )
         return 0;
 
-    if( dev->flags & SSF_SPECIAL )
-        return dev->f;
+    if( me->flags & MNTE_F_DEV )
+        return me->fdev;
 
-    if( dev->fs && dev->fs->open )
-        return (dev->fs->open)(dev, name, how);
+    if( me->fscf && me->fscf->open )
+        return (me->fscf->open)(me, name, how);
     else
-        return dev->f;
+        return me->fdev;
 }
 
 int
 chdir(const char *devname){
-    MountEntry *dev;
+    MountEntry *me;
 #ifdef USE_PROC
-    dev = deviceofname(devname);
-    if( dev && (dev->flags & SSF_SPECIAL) )
-        dev = 0;
-    if( dev ) currproc->cwd = dev;
+    me = find_mount(devname);
+    if( me && (me->flags & MNTE_F_DEV) )
+        me = 0;
+    if( me ) currproc->cwd = me;
 
-    return dev ? 0 : -1;
+    return me ? 0 : -1;
 #else
     return -1;
 #endif
@@ -176,21 +205,21 @@ chdir(const char *devname){
  *****************************************************************/
 
 #ifdef USE_PROC
-#  define DEV(dev, name)                        \
-    dev = deviceofname(name);                   \
-    if( !dev )                                  \
-        dev = currproc->cwd;                    \
-    if( !dev )                                  \
+#  define ME(me, name)                         \
+    me = find_mount(name);                     \
+    if( !me )                                  \
+        me = currproc->cwd;                    \
+    if( !me )                                  \
         return -1;
 #else
-#  define DEV(dev, name)                        \
-    dev = deviceofname(name);                   \
-    if( !dev )                                  \
+#  define ME(me, name)                         \
+    me = find_mount(name);                     \
+    if( !me )                                  \
         return -1;
 
 #endif
 
-#define CHK(dev)	( dev->fs && dev->fs->ops )
+#define CHK(me)	( me->fscf && me->fscf->ops )
 
 
 int
@@ -200,49 +229,49 @@ fchmod(FILE * f, int attr){
     fstat(f, &st);
 
     if( st.dev && CHK(st.dev) )
-        return (st.dev->fs->ops)(FSOP_FCHMOD, st.dev, f, attr);
+        return (st.dev->fscf->ops)(FSOP_FCHMOD, st.dev, f, attr);
     return -1;
 }
 
 int
 chmod(const char *name, int attr){
-    MountEntry *dev;
+    MountEntry *me;
 
-    DEV(dev, name);
-    if( CHK(dev) )
-        return (dev->fs->ops)(FSOP_CHMOD, dev, basenameoffile(name), attr);
+    ME(me, name);
+    if( CHK(me) )
+        return (me->fscf->ops)(FSOP_CHMOD, me, basenameoffile(name), attr);
 
     return -1;
 }
 
 int
 fs_format(const char *name){
-    MountEntry *dev;
+    MountEntry *me;
 
     fsmsg( "fs_format: %s\n", name);
-    DEV(dev, name);
-    if( CHK(dev) )
-        return (dev->fs->ops)(FSOP_FORMAT, dev, name);
+    ME(me, name);
+    if( CHK(me) )
+        return (me->fscf->ops)(FSOP_FORMAT, me, name);
     return -1;
 }
 
 int
 deletefile(const char *name){
-    MountEntry *dev;
+    MountEntry *me;
 
-    DEV(dev, name);
-    if( CHK(dev) )
-        return (dev->fs->ops)(FSOP_DELETE, dev, basenameoffile(name) );
+    ME(me, name);
+    if( CHK(me) )
+        return (me->fscf->ops)(FSOP_DELETE, me, basenameoffile(name) );
     return -1;
 }
 
 int
 renamefile(const char *oname, const char *nname){
-    MountEntry *dev;
+    MountEntry *me;
 
-    DEV(dev, oname);
-    if( CHK(dev) )
-        return (dev->fs->ops)(FSOP_RENAME, dev, basenameoffile(oname), nname);
+    ME(me, oname);
+    if( CHK(me) )
+        return (me->fscf->ops)(FSOP_RENAME, me, basenameoffile(oname), nname);
     return -1;
 }
 
@@ -306,7 +335,7 @@ DEFALIAS(cd, chdir)
     }
     i = chdir(argv[1]);
     if( i )
-        f_error("no such device");
+        f_error("no such meice");
     return i;
 }
 
@@ -336,7 +365,7 @@ DEFALIAS(dir, ll)
 {
     int how=0, i;
     char *what;
-    MountEntry *dev;
+    MountEntry *me;
 
     if( !strcmp(argv[0], "ll") )
         how = LSHOW_ALL | LSHOW_LONG ;
@@ -361,47 +390,46 @@ DEFALIAS(dir, ll)
 
     if( how & LSHOW_FSYS || how & LSHOW_DEVS ){
         /* list all devs */
-        dev = mountlist;
-        while( dev ){
-            if( dev->flags & SSF_SPECIAL && how & LSHOW_DEVS
-                || !(dev->flags & SSF_SPECIAL) && how & LSHOW_FSYS )
-                printf("\t%s\n", dev->name);
-            dev = dev->next;
+        me = mountlist;
+        while( me ){
+            if( (me->flags & MNTE_F_DEV) && (how & LSHOW_DEVS)
+                || (me->flags & MNTE_F_FS) && (how & LSHOW_FSYS) )
+                printf("\t%s\n", me->name);
+            me = me->next;
         }
         return 0;
     }
 
-    dev = deviceofname(what);
+    me = find_mount(what);
 
-    if( *what && !dev || !*what
+    if( *what && !me || !*what
 #ifdef USE_PROC
 	&& !currproc->cwd
 #endif
         ){
-        fsmsg("no such file or device\n");
+        fsmsg("no such file or meice\n");
         return -1;
     }
 #ifdef USE_PROC
-    if( !dev )
-        dev = currproc->cwd;
+    if( !me )
+        me = currproc->cwd;
 #endif
 
-    if( dev->fs && dev->fs->ops )
-        i = (dev->fs->ops)(FSOP_DIR, dev, how);
+    if( me->fscf && me->fscf->ops )
+        i = (me->fscf->ops)(FSOP_DIR, me, how);
     else
         i = -1;
 
     if( i )
-        f_error("ls [-adfxl] [dev]");
+        f_error("ls [-adfxl] [me]");
     return i;
 }
 
 struct GlobArgs {
-    struct MountEntry *dev;
+    struct MountEntry *me;
     int replc;
     char **argv;
     int argc;
-
 };
 
 int
@@ -410,9 +438,9 @@ globfnc(const char *name, struct GlobArgs *ga){
 
     snprintf(buf, sizeof(buf), "%s%s",
 #ifdef USE_PROC
-             (ga->dev == currproc->cwd) ? "" : ga->dev->name,
+             (ga->me == currproc->cwd) ? "" : ga->me->name,
 #else
-             ga->dev->name,
+             ga->me->name,
 #endif
              name);
 
@@ -451,22 +479,22 @@ DEFUN(glob, "expand wildcards in filenames")
 
     pattern = argv[argc-1];
 
-    ga.dev = deviceofname(pattern);
+    ga.me = find_mount(pattern);
 #ifdef USE_PROC
-    if( !ga.dev )
-        ga.dev = currproc->cwd;
+    if( !ga.me )
+        ga.me = currproc->cwd;
 #endif
-    if( !ga.dev ){
+    if( !ga.me ){
         return -1;
     }
 
-    /* strip off devicename */
+    /* strip off meicename */
     pattern = (char*)basenameoffile(pattern);
 
     ga.argv = argv;
     ga.argc = argc;
-    if( CHK(ga.dev) )
-        return (ga.dev->fs->ops)(FSOP_GLOB, ga.dev, pattern, globfnc, &ga);
+    if( CHK(ga.me) )
+        return (ga.me->fscf->ops)(FSOP_GLOB, ga.me, pattern, globfnc, &ga);
     return -1;
 }
 

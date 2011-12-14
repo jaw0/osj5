@@ -26,8 +26,8 @@
 
 
 int hdc_ioctl(FILE*, int, void*);
-int hdc_bread(FILE*, char*, int, int);
-int hdc_bwrite(FILE*, const char*, int, int);
+int hdc_bread(FILE*, char*, int, offset_t);
+int hdc_bwrite(FILE*, const char*, int, offset_t);
 
 const struct io_fs hdc_fs = {
     0, /* putc */
@@ -51,6 +51,7 @@ struct HDC_Device;
 struct HD_Device {
     FILE file;
     int disk, ncyl, nsect, nhead;
+    int blks;
     struct HDC_Device *hdc;
 };
 
@@ -76,12 +77,12 @@ int
 hdc_init(struct Device_Conf *dev){
     int port = dev->port;
 
-    int i = dev->unit;
-    hdc[i].lock = 0;
-    hdc[i].no   = i;
-    hdc[i].port = dev->port;
-    hdc[i].name = dev->name;
-    hdc[i].irq  = dev->irq;
+    int c = dev->unit;
+    hdc[c].lock = 0;
+    hdc[c].no   = c;
+    hdc[c].port = dev->port;
+    hdc[c].name = dev->name;
+    hdc[c].irq  = dev->irq;
 
     bootmsg( "%s at io 0x%x irq %d\n",
 	     dev->name, dev->port, dev->irq );
@@ -89,41 +90,25 @@ hdc_init(struct Device_Conf *dev){
     int dk;
     for(dk=0; dk<2; dk++){
 
-        finit( & hdc[i].hd[dk].file );
-        hdc[i].hd[dk].file.d  = (void*)& hdc[i].hd[dk];
-        hdc[i].hd[dk].file.fs = & hdc_fs;
-        hdc[i].hd[dk].hdc   = hdc + i;
-	hdc[i].hd[dk].ncyl  = 0;
-	hdc[i].hd[dk].nsect = 0;
-	hdc[i].hd[dk].nhead = 0;
-	hdc[i].hd[dk].disk  = 0;
+        finit( & hdc[c].hd[dk].file );
+        hdc[c].hd[dk].file.d  = (void*)& hdc[c].hd[dk];
+        hdc[c].hd[dk].file.fs = & hdc_fs;
+        hdc[c].hd[dk].hdc     = hdc + c;
+	hdc[c].hd[dk].ncyl    = 0;
+	hdc[c].hd[dk].nsect   = 0;
+	hdc[c].hd[dk].nhead   = 0;
+	hdc[c].hd[dk].disk    = 0;
 
 	if( hdc_probe( &hdc[i], dk ) ){
 
 	    bootmsg("%s unit %d %d cyl, %d sect, %d hd, %dkB\n",
 		    dev->name, dk,
-		    hdc[i].hd[dk].ncyl, hdc[i].hd[dk].nsect, hdc[i].hd[dk].nhead,
-		    hdc[i].hd[dk].ncyl * hdc[i].hd[dk].nsect * hdc[i].hd[dk].nhead / 2
+		    hdc[c].hd[dk].ncyl, hdc[c].hd[dk].nsect, hdc[c].hd[dk].nhead,
+		    hdc[c].hd[dk].ncyl * hdc[c].hd[dk].nsect * hdc[c].hd[dk].nhead / 2
 		);
 
-            /* RSN - read partition table */
+            disk_learn( dev, &hdc[c].hd[dk].file, hdc[c].hd[dk].blks );
 
-
-            /* search for matching entry in disk table */
-            int j;
-	    for(j=0; j<n_disk; j++){
-		if( dk == disk_device[j].unit && !strcmp(dev->name, disk_device[j].cntrlnm) ){
-
-		    if( disk_device[j].part == -1 ){
-                        int start = 0;
-                        int len   = hdc[i].hd[dk].ncyl * hdc[i].hd[dk].nsect * hdc[i].hd[dk].nhead * DISK_BLOCK_SIZE;
-
-                        disk_init( j, start, len, &hdc[i].hd[dk].file );
-		    }else{
-			/* RSN - find partition info */
-		    }
-		}
-	    }
 	}else{
 	    /* no disk present */
 	}
@@ -169,19 +154,21 @@ hdc_probe(struct HDC_Device *dev, int unit){
     dev->hd[unit].ncyl  = ((u_short*)buf)[1];
     dev->hd[unit].nsect = ((u_short*)buf)[6];
 
+    dev->hd[unit].blk = dev->hd[unit].nhead * dev->hd[unit].ncyl * dev->hd[unit].nsect;
+
     free(buf);
     return 1;
 }
 
 int
-hdc_bread(FILE* f, char *buf, int len, int pos){
+hdc_bread(FILE* f, char *buf, int len, offset_t pos){
     struct HD_Device *hd = (struct HD_Device *)(f->d);
 
     return hdc_xfer(hd->hdc, 0, hd->disk, len, pos/DISK_BLOCK_SIZE, buf);
 }
 
 int
-hdc_bwrite(FILE* f, const char *buf, int len, int pos){
+hdc_bwrite(FILE* f, const char *buf, int len, offset_t pos){
     struct HD_Device *hd = (struct HD_Device *)(f->d);
 
     return hdc_xfer(hd->hdc, 1, hd->disk, len, pos/DISK_BLOCK_SIZE, (char*)buf);
@@ -189,7 +176,7 @@ hdc_bwrite(FILE* f, const char *buf, int len, int pos){
 
 
 
-int hdc_xfer(struct HDC_Device *dev, int writep, int unit, int blk, int len, u_char *buf){
+int hdc_xfer(struct HDC_Device *dev, int writep, int unit, offset_t blk, int len, u_char *buf){
     int port, n, st, plx, w;
     int hd, sec, cyl, cnt;
 

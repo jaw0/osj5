@@ -13,10 +13,11 @@
 #include <locks.h>
 
 struct FSType_Conf {
-	const char *name;
-        int (*init)(struct MountEntry *);
-	FILE *(*open)(struct MountEntry *, const char*, const char*);
-	int (*ops)(int, struct MountEntry*, ...);
+    const char *name;
+    int (*init)(struct MountEntry *);
+    FILE *(*open)(struct MountEntry *, const char*, const char*);
+    int (*ops)(int, struct MountEntry*, ...);
+    int (*unmount)(struct MountEntry*);
 };
 /* #define FSOP_INIT	0 */
 #define FSOP_RENAME	1
@@ -35,19 +36,27 @@ struct FSType_Conf {
 #define LSHOW_DEVS	16
 
 typedef struct MountEntry {
-	FILE *f;			/* underlying device */
-	char *name;
-	struct FSType_Conf *fs;
+    char name[16];
+    FILE *fdev;			/* underlying device */
+    void *fsdat;
 
-    	void  *pmdata;			/* private data */
-	u_long totaldiskspace;		/* total space */
-	u_long lastfreeoffset;		/* cache location of last available space found */
-	u_long pblksize;
-	u_long fblksize;
-	u_long flags;
+    struct FSType_Conf *fscf;
 
-	lock_t lock;
-	struct MountEntry *next;
+    u_long flags;
+#define MNTE_F_DEV	1
+#define MNTE_F_FS	2
+
+#if 0
+    void  *pmdata;			/* private data */
+    u_long totaldiskspace;		/* total space */
+    u_long lastfreeoffset;		/* cache location of last available space found */
+    u_long pblksize;
+    u_long fblksize;
+    u_long flags;
+
+    lock_t lock;
+#endif
+    struct MountEntry *next, *prev;
 
 } MountEntry;
 
@@ -62,9 +71,11 @@ extern int chdir(const char *);
 extern int chmod(const char*, int);
 extern int fchmod(FILE*, int);
 
-extern int mount(FILE*, const char*, int, const char *);
+extern int fmount(FILE*, const char *name, const char *type);
+extern int devmount(FILE*, const char *name);
+extern int mount(const char * dev, const char *name, const char *type);
 
-extern MountEntry *deviceofname(const char *);
+extern MountEntry *find_mount(const char *);
 extern const char *basenameoffile(const char *);
 
 #endif /* __fs_h__ */

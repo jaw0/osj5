@@ -33,15 +33,16 @@ filesys flfs
 ################################################################
 
 device emulcon0                                         # emulation under UNIX
-#device pcterm0  port 0x60 addr 0xB8000 irq 1 flags 7    # flags are screen attr
+#device pcterm0  port 0x60 addr 0xB8000 irq 1 flags 7   # flags are screen attr
 #device serial0  port 0x3F8 irq 4 baud 9600
 #device serial1  port 0x2F8 irq 3 baud 9600
 device console
 device flash
 device rtc0     port 0x70
-# device hdc0     port 0x1F0 irq 14
 
 ################################################################
+
+# device hdc0     port 0x1F0 irq 14
 
 #disk hd0:       type flfs  on hdc0 unit 0 partition -1
 #disk hd1:       type flfs  on hdc0 unit 1 partition -1

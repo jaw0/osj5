@@ -208,7 +208,7 @@ int fread(FILE *f, char *b, int n){
 }
 
 int
-fbread(FILE *f, char *b, int len, int pos){
+fbread(FILE *f, char *b, int len, offset_t pos){
 
     if(!f || !f->fs || !f->fs->bread)
         PANIC(bad_f);
@@ -216,7 +216,7 @@ fbread(FILE *f, char *b, int len, int pos){
     return f->fs->bread(f,b,len,pos);
 }
 
-int fbwrite(FILE *f, const char *b, int len, int pos){
+int fbwrite(FILE *f, const char *b, int len, offset_t pos){
 
     if(!f || !f->fs || !f->fs->bwrite)
         PANIC(bad_f);

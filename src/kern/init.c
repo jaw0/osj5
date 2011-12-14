@@ -37,7 +37,7 @@ autoconfig(void){
 #ifdef USE_FILESYS
         if( all_devices[i].name && f > 0 )
             /* mount device in dev: */
-            mount( f, all_devices[i].name, 1, 0);
+            mount( f, all_devices[i].name, 0);
 #endif
 
     }
