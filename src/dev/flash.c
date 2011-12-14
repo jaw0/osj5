@@ -58,15 +58,12 @@ static void send_cmd(struct Flash_Disk *, struct Flash_Command);
 
 static const struct io_fs flash_port_fs = {
     0, 0,	/* putchar, getchar */
-    flash_noop, /* close */
-    flash_noop, /* flush */
-    0, /* status */
-    flash_read,
-    flash_write,
+    0, 0, 	/* close, flush */
+    0, 		/* status */
+    0, 0,	/* read, write */
     flash_bread,
     flash_bwrite,
-    flash_seek,
-    flash_tell,
+    0, 0, 	/* seek, tell */
     flash_stat,
     flash_ioctl
 };
