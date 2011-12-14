@@ -99,8 +99,9 @@ int ungetc(char c, FILE *f){
 int fgetc(FILE *f){
     int c;
 
-    if( !f || !f->fs || !f->fs->getc )
+    if( !f || !f->fs )
         PANIC(bad_f);
+    if(  !f->fs->getc ) return -1
     if( f->flags & F_UNGOT ){
         f->flags &= ~F_UNGOT;
         return f->ungotc;
@@ -125,8 +126,9 @@ int fgetc(FILE *f){
 
 int fputc(char c, FILE *f){
 
-    if( !f || !f->fs || !f->fs->putc )
+    if( !f || !f->fs )
         PANIC(bad_f);
+    if(  !f->fs->putc ) return -1
     if( f->flags & F_OSTRIP )
         c &= 0x7F;
     if( c=='\n' ){
