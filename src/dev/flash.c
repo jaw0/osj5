@@ -43,8 +43,6 @@ struct Flash_Disk {
 } fldsk[ N_FLASHDEV ];
 
 
-int flash_putchar(FILE *, char);
-int flash_getchar(FILE*);
 int flash_noop(FILE*);
 int flash_read(FILE*,char*,int);
 int flash_write(FILE*,const char*,int);
@@ -59,8 +57,7 @@ static int erase(struct Flash_Disk *, int);
 static void send_cmd(struct Flash_Disk *, struct Flash_Command);
 
 static const struct io_fs flash_port_fs = {
-    flash_putchar,
-    flash_getchar,
+    0, 0,	/* putchar, getchar */
     flash_noop, /* close */
     flash_noop, /* flush */
     0, /* status */
@@ -147,29 +144,6 @@ int flash_stat(FILE *f, struct stat *s){
     s->flags   = d->flags;
     s->mode    = 0;
     return 0;
-}
-
-int flash_seek(FILE *f, long off, int how){
-    struct Flash_Disk *d;
-
-    d = f->d;
-
-    if( how == 0 ){
-        d->offset = off;
-    }else if( how == 1 ){
-        d->offset += off;
-    }else{
-        d->offset = d->size - off;
-    }
-    return 0;
-}
-
-long flash_tell(FILE *f){
-    struct Flash_Disk *d;
-
-    d = f->d;
-
-    return d->offset;
 }
 
 #ifdef PLATFORM_EMUL
@@ -450,25 +424,10 @@ erase(struct Flash_Disk *fdk, int a){
 }
 
 int
-flash_getchar(FILE *f){
-    char c;
-
-    if( f->flags & F_EOF )
-        return -1;
-
-    flash_read(f, &c, 1);
-    return c;
-}
-
-int
 flash_noop(FILE *f){
     return 1;
 }
 
-int
-flash_putchar(FILE *f, char c){
-    return flash_write(f, &c, 1);
-}
 
 /******************************************************************/
 
