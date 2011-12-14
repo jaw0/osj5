@@ -181,15 +181,12 @@ int hdc_xfer(struct HDC_Device *dev, int writep, int unit, offset_t blk, int len
     int hd, sec, cyl, cnt;
 
     port = dev->port;
-    sec = blk % dev->hd[unit].nsect;
-    cyl = (blk / dev->hd[unit].nsect) % dev->hd[unit].ncyl;
-    hd  = blk / (dev->hd[unit].ncyl * dev->hd[unit].nsect);
-    cnt = (len + DISK_BLOCK_SIZE - 1) / DISK_BLOCK_SIZE;
+    cnt  = (len + DISK_BLOCK_SIZE - 1) / DISK_BLOCK_SIZE;
 
     spin_lock( &dev->lock );
     plx = spldisk();
 
-    hdc_command( dev, unit, hd, cyl, sec, cnt,
+    hdc_command( dev, unit, blk, cnt,
 		 writep ? IDE_CMD_WRITE_RETRY : IDE_CMD_READ_RETRY );
 
     /* wait for DRQ */
@@ -223,8 +220,10 @@ int hdc_xfer(struct HDC_Device *dev, int writep, int unit, offset_t blk, int len
 }
 
 
+#define BYTE(b, s)	(((b)>>(s))&0xFF)
+
 int
-hdc_command(struct HDC_Device *dev, int unit, int hd, int cyl, int sec, int cnt, int cmd){
+hdc_command(struct HDC_Device *dev, int unit, offset_t blk, int cnt, int cmd){
     int port = dev->port;
     int st, plx;
 
@@ -244,10 +243,10 @@ hdc_command(struct HDC_Device *dev, int unit, int hd, int cyl, int sec, int cnt,
 
     /* 2. Load required parameters in the Command Block Registers. */
     outb( port + IDE_R_WCOMP, 0 );
-    outb( port + IDE_R_DRHD,  (unit<<4 | hd | 0xA0) );
-    outb( port + IDE_R_HCYL,  cyl>>8 );
-    outb( port + IDE_R_LCYL,  cyl & 0xFF );
-    outb( port + IDE_R_SECT,  sec + 1 );
+    outb( port + IDE_R_DRHD,  (unit<<4 | (BYTE(blk,24)&0xF) | 0xE0) );
+    outb( port + IDE_R_HCYL,  BYTE(blk, 16));
+    outb( port + IDE_R_LCYL,  BYTE(blk, 8));
+    outb( port + IDE_R_SECT,  BYTE(blk, 0));
     outb( port + IDE_R_NSECT, cnt);
 
     /* 3. Activate the Interrupt Enable (nIEN) bit. */
