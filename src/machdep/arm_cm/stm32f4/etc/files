@@ -1,0 +1,4 @@
+
+kern:   machdep/arm_cm/stm32f4/src/startup.S
+kern:   machdep/arm_cm/stm32f4/src/stm32_init.c
+

@@ -1,0 +1,11 @@
+#!/usr/local/bin/perl
+# -*- perl -*-
+
+$file = $ARGV[0];
+
+$number = `cat $file`;
+$number ++;
+`echo $number > $file`;
+
+printf "%d\n", $number;
+

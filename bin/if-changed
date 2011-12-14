@@ -1,0 +1,12 @@
+#! /bin/sh
+
+exec 2> /dev/null
+
+if cmp $2 $3; then
+	echo $2 unchanged
+else
+	$1 $2 $3
+	shift 3
+	eval $*
+fi
+

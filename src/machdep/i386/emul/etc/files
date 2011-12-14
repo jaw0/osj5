@@ -1,0 +1,5 @@
+
+emulcon:        machdep/i386/emul/src/emulcon.c
+kern:           machdep/i386/emul/src/md_init.c
+kern:           machdep/i386/emul/src/md_idle.c
+

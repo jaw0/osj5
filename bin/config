@@ -1,0 +1,337 @@
+#!/usr/local/bin/perl
+# -*- perl -*-
+
+# Copyright (c) 2011
+# Author: Jeff Weisberg <jaw @ tcp4me.com>
+# Created: 2011-Dec-04 13:48 (EST)
+# Function: build files from config
+#
+# $Id$
+
+use POSIX;
+use File::Copy;
+
+my %fileconf;
+my %usefiles;
+my($arch, $variant, $ident);
+
+my $version = from_file('../src/etc/version');
+my $number  = from_file('../build/number') || 0;
+$number ++;
+to_file('../build/number', $number);
+conf_files( '../src/etc/files', 0 );
+
+open( CONFH, "> ../build/conf.h" )        || die "cannot open conf.h: $!\n";
+open( CONFC, "> ../build/conf.c" )        || die "cannot open conf.c: $!\n";
+open( CONFM, "> ../build/makefile.conf" ) || die "cannot open Makefile.conf: $!\n";
+open( CONFD, "> ../build/makefile.deps" ) || die "cannot open Makefile.deps: $!\n";
+
+copy( '../src/etc/Makefile', '../build/Makefile' );
+
+
+print CONFM "\n# this file is generated automatically - do not edit\n\n";
+print CONFD "\n# this file is generated automatically - do not edit\n\n";
+print CONFH "\n/* this file is generated automatically - do not edit */\n\n";
+
+print CONFC <<EOM;
+
+/* this file is generated automatically - do not edit */
+
+#include <sys/types.h>
+#include <sys/param.h>
+#include <conf.h>
+#include <nstdio.h>
+#include <flash.h>
+#include <disk.h>
+#include <dev.h>
+#include <fs.h>
+
+EOM
+    ;
+
+$nflashdev = 0;
+$flashdev = "const struct Flash_Conf flash_device[] = {\n";
+$ndevs = 0;
+$devs = "const struct Device_Conf all_devices[] = {\n";
+$nfsys = 0;
+$fsys = "const struct FSType_Conf filesystems[] = {\n";
+$ndisk = 0;
+$diskdev = "const struct Disk_Conf disk_device[] = {\n";
+
+
+while( <> ){
+    chop;
+    s/#.*//;
+    next if /^\s*$/;
+
+    split;
+    $cmd = $_[0];
+
+    if( $cmd eq "option" ){
+	print CONFH "#define $_[1] $_[2]\n";
+    }
+
+    elsif( $cmd eq "feature" ){
+	print CONFH "#define USE_$_[1]\n";
+        feature( lc($_[1]), 'feature' );
+    }
+    elsif( $cmd eq 'files' ){
+        conf_files( $_[1], 4 );
+    }
+    elsif( $cmd eq "config" ){
+	($root) = /root on\s*([^\s]*)/;
+	print CONFH "#define MOUNT_ROOT \"$root\"\n" if $root;
+
+	($start) = /startup in\s*([^\s]*)/;
+	print CONFH "#define STARTUPFILE \"$start\"\n" if $start;
+    }
+
+    elsif( $cmd eq "flashdev" ){
+	$nflashdev ++;
+	my( $addr, $size, $blk, $flg, $type ) = (0,0,0,0);
+
+	($addr) = /@\s*([^\s]*)/     if /@/;
+	($size) = /size\s*([^\s]*)/  if /size/;
+	($blk)  = /block\s*([^\s]*)/ if /block/;
+	($flg)  = /flags\s*([^\s]*)/ if /flags/;
+	($type) = /type\s*([^\s]*)/  if /type/;
+
+
+	$flashdev .= "\t{ $addr, $size, $flg, $blk, \"$_[1]\", \"$type\" },\n";
+
+        feature( 'flash', 'device' );
+    }
+
+    elsif( $cmd eq "disk" ){
+	$ndisk ++;
+	my( $cont, $unit, $part, $flags, $type ) = (0,0,0,0,0);
+
+	($cont)   = /on\s*([^\s]*)/ if /on/;
+	($unit)   = /unit\s*([^\s]*)/ if /unit/;
+	($part)   = /partition\s*([^\s]*)/ if /partition/;
+	($flags)  = /flags\s*([^\s]*)/ if /flags/;
+	($type)   = /type\s*([^\s]*)/  if /type/;
+
+	$diskdev .= "\t{ \"$_[1]\", \"$type\", \"$cont\", $unit, $part, $flags },\n";
+    }
+
+    elsif( $cmd eq "filesys" ){
+
+	my $type = $_[1];
+
+	$nfsys ++;
+	print CONFC "extern int ${type}_init(struct MountEntry *);\n";
+	print CONFC "extern int ${type}_ops(int, struct MountEntry *, ...);\n";
+	print CONFC "extern FILE* ${type}_open(struct MountEntry *, const char*, const char*);\n";
+	$fsys .= "\t{ \"$type\", ${type}_init, ${type}_open, ${type}_ops },\n";
+
+        feature( $type, 'filesystem' );
+    }
+
+    elsif( $cmd eq "device" ){
+	my $dev = $_[1];
+	my( $port, $addr, $irq, $flags, $baud, $init ) = (0,0,0,0,0,0);
+
+	($dev, $n) = $dev =~ /([^\d]*)(\d*)/;
+
+	$devs{ $dev } ++;
+        feature( $dev, 'device' );
+
+	print CONFH "#define USE_\U$dev\E\n" if( !$n );
+	($port) = /port\s*([^\s]*)/   if /port/;
+	($baud) = /baud\s*([^\s]*)/   if /baud/;
+	($irq) = /irq\s*([^\s]*)/     if /irq/;
+	($flags) = /flags\s*([^\s]*)/ if /flags/;
+	($addr) = /addr\s*([^\s]*)/   if /addr/;
+	($init) = /init\s*([^\s]*)/   if /init/;
+
+	$init = $init || "${dev}_init";
+
+	print CONFC "extern int $init(struct Device_Conf *);\n";
+	if( $n ne "" ){
+	    $devs .= "\t{ $n, $port, $addr, $irq, $baud, $flags, $init, ";
+	    $name = "$dev$n";
+	}else{
+	    $devs .= "\t{ 0, 0, 0, 0, 0, 0, $init, ";
+	    $name = "$dev";
+	}
+	if( /nodev/ ){
+	    $devs .= "0 },\n";
+	}else{
+	    $devs .= "\"$name\" },\n";
+	}
+	$ndevs ++;
+
+    }
+
+    elsif( $cmd eq "ident" ){
+	$ident = $_[1];
+    }
+
+    elsif( $cmd eq 'arch' ){
+        $arch = $_[1];
+        print CONFH "#define PLATFORM_", uc($arch), "\n";
+        print CONFM "CONF_ARCH = $arch\n";
+
+        conf_files( "../src/machdep/$arch/common/etc/files", 2 );
+    }
+    elsif( $cmd eq 'variant' ){
+        $variant = $_[1];
+        print CONFH "#define PLATFORM_", uc($variant), "\n";
+        print CONFM "CONF_VARIANT = $variant\n";
+
+        conf_files( "../src/machdep/$arch/$variant/etc/files", 3 );
+    }
+    elsif( $cmd eq 'compile-prefix' ){
+        print CONFM "CONF_PREFIX = $_[1]\n";
+    }
+    elsif( $cmd eq 'compile-flags' ){
+        shift @_;
+        print CONFM "CONF_FLAGS = @_\n";
+    }
+
+    else{
+	print STDERR "unrecognized config: $_\n";
+	exit -1;
+    }
+}
+
+feature('kern', 'feature');
+
+
+foreach $d (keys %devs){
+    print CONFH "#define N_\U$d\E $devs{$d}\n";
+}
+print CONFH "#define N_FLASHDEV $nflashdev\n";
+print CONFH "#define N_DISK $ndisk\n";
+print CONFH "#define USE_FILESYS\n" if( $nfsys );
+
+
+chop($whoami = `whoami`);
+chop($host=`hostname`);
+chop($pwd = `cd ..;pwd`);
+my $date = strftime('%Y-%m-%d %H:%M', localtime());
+my $archid = uc($arch . ($variant ? "/$variant" : ''));
+
+print CONFH "\n";
+
+print CONFC <<EOM;
+
+const int n_devs = $ndevs;
+const int n_flashdev = $nflashdev;
+const int n_fsys = $nfsys;
+const int n_disk = $ndisk;
+
+$flashdev};
+$devs};
+$fsys};
+$diskdev};
+
+const char *const version =
+	"OS/J5 ($ident) $archid Release $version($number)\\n"
+	"Copyright (c) 1999-2012 Jeff Weisberg\\n"
+	"Built on $date by $whoami\@$host\\n"
+	"Built in $pwd\\n";
+
+EOM
+
+close CONFC;
+close CONFH;
+
+if( -f "../src/machdep/$arch/$variant/etc/link.ld" ){
+    print CONFM "LINK_SCRIPT = ../src/machdep/$arch/$variant/etc/link.ld\n";
+}else{
+    print CONFM "LINK_SCRIPT = ../src/machdep/$arch/common/etc/link.ld\n";
+}
+print CONFM "\n";
+if( -f "../src/machdep/$arch/$variant/etc/makefile.inc" ){
+    print CONFM qq(.include "../src/machdep/$arch/$variant/etc/makefile.inc"\n);
+}else{
+    print CONFM qq(.include "../src/machdep/$arch/common/etc/makefile.inc"\n);
+}
+
+
+my @objs;
+my @srcs;
+
+for my $file (use_files()){
+    my($base) = $file =~ m|.*/([^/]+)\.(\S+)$|;
+
+    print CONFD "$base.o: ../src/$file\n";
+    push @objs, "$base.o";
+    push @srcs, "../src/$file";
+}
+
+print CONFM "\nOBJS = conf.o @objs\n\n";
+print CONFM "\nSRCS = @srcs\n\n";
+close CONFM;
+close CONFD;
+
+
+################################################################
+
+sub from_file {
+    my $file = shift;
+
+    open(my $f, '<', $file);
+    chomp(my $v = <$f>);
+    return $v;
+}
+
+sub to_file {
+    my $file = shift;
+    my $data = shift;
+
+    open(my $f, '>', $file);
+    print $f $data;
+}
+
+sub conf_files {
+    my $conf = shift;
+    my $prio = shift;
+
+    open(my $f, '<', $conf) || return;
+
+    # feature [cpu|chip]: file file file
+    # fileconf{feature} => [ { req, @file } ]
+
+    while(<$f>){
+        chop;
+        s/#.*$//;
+        next if /^\s*$/;
+        my($feat, $opt, $file) = /^(\S+)\s*(\S*):\s+(.*)/;
+        my @file = split /\s+/, $file;
+        push @{$fileconf{$feat}}, { req => $opt, prio => $prio, file => \@file };
+    }
+}
+
+sub feature {
+    my $feat = shift;
+    my $catg = shift;
+
+    die "arch not specified\n"   unless $arch;
+    die "unknown $catg: $feat\n" if $catg && ! $fileconf{$feat};
+
+    for my $fc ( @{$fileconf{$feat}} ){
+        my $req = $fc->{req};
+        next if $req && ($req ne $arch) && ($req ne $variant);
+        for my $file (@{$fc->{file}}){
+            $usefiles{$file} = $fc->{prio};
+        }
+    }
+}
+
+sub use_files {
+
+    my %file;
+
+    for my $file (keys %usefiles){
+        my($base) = $file =~ m|.*/([^/]+)\.(\S+)$|;
+        my $prio = $usefiles{$file};
+        $file{$base} = { file => $file, prio => $prio }
+          if !$file{$base} || $prio > $file{$base}{prio};
+    }
+    return sort map {
+        $_->{file};
+    } values %file;
+}
