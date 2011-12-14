@@ -85,6 +85,10 @@ _mount(FILE *fdev, const char *name, const char *type){
         /* mount special device in dev: */
         strncpy(me->name, DEVPREFIX, sizeof(me->name));
         strncat(me->name, name, sizeof(me->name) - sizeof(DEVPREFIX) );
+        // remove a trailing :
+        int l = strlen(me->name);
+        if( me->name[l-1] == ':' ) me->name[l-1] = 0;
+
         me->flags   = MNTE_F_DEV;
     }
 

@@ -15,6 +15,7 @@
 #include <proc.h>
 #include <alloc.h>
 #include <error.h>
+#include <misc.h>
 #include <msgs.h>
 #include <dev.h>
 #include <ioctl.h>
@@ -25,9 +26,7 @@
 extern struct Disk_Conf disk_device[];
 
 struct DiskPart {
-    struct DiskPart_Conf *conf;
-    int 	unit;			/* unit number on controller */
-    int 	part;			/* partition number */
+    char	name[16];
     u_long 	flags;
 
     offset_t 	part_offset;		/* offset of partition */
@@ -57,50 +56,76 @@ static const struct io_fs disk_fs = {
     disk_ioctl,
 };
 
+const struct {
+    int mbrtype;
+    const char *fstype;
+} mbr_types[] = {
+    {   1, "msdosfs" },
+    {   4, "msdosfs" },
+    {   6, "msdosfs" },
+    { 0xB, "msdosfs" },
+    { 0xC, "msdosfs" },
+    { 0xE, "msdosfs" },
+};
 
-int
-disk_learn(struct Device_Conf *cf, FILE *dev){
+static const char *
+mbr_fs(int mt){
+    int i;
 
-    // read part table
-
-    // disk_init()
+    for(i=0; i<ELEMENTSIN(mbr_types); i++){
+        if( mt == mbr_types[i].mbrtype ) return mbr_types[i].fstype;
+    }
+    return 0;
 }
 
 int
-disk_init(int unit, int start, int len, FILE *cont){
-    struct DiskPart_Conf *cf = disk_device + unit;
-    struct DiskPart      *dk = disk + unit;
+disk_learn(struct Device_Conf *cf, const char *pfx, int dkno, FILE *fdev, offset_t blks){
+    int i;
 
-    dk->unit    = unit;
-    dk->part    = cf->part;
-    dk->flags   = cf->flags;
-    dk->filepos = 0;
-    dk->fdev    = cont;
-    dk->conf    = cf;
+    // read part table
+    struct Disk_MBR *mbr = alloc(512);
 
-    dk->part_offset = start;
-    dk->part_len    = len;
+    if( mbr->mbrsig != DISK_MBR_SIG ){
+        // entire disk
+        // determine type from data
+        const char *fstype = "flfs";
+        disk_init(cf, pfx, dkno, 0, 0, blks * DISK_BLOCK_SIZE, fdev, fstype);
+        free(mbr, 512);
+        return 0;
+    }
 
-    finit( & dk->file );
-    dk->file.d = (void*)dk;
-    dk->file.fs = &disk_fs;
+    for(i=0; i<4; i++){
+        const char *fstype = mbr_fs( mbr->part[i].type );
+        disk_init(cf, pfx, dkno, i, mbr->part[i].lba_start * DISK_BLOCK_SIZE, mbr->part[i].num_blks * DISK_BLOCK_SIZE, fdev, fstype);
+    }
 
-    // change this table
-    mount( & dk->file, cf->mntpt, 0, cf->fstype );
+    free(mbr, 512);
+    return 0;
+}
 
-    bootmsg( "%s unit %d mounted on %s type %s\n",
-	     cf->cntrlnm, dk->unit, cf->mntpt, cf->fstype );
+int
+disk_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, int start, int len, FILE *cont, const char *fstype){
+    struct DiskPart *dkp = alloc(sizeof(struct DiskPart));
 
-    char *buf;
-    /* also mount as special device file */
-    buf = alloc( strlen(cf->mntpt) + 1 );
-    strcpy( buf, cf->mntpt );
-    buf[ strlen(cf->mntpt) - 1 ] = 0;
-    mount( & dk->file, buf, 1, 0);
-    free( buf, strlen(cf->mntpt) + 1 );
+    // name this
+    snprintf(dkp->name, sizeof(dkp->name), "%s%d%c:", pfx, dkno, partno + 'a');
 
-    return 1;
+    dkp->flags       = cf->flags;
+    dkp->fdev        = cont;
+    dkp->part_offset = start;
+    dkp->part_len    = len;
 
+    finit( & dkp->file );
+    dkp->file.d = (void*)dkp;
+    dkp->file.fs = &disk_fs;
+
+    fmount( & dkp->file, dkp->name, 0);
+    if( fstype ) fmount( & dkp->file, dkp->name, fstype );
+
+    bootmsg( "%s unit %d/%d mounted on %s type %s\n",
+	     cf->name, dkno, partno, dkp->name, fstype );
+
+    return 0;
 }
 
 
@@ -112,7 +137,7 @@ disk_bread(FILE *f, char *buf, int len, offset_t pos){
     dev = (struct DiskPart *)f->d;
 
     if( pos + len > dev->part_len ){
-	kprintf("%s unit %d: attempt to read past end of device\n", dev->conf->cntrlnm, dev->unit);
+	kprintf("%s attempt to read past end of device\n", dev->name);
 	return -1;
     }
 
@@ -127,7 +152,7 @@ disk_bwrite(FILE *f, const char *buf, int len, offset_t pos){
     dev = (struct DiskPart *)f->d;
 
     if( pos + len > dev->part_len ){
-	kprintf("%s unit %d: attempt to write past end of device\n", dev->conf->cntrlnm, dev->unit);
+	kprintf("%s attempt to write past end of device\n", dev->name);
 	return -1;
     }
 

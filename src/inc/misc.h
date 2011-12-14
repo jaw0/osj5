@@ -10,6 +10,7 @@
 #define __CONCAT(x,y)	x ## y
 #define CONCAT(x,y)	__CONCAT(x,y)
 
+#define ELEMENTSIN(T) (sizeof(T)/sizeof(T[0]))
 
 
 #endif /* __misc_h__ */

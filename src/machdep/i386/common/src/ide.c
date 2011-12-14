@@ -99,7 +99,7 @@ hdc_init(struct Device_Conf *dev){
 	hdc[c].hd[dk].nhead   = 0;
 	hdc[c].hd[dk].disk    = 0;
 
-	if( hdc_probe( &hdc[i], dk ) ){
+	if( hdc_probe( &hdc[c], dk ) ){
 
 	    bootmsg("%s unit %d %d cyl, %d sect, %d hd, %dkB\n",
 		    dev->name, dk,
@@ -107,7 +107,7 @@ hdc_init(struct Device_Conf *dev){
 		    hdc[c].hd[dk].ncyl * hdc[c].hd[dk].nsect * hdc[c].hd[dk].nhead / 2
 		);
 
-            disk_learn( dev, &hdc[c].hd[dk].file, hdc[c].hd[dk].blks );
+            disk_learn( dev, "hd", c*2 + dk, &hdc[c].hd[dk].file, hdc[c].hd[dk].blks );
 
 	}else{
 	    /* no disk present */
@@ -154,7 +154,7 @@ hdc_probe(struct HDC_Device *dev, int unit){
     dev->hd[unit].ncyl  = ((u_short*)buf)[1];
     dev->hd[unit].nsect = ((u_short*)buf)[6];
 
-    dev->hd[unit].blk = dev->hd[unit].nhead * dev->hd[unit].ncyl * dev->hd[unit].nsect;
+    dev->hd[unit].blks = dev->hd[unit].nhead * dev->hd[unit].ncyl * dev->hd[unit].nsect;
 
     free(buf);
     return 1;
@@ -180,29 +180,17 @@ int hdc_xfer(struct HDC_Device *dev, int writep, int unit, offset_t blk, int len
     int port, n, st, plx, w;
     int hd, sec, cyl, cnt;
 
-    XE9('X');
-    XE9('<');
-    port = dev->port;
-    /* E9PRINTF(("\nhdcxfer %c dev %x, prt %x, u %d, blk %d, len %d, nhd %d, ncyl %d, nsec %d, DBS %d\n",
-       (writep ? '	w' : 'r'),
-       dev, port, unit, blk, len,
-       dev->params[unit].nhead, dev->params[unit].nsect, dev->params[unit].ncyl, DISK_BLOCK_SIZE));
-       dumpmem(buf, 32, "hdc xfer w ");
-    */
     port = dev->port;
     sec = blk % dev->hd[unit].nsect;
     cyl = (blk / dev->hd[unit].nsect) % dev->hd[unit].ncyl;
     hd  = blk / (dev->hd[unit].ncyl * dev->hd[unit].nsect);
     cnt = (len + DISK_BLOCK_SIZE - 1) / DISK_BLOCK_SIZE;
 
-    XE9('a');
-
     spin_lock( &dev->lock );
     plx = spldisk();
-    XE9('b');
+
     hdc_command( dev, unit, hd, cyl, sec, cnt,
 		 writep ? IDE_CMD_WRITE_RETRY : IDE_CMD_READ_RETRY );
-    XE9('c');
 
     /* wait for DRQ */
     while( 1 ){
@@ -221,8 +209,6 @@ int hdc_xfer(struct HDC_Device *dev, int writep, int unit, offset_t blk, int len
 	    return n;
 	}
     }
-    XE9('d');
-    XE9('d');
 
     if( writep ){
 	rep_outsw(port + IDE_R_DATA, buf, len/2);
@@ -230,11 +216,9 @@ int hdc_xfer(struct HDC_Device *dev, int writep, int unit, offset_t blk, int len
 	rep_insw(port + IDE_R_DATA, buf, len/2);
     }
 
-    XE9('e');
-    XE9('e');
     splx(plx);
     spin_unlock( &dev->lock );
-    XE9('>');
+
     return 0;
 }
 
@@ -244,16 +228,10 @@ hdc_command(struct HDC_Device *dev, int unit, int hd, int cyl, int sec, int cnt,
     int port = dev->port;
     int st, plx;
 
-    XE9('C');
-    XE9('<');
-    /* E9PRINTF(("\nhdccmd u %d, hd %d, cyl %d, sec %d, cnt %d, cmd %x\n",
-       unit, hd, cyl, sec, cnt, cmd)); */
-
     /* 1. Wait for drive to clear BUSY. */
     while( 1 ){
 	st = inb( port + IDE_R_STAT );
 	if( !(st & IDE_STAT_BUSY) ){
-	    /* E9PRINTF(("\nhdccmd %x %d\n", port, st)); */
 	    plx = spldisk();
 	    /* recheck */
 	    st = inb( port + IDE_R_STAT );
@@ -264,7 +242,6 @@ hdc_command(struct HDC_Device *dev, int unit, int hd, int cyl, int sec, int cnt,
 	}
     }
 
-    XE9('a');
     /* 2. Load required parameters in the Command Block Registers. */
     outb( port + IDE_R_WCOMP, 0 );
     outb( port + IDE_R_DRHD,  (unit<<4 | hd | 0xA0) );
@@ -274,21 +251,19 @@ hdc_command(struct HDC_Device *dev, int unit, int hd, int cyl, int sec, int cnt,
     outb( port + IDE_R_NSECT, cnt);
 
     /* 3. Activate the Interrupt Enable (nIEN) bit. */
-    /* we are not using interrupt driven i/o here (yet) */
-    XE9('b');
+    /* RSN - we are not using interrupt driven i/o here (yet) */
 
     /* 4. Wait for drive to set DRDY. */
     do{
 	st = inb( port + IDE_R_STAT );
     }while( !(st & IDE_STAT_READY) );
 
-    XE9('c');
     /* 5. Write the command code to the Command Register. */
     outb( port + IDE_R_CMD,   cmd );
-    XE9('d');
 
     splx(plx);
-    XE9('>');
+
+    return 0;
 }
 
 int hdc_ioctl(FILE* f, int cmd, void *x){
