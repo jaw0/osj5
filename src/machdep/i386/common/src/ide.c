@@ -189,6 +189,8 @@ int hdc_xfer(struct HDC_Device *dev, int writep, int unit, offset_t blk, int len
     hdc_command( dev, unit, blk, cnt,
 		 writep ? IDE_CMD_WRITE_RETRY : IDE_CMD_READ_RETRY );
 
+    /* RSN - DMA */
+
     /* wait for DRQ */
     while( 1 ){
 	st = inb( port + IDE_R_STAT );
