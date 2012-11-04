@@ -245,7 +245,6 @@ free(ptr, size)
 
 #ifdef ALLOC_TRACE
     xprintf("free(%x, %d) (origsize %d)\n", (u_long)ptr, size, f->size);
-#endif
 #ifdef DEBUG
     if (size > f->size)
         xprintf("free %d bytes @%x, should be <=%d\n",
@@ -253,6 +252,7 @@ free(ptr, size)
 
     if (ptr < (void *)HEAP_START)
         xprintf("free: %x before start of heap.\n", (u_long)ptr);
+#endif
 
 #ifdef HEAP_LIMIT
     if (ptr > (void *)HEAP_LIMIT)

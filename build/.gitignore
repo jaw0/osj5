@@ -1,0 +1,14 @@
+*.o
+makefile.conf
+makefile.deps
+defproto.h
+defun.list
+defun.list.tmp
+disk
+disk_cf_16mb
+mkassym
+osj5
+mkassym
+assym.h
+conf.c
+conf.h

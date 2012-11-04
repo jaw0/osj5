@@ -22,6 +22,11 @@
 #include <disk.h>
 #include <fs.h>
 
+#define MBR_PART_START	446
+#define MBR_PART_LEN	16
+#define MBR_PART_TYPE_OFF	4
+#define MBR_PART_STARTSEC_OFF	8
+#define MBR_PART_NUMSEC_OFF	12
 
 extern struct Disk_Conf disk_device[];
 
@@ -35,6 +40,8 @@ struct DiskPart {
     FILE 	file;			/* this device */
     FILE 	*fdev;			/* underlying device */
 };
+
+int disk_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, u_int start, u_int len, FILE *cont, const char *fstype);
 
 int disk_bread(FILE*,char*,int,offset_t);
 int disk_bwrite(FILE*,const char*,int,offset_t);
@@ -78,33 +85,64 @@ mbr_fs(int mt){
     return 0;
 }
 
+static int
+is_an_mbr(const u_char *buf){
+
+    if( buf[510] != 0x55 ) return 0;
+    if( buf[511] != 0xAA ) return 0;
+    if( buf[446] & 0x7f  ) return 0;	// status of 1st partition: 80|00
+    if( buf[462] & 0x7f  ) return 0;	// status of 2nd partition: 80|00
+    if( buf[478] & 0x7f  ) return 0;	// status of 3rd partition: 80|00
+    if( buf[494] & 0x7f  ) return 0;	// status of 4th partition: 80|00
+
+}
+
+// mbr data is unaligned + little-endian
+static u_int
+mbr_val(unsigned char *buf, int partno, int valoff){
+
+    return (
+        buf[MBR_PART_START + partno * MBR_PART_LEN + valoff]
+        | (buf[MBR_PART_START + partno * MBR_PART_LEN + valoff + 1]<<8)
+        | (buf[MBR_PART_START + partno * MBR_PART_LEN + valoff + 2]<<16)
+        | (buf[MBR_PART_START + partno * MBR_PART_LEN + valoff + 3]<<24)
+       );
+}
+
 int
 disk_learn(struct Device_Conf *cf, const char *pfx, int dkno, FILE *fdev, offset_t blks){
     int i;
 
     // read part table
-    struct Disk_MBR *mbr = alloc(512);
+    char *buf = alloc(512);
+    fbread(fdev, buf, DISK_BLOCK_SIZE, 0);
 
-    if( mbr->mbrsig != DISK_MBR_SIG ){
+    // RSN - is this an mbr? check more
+
+    if( ! is_an_mbr(buf) ){
         // entire disk
-        // determine type from data
-        const char *fstype = "flfs";
-        disk_init(cf, pfx, dkno, 0, 0, blks * DISK_BLOCK_SIZE, fdev, fstype);
-        free(mbr, 512);
+        // RSN - determine type from data
+        const char *fstype = "msdosfs";
+        disk_init(cf, pfx, dkno, 0, 0, blks, fdev, fstype);
+        free(buf, 512);
         return 0;
     }
 
+    // init all partitions
     for(i=0; i<4; i++){
-        const char *fstype = mbr_fs( mbr->part[i].type );
-        disk_init(cf, pfx, dkno, i, mbr->part[i].lba_start * DISK_BLOCK_SIZE, mbr->part[i].num_blks * DISK_BLOCK_SIZE, fdev, fstype);
+        const char *fstype = mbr_fs( buf[MBR_PART_START + i * MBR_PART_LEN + MBR_PART_TYPE_OFF] );
+        if( fstype ){
+            disk_init(cf, pfx, dkno, i, mbr_val(buf, i, MBR_PART_STARTSEC_OFF), mbr_val(buf, i, MBR_PART_NUMSEC_OFF), fdev, fstype);
+        }
+        // else ?
     }
 
-    free(mbr, 512);
+    free(buf, 512);
     return 0;
 }
 
 int
-disk_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, int start, int len, FILE *cont, const char *fstype){
+disk_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, u_int start, u_int len, FILE *cont, const char *fstype){
     struct DiskPart *dkp = alloc(sizeof(struct DiskPart));
 
     // name this
@@ -112,8 +150,8 @@ disk_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, int sta
 
     dkp->flags       = cf->flags;
     dkp->fdev        = cont;
-    dkp->part_offset = start;
-    dkp->part_len    = len;
+    dkp->part_offset = start * DISK_BLOCK_SIZE;
+    dkp->part_len    = len   * DISK_BLOCK_SIZE;
 
     finit( & dkp->file );
     dkp->file.d = (void*)dkp;
@@ -122,8 +160,8 @@ disk_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, int sta
     fmount( & dkp->file, dkp->name, 0);
     if( fstype ) fmount( & dkp->file, dkp->name, fstype );
 
-    bootmsg( "%s unit %d/%d mounted on %s type %s\n",
-	     cf->name, dkno, partno, dkp->name, fstype );
+    bootmsg( "%s unit %d/%d %d blocks mounted on %s type %s\n",
+	     cf->name, dkno, partno, len, dkp->name, fstype );
 
     return 0;
 }
@@ -137,7 +175,7 @@ disk_bread(FILE *f, char *buf, int len, offset_t pos){
     dev = (struct DiskPart *)f->d;
 
     if( pos + len > dev->part_len ){
-	kprintf("%s attempt to read past end of device\n", dev->name);
+	kprintf("%s attempt to read past end of device (%d @%d)\n", dev->name, len, pos);
 	return -1;
     }
 

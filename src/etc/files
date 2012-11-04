@@ -17,9 +17,10 @@ kern:           libc/strlen.c libc/strncasecmp.c libc/strncmp.c libc/strncpy.c l
 flash:          dev/flash.c
 console:        dev/console.c
 # hd:           dev/ide.c dev/disk.c
+udsk:           dev/unixdisk.c dev/disk.c
 
 flfs:           fs/flfs.c
-msdosfs:        fs/msdosfs/ff.c
+msdosfs:        dev/disk.c fs/msdosfs.c
 
 ed:             util/ed.c
 cli:            util/cli.c util/debugger.c

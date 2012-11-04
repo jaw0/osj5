@@ -22,24 +22,6 @@ struct Disk_Conf {
     u_long flags;
 };
 
-struct Disk_MBR {
-    char code[440];
-    char disksig[4];
-    char dummy[2];
-
-    struct {
-        char status;
-        char chs_start[3];
-        char type;
-        char chs_last[3];
-        unsigned int lba_start;
-        unsigned int num_blks;
-    } part[4];
-
-    unsigned short mbrsig;
-#define DISK_MBR_SIG	0x55AA
-};
-
 
 
 #endif /* __disk_h__ */
