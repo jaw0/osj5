@@ -864,27 +864,3 @@ _yield_bottom(void){
     spl0();
 }
 
-
-//################################################################
-#if 0
-static inline void * get_sp(void){
-    void * result=NULL;
-    asm volatile ("MRS %0, msp\n\t" : "=r" (result) );
-    return(result);
-}
-
-static inline void set_sp(void * ptr){
-    asm volatile ("MSR msp, %0\n\t" : : "r" (ptr) );
-}
-
-void
-xxx_yield(void){
-
-    struct Proc * next = _yield_next_proc();
-    currproc->sp = get_sp();
-    set_sp( next->sp );
-    currproc = next;
-    _yield_bottom();
-
-}
-#endif

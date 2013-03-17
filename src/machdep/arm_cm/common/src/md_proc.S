@@ -39,8 +39,7 @@ ENTRY(PendSV_Handler)
         bx lr
 
 ENTRY(idle)
-        /* XXX - because serial irq does not yet work */
-        /* wfi */
+        wfi
         bx lr
 
 

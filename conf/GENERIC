@@ -50,7 +50,7 @@ filesys flfs
 # device name port xxx addr xxx irq xxx baud xxx flags xxx init [name_init]
 
 device serial0 	baud 57600
-#device serial1 	port 0x2F8 irq 3 baud 9600
+
 #device sdcard0          addr 0x1234
 
 # QQQ

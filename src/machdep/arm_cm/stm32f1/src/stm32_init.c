@@ -79,8 +79,33 @@ talky(void){
     }
 }
 
+static void
+blink_init(void){
+/* Enable everything but wdg */
+    RCC->APB2ENR |= 0x38FFFD;
+    RCC->APB1ENR |= 0x3afec1ff;
+    RCC->AHBENR  |= 0x557;
+
+    /* blink B1 */
+    GPIOB->CRL = 0x10;
+}
+
 void
-blinky(void){
+blink(int n){
+
+    for( ;n; n--){
+        GPIOB->ODR = (GPIOB->ODR & 0xFFFFFFFD) | 2;
+        delay(5);
+        GPIOB->ODR = (GPIOB->ODR & 0xFFFFFFFD) | 0;
+        delay(5);
+    }
+    delay(40);
+}
+
+
+
+void
+xxxblinky(void){
 
     int n = 0;
     int i;
@@ -171,6 +196,7 @@ init_hw(void){
 
     clock_init();
     tick_init();
+    blink_init();
     //stm32_serial_init();
 }
 

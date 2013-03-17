@@ -32,6 +32,8 @@ int serial_noop(FILE*);
 int serial_status(FILE*);
 void serial_setbaud(int, int);
 
+extern void blink(int);
+
 
 const struct io_fs serial_port_fs = {
     serial_putchar,
@@ -111,7 +113,7 @@ serial_init(struct Device_Conf *dev){
         serial_setbaud(i, b=9600);
 
     addr->CR1 |= 0x200C		// enable, no parity, 8 bit, ...
-       /*| 0xA0*/;			// enable TX/RX irq
+        | 0x20;			// enable RX irq
 
     // enable ints
     nvic_enable( irq, IPL_TTY );
@@ -160,10 +162,19 @@ serial_putchar(FILE *f, char ch){
     p = (struct Com*)f->d;
     USART_TypeDef *addr = p->addr;
 
-    //plx = spltty();
-    while( !(addr->SR & 0x80) ) {}
+    while(1){
+        plx = spltty();
+        if( addr->SR & SR_TXE ) break;
+#ifdef USE_PROC
+        if( !(f->flags & F_NONBLOCK) ){
+            addr->CR1 |= 0x80;	/* enable TXE irq */
+            tsleep(addr, currproc->prio, "com/o", 1000000);
+        }
+#endif
+    }
+
     addr->DR = ch;
-    //splx(plx);
+    splx(plx);
 
     return 1;
 }
@@ -178,12 +189,39 @@ serial_getchar(FILE *f){
     p = (struct Com*)f->d;
     USART_TypeDef *addr = p->addr;
 
-    //plx = spltty();
-    while( !(addr->SR & 0x20) ) {}
-    ch = addr->DR;
-    //splx(plx);
+    while( 1 ){
+        if( p->len ){
+            /* make sure some one else didn't already take the char */
+            plx = spltty();
+            if( p->len )
+                break;
+            else
+                splx(plx);
+        }
+        if( f->flags & F_NONBLOCK ){
+            plx = spltty();
+            /* wait until something is available */
+            do {
+                i = addr->SR;
+            }while( !(i & SR_TXE) );
+            ch = addr->DR;
+            splx(plx);
+            return ch;
+        }else{
+#ifdef USE_PROC
+            tsleep( &p->len, currproc->prio, "com/i", 0);
+#endif
+        }
+    }
 
+    ch = p->queue[ p->tail++ ];
+    p->tail %= SERIAL_QUEUE_SIZE;
+    p->len --;
+    /* RSN - flow control */
+
+    splx(plx);
     return ch;
+
 }
 
 /****************************************************************/
@@ -194,10 +232,14 @@ serial_irq(int unit){
 
     int sr = addr->SR;
 
+    // kprintf("s %d %x\n", unit, sr);
+
     if( sr & SR_TXE ){
         /* transmitter empty */
-        com[unit].status &= ~ COMSTAT_TXPENDING;
-        wakeup( &com[unit].status );
+        //blink(1);
+        //com[unit].status &= ~ COMSTAT_TXPENDING;
+        addr->CR1 &= ~ 0xC0;	// disable TXE irq
+        wakeup( addr );
     }
 
     if( sr & SR_RXNE ){
@@ -233,11 +275,8 @@ serial_irq(int unit){
 
 /****************************************************************/
 void
-SPI1_IRQHandler(void){
-}
-void
 USART1_IRQHandler(void){
-    //serial_irq(0);
+    serial_irq(0);
 }
 void
 USART2_IRQHandler(void){
