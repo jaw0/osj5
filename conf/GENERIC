@@ -2,10 +2,13 @@
 # $Id: GENERIC,v 1.7 2001/11/15 22:56:37 jaw Exp $
 #
 
-ident	GENERIC
+ident	GENERIC/ARM-CM3
 
 arch    arm_cm
-variant stm32f4
+variant stm32f1
+
+#option  HSECLOCK        8000000         # external xtal
+#option  SYSCLOCK        60000000        # run system at this speed
 
 feature PROC
 feature NSTDIO
@@ -38,15 +41,15 @@ filesys flfs
 
 ################################################################
 
-flashdev ram:	type flfs @ 0	size 10240	block 512	flags SSF_NOERASE
+#flashdev ram:	type flfs @ 0	size 2048	block 64	flags SSF_NOERASE
 
 ################################################################
 
-device flash
+#device flash
 
 # device name port xxx addr xxx irq xxx baud xxx flags xxx init [name_init]
 
-#device serial0 	port 0x3F8 irq 4 baud 9600
+device serial0 	baud 57600
 #device serial1 	port 0x2F8 irq 3 baud 9600
 #device sdcard0          addr 0x1234
 
@@ -58,10 +61,10 @@ device flash
 
 ################################################################
 
-disk sd0:       type flfs on sd0  unit 0 partition -1
+#disk sd0:       type flfs on sd0  unit 0 partition -1
 
 ################################################################
 
 device console
-config  root on sd0:  startup in startup.rc
+config  root on ram:
 

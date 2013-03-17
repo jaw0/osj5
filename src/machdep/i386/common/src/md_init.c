@@ -14,3 +14,8 @@ long k_paddr = 0, bootmem0 = 0, bootmem1 = 0;
 void
 init_hw(void){}
 
+void
+init_hw2(void){
+    kprintf("bootflags = 0x%x\n", bootflags);
+}
+

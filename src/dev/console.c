@@ -19,13 +19,13 @@
 #include <bootflags.h>
 
 #ifdef USE_PCTERM
-FILE *pcterm_port;
+extern FILE *pcterm_port;
 #endif
 #ifdef USE_SERIAL
-FILE *serial0_port;
+extern FILE *serial0_port;
 #endif
 #ifdef PLATFORM_EMUL
-FILE *emulcon_port;
+extern FILE *emulcon_port;
 #endif
 
 FILE *console_port=0, *kconsole_port=0;

@@ -10,6 +10,8 @@
 
 use POSIX;
 use File::Copy;
+use strict;
+
 
 my %fileconf;
 my %usefiles;
@@ -49,34 +51,35 @@ print CONFC <<EOM;
 EOM
     ;
 
-$nflashdev = 0;
-$flashdev = "const struct Flash_Conf flash_device[] = {\n";
-$ndevs = 0;
-$devs = "const struct Device_Conf all_devices[] = {\n";
-$nfsys = 0;
-$fsys = "const struct FSType_Conf filesystems[] = {\n";
-$ndisk = 0;
-$diskdev = "const struct Disk_Conf disk_device[] = {\n";
+my $nflashdev = 0;
+my $flashdev = "const struct Flash_Conf flash_device[] = {\n";
+my $ndevs = 0;
+my $devs = "const struct Device_Conf all_devices[] = {\n";
+my $nfsys = 0;
+my $fsys = "const struct FSType_Conf filesystems[] = {\n";
+my $ndisk = 0;
+my $diskdev = "const struct Disk_Conf disk_device[] = {\n";
 
+my($root, $start, $name, %devs);
 
 while( <> ){
     chop;
     s/#.*//;
     next if /^\s*$/;
 
-    split;
-    $cmd = $_[0];
+    my @f = split;
+    my $cmd = $f[0];
 
     if( $cmd eq "option" ){
-	print CONFH "#define $_[1] $_[2]\n";
+	print CONFH "#define $f[1] $f[2]\n";
     }
 
     elsif( $cmd eq "feature" ){
-	print CONFH "#define USE_$_[1]\n";
-        feature( lc($_[1]), 'feature' );
+	print CONFH "#define USE_$f[1]\n";
+        feature( lc($f[1]), 'feature' );
     }
     elsif( $cmd eq 'files' ){
-        conf_files( $_[1], 4 );
+        conf_files( $f[1], 4 );
     }
     elsif( $cmd eq "config" ){
 	($root) = /root on\s*([^\s]*)/;
@@ -97,7 +100,7 @@ while( <> ){
 	($type) = /type\s*([^\s]*)/  if /type/;
 
 
-	$flashdev .= "\t{ $addr, $size, $flg, $blk, \"$_[1]\", \"$type\" },\n";
+	$flashdev .= "\t{ $addr, $size, $flg, $blk, \"$f[1]\", \"$type\" },\n";
 
         feature( 'flash', 'device' );
     }
@@ -112,12 +115,12 @@ while( <> ){
 	($flags)  = /flags\s*([^\s]*)/ if /flags/;
 	($type)   = /type\s*([^\s]*)/  if /type/;
 
-	$diskdev .= "\t{ \"$_[1]\", \"$type\", \"$cont\", $unit, $part, $flags },\n";
+	$diskdev .= "\t{ \"$f[1]\", \"$type\", \"$cont\", $unit, $part, $flags },\n";
     }
 
     elsif( $cmd eq "filesys" ){
 
-	my $type = $_[1];
+	my $type = $f[1];
 
 	$nfsys ++;
 	print CONFC "extern int ${type}_init(struct MountEntry *);\n";
@@ -129,10 +132,10 @@ while( <> ){
     }
 
     elsif( $cmd eq "device" ){
-	my $dev = $_[1];
+	my $dev = $f[1];
 	my( $port, $addr, $irq, $flags, $baud, $init ) = (0,0,0,0,0,0);
 
-	($dev, $n) = $dev =~ /([^\d]*)(\d*)/;
+	my ($dev, $n) = $dev =~ /([^\d]*)(\d*)/;
 
 	$devs{ $dev } ++;
         feature( $dev, 'device' );
@@ -165,29 +168,29 @@ while( <> ){
     }
 
     elsif( $cmd eq "ident" ){
-	$ident = $_[1];
+	$ident = $f[1];
     }
 
     elsif( $cmd eq 'arch' ){
-        $arch = $_[1];
+        $arch = $f[1];
         print CONFH "#define PLATFORM_", uc($arch), "\n";
         print CONFM "CONF_ARCH = $arch\n";
 
         conf_files( "../src/machdep/$arch/common/etc/files", 2 );
     }
     elsif( $cmd eq 'variant' ){
-        $variant = $_[1];
+        $variant = $f[1];
         print CONFH "#define PLATFORM_", uc($variant), "\n";
         print CONFM "CONF_VARIANT = $variant\n";
 
         conf_files( "../src/machdep/$arch/$variant/etc/files", 3 );
     }
     elsif( $cmd eq 'compile-prefix' ){
-        print CONFM "CONF_PREFIX = $_[1]\n";
+        print CONFM "CONF_PREFIX = $f[1]\n";
     }
     elsif( $cmd eq 'compile-flags' ){
-        shift @_;
-        print CONFM "CONF_FLAGS = @_\n";
+        shift @f;
+        print CONFM "CONF_FLAGS = @f\n";
     }
 
     else{
@@ -199,7 +202,7 @@ while( <> ){
 feature('kern', 'feature');
 
 
-foreach $d (keys %devs){
+for my $d (keys %devs){
     print CONFH "#define N_\U$d\E $devs{$d}\n";
 }
 print CONFH "#define N_FLASHDEV $nflashdev\n";
@@ -207,9 +210,9 @@ print CONFH "#define N_DISK $ndisk\n";
 print CONFH "#define USE_FILESYS\n" if( $nfsys );
 
 
-chop($whoami = `whoami`);
-chop($host=`hostname`);
-chop($pwd = `cd ..;pwd`);
+chop(my $whoami = `whoami`);
+chop(my $host=`hostname`);
+chop(my $pwd = `cd ..;pwd`);
 my $date = strftime('%Y-%m-%d %H:%M', localtime());
 my $archid = uc($arch . ($variant ? "/$variant" : ''));
 
@@ -227,9 +230,11 @@ $devs};
 $fsys};
 $diskdev};
 
+const char *const ident   = "$ident";
+const char *const archid  = "$archid";
 const char *const version =
 	"OS/J5 ($ident) $archid Release $version($number)\\n"
-	"Copyright (c) 1999-2012 Jeff Weisberg\\n"
+	"Copyright (c) 1999-2013 Jeff Weisberg\\n"
 	"Built on $date by $whoami\@$host\\n"
 	"Built in $pwd\\n";
 

@@ -339,7 +339,7 @@ DEFALIAS(cd, chdir)
     }
     i = chdir(argv[1]);
     if( i )
-        f_error("no such meice");
+        f_error("no such device");
     return i;
 }
 
@@ -411,7 +411,7 @@ DEFALIAS(dir, ll)
 	&& !currproc->cwd
 #endif
         ){
-        fsmsg("no such file or meice\n");
+        fsmsg("no such file or device\n");
         return -1;
     }
 #ifdef USE_PROC
@@ -492,7 +492,7 @@ DEFUN(glob, "expand wildcards in filenames")
         return -1;
     }
 
-    /* strip off meicename */
+    /* strip off devicename */
     pattern = (char*)basenameoffile(pattern);
 
     ga.argv = argv;

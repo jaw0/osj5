@@ -108,7 +108,9 @@ typedef struct Proc *proc_t;
 #	define	PROCOK(p)
 #endif
 
-#define PROC_TIME	50000		/* usec - timer int rate */
+#ifndef PROC_TIME
+#  define PROC_TIME	50000		/* usec - timer int rate */
+#endif
 #define PRIO_TIME	1000000		/* usec - how often to recalc priorities */
 #define WAITTABLESIZE	23
 #define WCHAN_NEVER	0		/* a wchan that is never woken */

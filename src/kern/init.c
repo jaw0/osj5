@@ -25,6 +25,8 @@ extern void kflush(int);
 extern void init_ddb(void);
 
 extern const char *version;
+extern void blinky(void);
+extern hexdump(const unsigned char *p, int len);
 
 void
 autoconfig(void){
@@ -45,19 +47,18 @@ autoconfig(void){
 
 void
 init(proc_t proc){
-    char buf[64];
-    int i;
 
     splhigh();
+    irq_disable();
 
     /* machdep initialization */
     init_hw();
     init_ints();
 
     /* spit out banner */
-    kprintf("%s", version);
+    kprintf("\n%s\n", version);
 
-    kprintf("bootflags = 0x%x\n", bootflags);
+    init_hw2();
 
 #ifdef USE_DDB
     init_ddb();
@@ -70,6 +71,7 @@ init(proc_t proc){
 #ifdef USE_PROC
     init_proc(proc);
 #endif
+
 
 }
 

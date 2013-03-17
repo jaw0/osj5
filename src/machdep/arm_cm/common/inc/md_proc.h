@@ -18,13 +18,13 @@
 #include <conf.h>
 
 
-#define IPL_ZERO	0
-#define IPL_PROC	1
-#define IPL_TTY		2
-#define IPL_DISK	3
-#define IPL_MOTOR	4
-#define IPL_CLOCK	5
-#define IPL_HIGH	6
+#define IPL_ZERO	0x00	// basepri 0 enables all
+#define IPL_PROC	0xF0
+#define IPL_TTY		0xD0
+#define IPL_DISK	0xC0
+#define IPL_MOTOR	0xB0
+#define IPL_CLOCK	0x80
+#define IPL_HIGH	0x10
 
 #define splproc()	splraise(IPL_PROC)
 #define splalloc()	splproc()
@@ -38,8 +38,8 @@
 #define splx(x)		spllower(x)
 
 
-#define NVIC_INT_CTLST	0xE000ED04
-#define NVIC_PENDSVSET	0x10000000
+#define SCB_ICSR	0xE000ED04
+#define ICSR_PENDSVSET	0x10000000
 
 #define irq_disable()        __asm__("cpsid i")
 #define irq_enable()         __asm__("cpsie if")
@@ -47,14 +47,8 @@
 static inline void
 sched_yield(){
     /* cause a PendSV int to fire */
-    *(volatile unsigned*)NVIC_INT_CTLST = NVIC_PENDSVSET;
+    *(volatile unsigned*)SCB_ICSR = ICSR_PENDSVSET;
 }
-
-static inline void
-md_yield(){
-    sched_yield();
-}
-
 
 static inline int
 splraise(int ncpl) {
@@ -63,7 +57,7 @@ splraise(int ncpl) {
     /* ocpl = basepri */
     asm("mrs %0, basepri" : "=r" (ocpl));
 
-    if( ncpl > ocpl ){
+    if( !ocpl || ncpl && (ncpl < ocpl) ){
         /* basepri = ncpl */
         asm("msr basepri, %0" : : "r" (ncpl));
     }
@@ -84,15 +78,23 @@ spllower(int ncpl) {
     return ocpl;
 }
 
+static inline void
+md_yield(){
+    spl0();
+    sched_yield();
+}
+
+
 extern void _start_proc(void (*)(void));
+extern void exit(int);
 
 static inline u_long *
 _setup_initial_stack(u_long *s, char *start /* NOT USED */, void *entry){
 
     // hardware interrupt frame
-    *--s = 0;			// xpsr
+    *--s = 0x01000000;		// xpsr
     *--s = (u_long)_start_proc;	// pc
-    *--s = 0;			// lr
+    *--s = (u_long)exit;	// lr
     *--s = 0;			// r12
     *--s = 0;			// r3
     *--s = 0;			// r2
@@ -100,15 +102,15 @@ _setup_initial_stack(u_long *s, char *start /* NOT USED */, void *entry){
     *--s = (u_long)entry;	// r0
 
     // pendsv_handler pushes
-    *--s = 0xFFFFFFF9;		// lr - EXC_RETURN(thread mode, MSP, no floats)
-    *--s = 0;			// r7
-    *--s = 0;			// r6
-    *--s = 0;			// r5
-    *--s = 0;			// r4
     *--s = 0;			// r11
     *--s = 0;			// r10
     *--s = 0;			// r9
     *--s = 0;			// r8
+    *--s = 0;			// r7
+    *--s = 0;			// r6
+    *--s = 0;			// r5
+    *--s = 0;			// r4
+    *--s = 0xFFFFFFF9;		// lr - EXC_RETURN(thread mode, MSP, no floats)
 
     return s;
 }

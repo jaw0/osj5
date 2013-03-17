@@ -427,7 +427,7 @@ scheduler(void){
         r = rl = 0;
 
         for(p=(proc_t)proclist; p; p=p->next){
-            /* kprintf("sched %X\n", (u_long)p); */
+            /* kprintf("sched %X\n", (u_long)p);*/
             PROCOK(p);
 
             p->rnext = p->rprev = 0;
@@ -494,6 +494,7 @@ scheduler(void){
 
         if( ! r ){
             /* nothing is runnable */
+            /* kprintf("sched idle\n"); */
             idle();
             goto startover;
         }
@@ -505,7 +506,9 @@ scheduler(void){
         /* install readylist */
         plx = splproc();
         readylist = rl;
+        spl0();
 
+        /* kprintf("sched done\n");*/
         /* yield the remainder of our slice */
         yield();
     }
@@ -801,9 +804,12 @@ yield(void){
 
 proc_t
 _yield_next_proc(void){
-    register proc_t nextproc;
+    proc_t nextproc;
 
+    // ARM nvic already prevents lower prio ints
+#ifdef PLATFORM_I386
     splproc();
+#endif
 
     /* who runs next? */
     if( realtimelist ){
@@ -825,14 +831,21 @@ _yield_next_proc(void){
     if( timeremain > 0 )
         currproc->timeyielded += timeremain;
 
+    /* kprintf(" ynp curr %x, next %x; curr sp %x, next sp %x\n",
+       currproc, nextproc, currproc->sp, nextproc->sp); */
+
+
 #ifdef CHECKPROC
-    if( nextproc->sp < (u_long)nextproc->stack_start )
+    if( !nextproc || nextproc->sp < (u_long)nextproc->stack_start ){
+        kprintf("stack overflow: next %x, sp %x, start %x\n", nextproc, nextproc->sp, nextproc->stack_start);
         PANIC("stack overflow");
+    }
     if( nextproc->sp < nextproc->lowsp ) nextproc->lowsp = nextproc->sp;
 #endif
 
     nextproc->timeallotted += nextproc->timeslice;
     timeremain = nextproc->timeslice;
+    if( !timeremain ) timeremain = 1;
 
     return nextproc;
 }
@@ -851,3 +864,27 @@ _yield_bottom(void){
     spl0();
 }
 
+
+//################################################################
+#if 0
+static inline void * get_sp(void){
+    void * result=NULL;
+    asm volatile ("MRS %0, msp\n\t" : "=r" (result) );
+    return(result);
+}
+
+static inline void set_sp(void * ptr){
+    asm volatile ("MSR msp, %0\n\t" : : "r" (ptr) );
+}
+
+void
+xxx_yield(void){
+
+    struct Proc * next = _yield_next_proc();
+    currproc->sp = get_sp();
+    set_sp( next->sp );
+    currproc = next;
+    _yield_bottom();
+
+}
+#endif

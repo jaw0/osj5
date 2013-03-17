@@ -24,6 +24,7 @@
 #define _ENTRY(x)               \
         .globl x;               \
         .thumb;			\
+        .syntax unified;	\
         .thumb_func;		\
         .type x,%function;      \
         .align 2;               \

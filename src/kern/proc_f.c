@@ -15,7 +15,6 @@
 
 #ifdef USE_CLI
 
-
 DEFUN(kill, "kill a process")
 {
     proc_t p;
@@ -136,6 +135,7 @@ DEFUN(ps, "list processes")
                p->memused, p->timeused, p->timeyielded, p->timeallotted);
         printf("estcpu=%03.3d next=0x%08.8x prev=0x%08.8x\n",
                p->estcpu, p->next, p->prev);
+        printf("timeslice=%d\n", p->timeslice);
 #ifdef CHECKPROC
         printf("lowsp=%08.8X (%d)\n", p->lowsp, (char*)p - (char*)p->lowsp);
 #endif

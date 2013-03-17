@@ -16,11 +16,10 @@
 #include <proc.h>
 #include <error.h>
 
-
 #if 0
 #define DEBUG
 #define ALLOC_TRACE
-#define xprintf	printf
+#define xprintf	kprintf
 #endif
 
 #ifdef PLATFORM_X86
@@ -75,10 +74,11 @@ struct fl {
 
 #ifndef HEAP_START
 extern char end[];
-#define HEAP_START end
+extern char _end[];
+#define HEAP_START _end
 #endif
 
-static char *top = (char*)HEAP_START;
+static char *top = 0;
 
 
 void *
@@ -91,15 +91,17 @@ alloc(size)
     int failed;
     int plx;
 
+    if( !top ) top = HEAP_START;
+
 #ifdef ALLOC_TRACE
-    xprintf("alloc(%d)", size);
+    xprintf("alloc(%d) top %x, fl %x\n", size, top, freelist);
 #endif
 
     size = ALIGNED(size);
 
     plx = splproc();
 #ifdef ALLOC_FIRST_FIT
-    while (*f != (struct fl *)0 && (*f)->size < size)
+    while (*f != 0 && (*f)->size < size)
         f = &((*f)->next);
     bestf = f;
     failed = (*bestf == (struct fl *)0);
@@ -124,7 +126,7 @@ alloc(size)
 #endif
 
 #ifdef ALLOC_TRACE
-    xprintf("\talloc need more\n" );
+    xprintf("\talloc need more. top %x\n", top );
 #endif
 
     if (failed) { /* nothing found */
@@ -144,6 +146,7 @@ alloc(size)
         /* make _sure_ the region can hold a struct fl. */
         if (size < MIN_SIZE )
             size = MIN_SIZE;
+
 
         top += OVRHD + size;
 #ifdef PLATFORM_EMUL

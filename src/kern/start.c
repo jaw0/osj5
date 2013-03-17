@@ -27,6 +27,11 @@ start(void){
 #ifdef PROJECT_MAIN
     extern void PROJECT_MAIN(void);
     PROJECT_MAIN();
+#else
+#  ifdef USE_CLI
+    extern void shell(void);
+    shell();
+#  endif
 #endif
 
     while(1) yield();

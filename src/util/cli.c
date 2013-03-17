@@ -837,7 +837,7 @@ fshell(FILE *f, int interactivep){
 void
 shell(void){
     FILE *f;
-#ifdef USE_FILESYS
+#if defined(USE_FILESYS) & defined(MOUNT_ROOT) & defined(STARTUPFILE)
     f = fopen( MOUNT_ROOT STARTUPFILE, "r" );
     if( f ){
         fshell(f, 0);

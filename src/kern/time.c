@@ -25,7 +25,7 @@ systime_tick(void){
     if( currproc )
         currproc->estcpu ++;
 
-    if( currproc && !(--timeremain) ){
+    if( currproc && (--timeremain <= 0) ){
         sched_yield();
     }
 #endif

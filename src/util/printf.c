@@ -16,6 +16,9 @@
 #endif
 #include <calendar.h>
 
+// use 64bit nums?
+// #define PRINTF64
+
 /*
   a minimal implementation of printf
   %<flags><width><.prec><type>
@@ -55,20 +58,27 @@ enum {
 #define B(x)		(1<<(x))
 #define isdig(x)	(((x)>='0') && ((x)<='9'))
 
+#define PRINTF64
 typedef unsigned long long u_quad;
+#ifdef PRINTF64
+typedef u_quad	u_num_t;
+#else
+typedef unsigned long u_num_t;
+#endif
+
 
 static const char Set_A[] =	"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 static const char Set_a[] =	"0123456789abcdefghijklmnopqrstuvwxyz";
 static const char spinchar[] = "|\\-/";
 
 int snprintf(char *, int, const char *, ...);
-static int putnum(int (*)(void*, char), void *, u_quad, int, int, int, int);
+static int putnum(int (*)(void*, char), void *, u_num_t, int, int, int, int);
 int fncprintf(int (*)(void*, char), void *, const char *, ...);
 
 int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
     const char *p = fmt;
     char *s;
-    u_quad val;
+    u_num_t val;
     int width = 0, prec = 0;
     u_short flags;
     int base;
@@ -142,7 +152,7 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                 int hr, min, sec, usec, dy, mon, yr;
                 int i;
 
-                val = va_arg(ap, u_quad);
+                val = va_arg(ap, u_num_t);
 
                 usec = val % 1000000;
                 val /= 1000000;
@@ -254,7 +264,7 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                 base = 0x10;
             donum:
                 if( flags & B(PF_QUAD) ){
-                    val = va_arg(ap, u_quad);
+                    val = va_arg(ap, u_num_t);
                 }else{
                     val = va_arg(ap, u_long);
                     /* sign extend */
@@ -262,7 +272,6 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                         if( val & 0x80000000 )
                             val |= 0xFFFFFFFF00000000ULL;
                     }
-
                 }
 
                 pos += putnum(ofnc, arg, val, base, width, prec, flags);
@@ -320,10 +329,12 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
             case '-':
                 flags |= B(PF_LEFT);
                 goto rflag;
+#ifdef PRINTF64
             case 'Q':
             case 'q':
                 flags |= B(PF_QUAD);
                 goto rflag;
+#endif
             default:
                 break;
 
@@ -334,26 +345,32 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
     return pos;
 }
 
+#ifdef PRINTF64
+#  define NUMSZMAX 64
+#  define NUMTMAX  0x7FFFFFFFFFFFFFFFULL
+#else
+#  define NUMSZMAX 32
+#  define NUMTMAX  0x7FFFFFFFUL
+#endif
 
 static int
-putnum(int (*ofnc)(void*, char), void *arg, u_quad val, int base, int width, int prec, int flags){
+putnum(int (*ofnc)(void*, char), void *arg, u_num_t val, int base, int width, int prec, int flags){
     /* base must be: 2<=base<=36 */
 
     const char *chrs;
-    char tbuf[66];
+    char tbuf[NUMSZMAX+2];
     int i=0, l, n, neg=0;
-
 
     chrs = flags&B(PF_ALT)?Set_a:Set_A;
 
-    if( prec > 64 )
-        prec = 64;
-    if( width > 64 )
-        width = 64;
+    if( prec > NUMSZMAX )
+        prec = NUMSZMAX;
+    if( width > NUMSZMAX )
+        width = NUMSZMAX;
     if( base < 2 || base > 36 )
         base = 10;
 
-    if( flags&B(PF_SIGNED) && (val > 0x7FFFFFFFFFFFFFFFULL || val < 0) ){
+    if( flags&B(PF_SIGNED) && (val > NUMTMAX || val < 0) ){
         neg = 1;
         val = 0 - val;
     }
@@ -366,7 +383,6 @@ putnum(int (*ofnc)(void*, char), void *arg, u_quad val, int base, int width, int
         else
             tbuf[i++] = chrs[ n ];
     }while( val /= base );
-
 
     /* add leading zeros */
     while( i < prec ){
