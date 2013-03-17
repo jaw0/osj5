@@ -1,0 +1,6 @@
+
+kern:   machdep/arm_cm/stm32f1/src/startup.S
+kern:   machdep/arm_cm/stm32f1/src/stm32_init.c
+
+serial: machdep/arm_cm/stm32f1/src/serial.c
+
