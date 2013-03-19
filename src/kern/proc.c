@@ -22,7 +22,7 @@
 #include <fs.h>
 #include <bootflags.h>
 
-#define STACK_MIN	2048
+#define STACK_MIN	1024
 #define INIT_STACK	4096
 
 volatile struct Proc *proclist = 0;
@@ -45,16 +45,6 @@ void
 _start_proc( void (*entry)(void) ){
     entry();
     exit(-1);
-}
-
-void
-kdump( u_long *start, u_long *end ){
-
-    while( start < end ){
-        kprintf(" %08.8X", *start);
-        start ++;
-    }
-    kprintf("\n");
 }
 
 proc_t
@@ -105,8 +95,6 @@ start_proc(int ssize, void *entry, const char *name){
     if( currproc )
         proc->brother = currproc->booboo;
 
-    /* it is safe to be preempted until something points to the new proc */
-    /* QQQ - what happens if we get killed before we finish */
     int plx = splproc();
 
     if( proc->brother )
@@ -462,6 +450,8 @@ scheduler(void){
                     if( p->wchan != WCHAN_NEVER )
                         ksendmsg(p, MSG_TIMEOUT);
                 }
+
+                /* QQQ - sould a signal unblock proc? */
             }
 
             /* handle alarm clocks */
@@ -470,6 +460,9 @@ scheduler(void){
                     sigunblock(p);
                 ksendmsg(p, MSG_ALARM);
             }
+
+            /* in case handler aborted with clearing flag */
+            if( !(p->flags & PRF_MSGPEND) ) p->throwing = 0;
 
             if( !p->pcnt ){
                 if( p->state == PRS_RUNNABLE ){
@@ -613,7 +606,7 @@ sigunblock(proc_t proc){
 
     PROCOK(proc);
     w = (int)proc->wchan % WAITTABLESIZE;
-    plx = splproc();
+    plx = splhigh();
 
     if( proc->wprev )
         proc->wprev->wnext = proc->wnext;
@@ -845,7 +838,6 @@ _yield_next_proc(void){
 
     nextproc->timeallotted += nextproc->timeslice;
     timeremain = nextproc->timeslice;
-    if( !timeremain ) timeremain = 1;
 
     return nextproc;
 }
@@ -854,7 +846,12 @@ void
 _yield_bottom(void){
 
     /* are there any pending msgs that need to be delivered? */
-    if( (currproc->flags & PRF_MSGPEND) && !currproc->throwing ){
+    if( (currproc->flags & PRF_MSGPEND)
+#ifndef PLATFORM_ARM_CM
+        /* arm port sets this below */
+        && !currproc->throwing
+#endif
+        ){
         currproc->throwing = 1;
         spl0();
         _xthrow();
@@ -862,5 +859,14 @@ _yield_bottom(void){
     }
 
     spl0();
+}
+
+int
+_need_yield_bottom(void){
+    /* do we need to do a yield_bottom */
+    int r = ((currproc->flags & PRF_MSGPEND) && !currproc->throwing) ? 1 : 0;
+    /* set flag now, to avoid recursing when we come out of interrupt mode */
+    if( r ) currproc->throwing = 1;
+    return r;
 }
 

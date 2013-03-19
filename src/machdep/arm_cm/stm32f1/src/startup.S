@@ -116,6 +116,16 @@ Default_Handler:
 Infinite_Loop:
   b  Infinite_Loop
   .size  Default_Handler, .-Default_Handler
+
+/****************************************************************/
+/* default app main */
+    .section  .text._app_main,"ax",%progbits
+_app_main:
+        bx lr
+
+   .weak      main
+   .thumb_set main,_app_main
+
 /******************************************************************************
 *
 * The minimal vector table for a Cortex M3. Note that the proper constructs

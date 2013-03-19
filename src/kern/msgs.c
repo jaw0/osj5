@@ -67,6 +67,12 @@ ksendmsg(proc_t proc, u_long msg){
     proc->flags   |= PRF_MSGPEND;
 }
 
+static void
+clear_flags(){
+    currproc->flags &= ~PRF_MSGPEND;
+    currproc->throwing = 0;
+}
+
 void
 throw(u_long msg, u_long ret){
     struct Catch *c;
@@ -83,6 +89,7 @@ throw(u_long msg, u_long ret){
             (c->func)(msg, ret);
             break;
         }
+        currproc->throwing = 0;
         _longjmp(c->jb, 1);
     }
 }
@@ -99,7 +106,7 @@ _xthrow(void){
             if( currproc->sigmsgs & (1<<m) ){
                 currproc->sigmsgs &= ~(1<<m);
                 if( !currproc->sigmsgs && !currproc->msghead )
-                    currproc->flags &= ~PRF_MSGPEND;
+                    clear_flags();
                 throw(m, 1);
             }
         }
@@ -114,7 +121,7 @@ _xthrow(void){
         currproc->msghead = msg->next;
         if( ! msg->next ){
             currproc->msgtail = 0;
-            currproc->flags &= ~PRF_MSGPEND;
+            clear_flags();
         }
 
         splx(plx);

@@ -27,6 +27,8 @@ option CHECKPROC		# additional error checking in proc
 
 option GETLINEHIST
 
+srcfile         app/maple_mini_blinky.c
+
 ################################################################
 # FLFS options
     # what should happen when creating a file that already exists?
@@ -50,6 +52,8 @@ filesys flfs
 # device name port xxx addr xxx irq xxx baud xxx flags xxx init [name_init]
 
 device serial0 	baud 57600
+device i2c0
+
 
 #device sdcard0          addr 0x1234
 

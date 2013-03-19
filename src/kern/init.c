@@ -56,7 +56,7 @@ init(proc_t proc){
     init_ints();
 
     /* spit out banner */
-    kprintf("\n%s\n", version);
+    bootmsg("\n%s\n", version);
 
     init_hw2();
 

@@ -15,6 +15,12 @@
 
 #ifdef USE_CLI
 
+DEFUN(tthrow, "test throw")
+{
+    _xthrow();
+}
+
+
 DEFUN(kill, "kill a process")
 {
     proc_t p;
@@ -59,6 +65,16 @@ DEFUN(nice, "nice a process")
     return 0;
 }
 #endif /* USE_CLI */
+
+static void
+ps_header(void){
+
+    printf("  R Runnable      D Dead         N Non-Blocking\n");
+    printf("  B Blocked       C Real-Time    K Dead Child\n");
+    printf("  Z Suspended     S System       M Msg Pending\n");
+    printf("\n");
+}
+
 
 static void
 proc_ps(proc_t p){
@@ -111,6 +127,7 @@ DEFUN(ps, "list processes")
         }
     }
 
+    ps_header();
 
     printf("PID      PPID     PRI NIC TSL STATE FLGS WCHAN %%CPU %%TSL   MEM CWD    COMMAND\n");
     plx = splproc();
@@ -135,7 +152,6 @@ DEFUN(ps, "list processes")
                p->memused, p->timeused, p->timeyielded, p->timeallotted);
         printf("estcpu=%03.3d next=0x%08.8x prev=0x%08.8x\n",
                p->estcpu, p->next, p->prev);
-        printf("timeslice=%d\n", p->timeslice);
 #ifdef CHECKPROC
         printf("lowsp=%08.8X (%d)\n", p->lowsp, (char*)p - (char*)p->lowsp);
 #endif

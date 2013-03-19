@@ -30,6 +30,7 @@ sys_clock_freq(void){
     return SYSCLOCK;
 }
 
+#if 0
 static void
 delay(int n){
     int i;
@@ -37,7 +38,6 @@ delay(int n){
         asm("nop");	/* This stops it optimising code out */
     }
 }
-
 
 static void
 stm32_serial_init(void){
@@ -138,6 +138,7 @@ xxxblinky(void){
         stm32_putchar( (n&0xF) + 0x40 );
     }
 }
+#endif
 
 static void
 clock_init(void){
@@ -193,11 +194,8 @@ tick_init(void){
 
 void
 init_hw(void){
-
     clock_init();
     tick_init();
-    blink_init();
-    //stm32_serial_init();
 }
 
 /****************************************************************/
@@ -212,9 +210,9 @@ void
 init_hw2(void){
     int i;
 
-    kprintf("bootflags = 0x%x, cpuid %x, flash mem %dk\n", bootflags, SCB->CPUID, *R_FLASHKB);
-    kprintf("uid %x-%x-%x\n", R_UNIQUE[0], R_UNIQUE[1], R_UNIQUE[2]);
-    kprintf("\n");
+    bootmsg("bootflags = 0x%x, cpuid %x, flash mem %dk\n", bootflags, SCB->CPUID, *R_FLASHKB);
+    bootmsg("uid %x-%x-%x\n", R_UNIQUE[0], R_UNIQUE[1], R_UNIQUE[2]);
+    bootmsg("\n");
 
     // RSN - uid, devid, mem, ...
 

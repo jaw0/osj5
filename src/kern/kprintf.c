@@ -247,20 +247,30 @@ kprintn(unsigned long ul, int base){
 	} while (p > buf);
 }
 
-void
-hexdump(const unsigned char *d, int len){
-    int i;
-
-    kprintf("\n");
-    for(i=0; i<len; i++){
-        kprintf(" %x%x", (d[i]&0xF0) >> 4, (d[i]&0x0F));
-        if( (i%16)==15 && i!=len-1 ) kprintf("\n");
-    }
-    kprintf("\n");
-}
 
 #endif
 
+void
+hexdump(const unsigned char *d, int len){
+    int i;
+    int col = 0;
+
+    kprintf("\n");
+
+    for(i=0; i<len; i++){
+        if( !col )       kprintf("%08.8X:", d + i);
+        if(! (col % 4 )) kprintf(" ");
+
+        kprintf(" %x%x", (d[i]&0xF0) >> 4, (d[i]&0x0F));
+
+        if( ++col == 16){
+            kprintf("\n");
+            col = 0;
+        }
+    }
+
+    kprintf("\n");
+}
 
 void
 diag(const char *file, const char *func, int line, const char *fmt, ...){

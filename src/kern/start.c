@@ -15,23 +15,15 @@ void
 start(void){
     struct Proc proc0;
 
-    /* initialize hardware */
-#ifdef PROJECT_INIT_HW
-    extern void PROJECT_INIT_HW(void);
-    PROJECT_INIT_HW();
-#endif
-
     init(&proc0);
 
     /* run project code */
-#ifdef PROJECT_MAIN
-    extern void PROJECT_MAIN(void);
-    PROJECT_MAIN();
-#else
-#  ifdef USE_CLI
+    extern void main(void);
+    main();
+
+#ifdef USE_CLI
     extern void shell(void);
     shell();
-#  endif
 #endif
 
     while(1) yield();
