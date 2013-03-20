@@ -17,9 +17,10 @@ start(void){
 
     init(&proc0);
 
-    /* run project code */
-    extern void main(void);
-    main();
+#ifdef PROJECT_MAIN
+    extern void PROJECT_MAIN(void);
+    PROJECT_MAIN();
+#endif
 
 #ifdef USE_CLI
     extern void shell(void);
