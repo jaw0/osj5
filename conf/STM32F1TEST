@@ -1,0 +1,75 @@
+#
+# $Id: GENERIC,v 1.7 2001/11/15 22:56:37 jaw Exp $
+#
+
+ident	STM32F1TEST
+
+arch    arm_cm
+variant stm32f1
+
+#option  HSECLOCK        8000000         # external xtal
+#option  SYSCLOCK        60000000        # run system at this speed
+
+feature PROC
+feature NSTDIO
+feature ED			# text editor
+feature CLI			# command line interface
+# feature GDB			# use gdb over serial port if booted with -g
+# feature MOTORS
+
+#feature DDB			# debuging features
+#feature DDB_SYMS		# save symbol table
+option KDEBUG                  # kernel debugging
+
+
+option DEVPREFIX	"dev:"	# prefix for naming device files
+option CHECKPROC		# additional error checking in proc
+
+option GETLINEHIST
+
+srcfile         app/maple_mini_blinky.c
+option PROJECT_MAIN     main
+
+################################################################
+# FLFS options
+    # what should happen when creating a file that already exists?
+    # rename it, delete it, or keep it
+option RENAMEFILE_ON_CREAT
+# option DELETEFILE_ON_CREAT
+option ENOUGHALREADYHEURISTIC	64
+################################################################
+
+filesys flfs
+# filesys msdosfs
+
+################################################################
+
+#flashdev ram:	type flfs @ 0	size 2048	block 64	flags SSF_NOERASE
+
+################################################################
+
+#device flash
+
+# device name port xxx addr xxx irq xxx baud xxx flags xxx init [name_init]
+
+device serial0 	baud 57600
+device i2c0     baud 100000
+
+
+#device sdcard0          addr 0x1234
+
+# QQQ
+#device usb0             addr 0x1234
+#device usbdisk0
+#device usbserial0
+
+
+################################################################
+
+#disk sd0:       type flfs on sd0  unit 0 partition -1
+
+################################################################
+
+device console
+config  root on ram:
+
