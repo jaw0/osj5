@@ -8,6 +8,9 @@ AS = $(CONF_PREFIX)as $(CONF_FLAGS)
 CC = $(CONF_PREFIX)gcc $(CONF_FLAGS)
 OBJCOPY = $(CONF_PREFIX)objcopy
 
+LINK = $(CONF_PREFIX)gcc
+LINK_FLAGS = -Wl,-T$(LINK_SCRIPT)  -nostartfiles
+
 CFLAGS = -ffreestanding
 
 CLEANFILES += osj5.bin
@@ -18,6 +21,5 @@ all: osj5.bin
 
 osj5.bin: osj5.elf
 	$(OBJCOPY) -O binary osj5.elf osj5.bin
-
 
 

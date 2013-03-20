@@ -10,6 +10,7 @@
 
 #ifdef PLATFORM_STM32F1
 # include <stm32f10x.h>
+# include <nvic.h>
 #endif
 
 #ifdef PLATFORM_STM32F4

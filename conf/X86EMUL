@@ -17,8 +17,6 @@ option CHECKPROC		# additional error checking in proc
 option GETLINEHIST
 # option E9_EMUL_DEBUGGING
 
-option  PROJECT_MAIN    shell
-
 ################################################################
 # FLFS options
     # what should happen when creating a file that already exists?
@@ -29,7 +27,7 @@ option ENOUGHALREADYHEURISTIC	64
 ################################################################
 
 filesys flfs
-filesys msdosfs
+#filesys msdosfs
 
 ################################################################
 

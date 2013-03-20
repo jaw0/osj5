@@ -25,6 +25,8 @@ init_hw(void){
 
 }
 
+void init_hw2(void){}
+
 asm("sighandler:\n"
     "pushl $0\n"
     "call sigsetmask\n"

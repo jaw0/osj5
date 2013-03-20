@@ -84,7 +84,7 @@ serial_init(struct Device_Conf *dev){
     switch(i){
     case 0:
         addr = USART1;
-        RCC->APB2ENR |= 0x4005;
+        RCC->APB2ENR |= 0x4005;		// usart1+gpioA+afi
         GPIOA->CRH   |= 0x4b0;
         irq           = (int) IRQ_USART1;
         break;
@@ -121,7 +121,7 @@ serial_init(struct Device_Conf *dev){
         serial0_port = &com[0].file;
     }
 
-    bootmsg("%s unit %d at io 0x%x irq %d %d baud\n", dev->name, i, addr, irq, b);
+    bootmsg("%s at io 0x%x irq %d %d baud\n", dev->name, addr, irq, b);
 
     return (int) &com[i].file;
 }

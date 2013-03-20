@@ -1,3 +1,3 @@
 
-config: GENERIC
-	../bin/config GENERIC
+config: STM32F1TEST
+	../bin/config STM32F1TEST

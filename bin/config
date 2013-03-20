@@ -8,28 +8,38 @@
 #
 # $Id$
 
+use Getopt::Std;
 use POSIX;
 use File::Copy;
 use strict;
+
+my %opt;
+getopts('d:', \%opt);
+
+my $confile = $ARGV[0];
+my $dir = $opt{d} || "../build/$confile";
+mkdir $dir;
+die "cannot create build directory\n" unless -d $dir;
 
 
 my %fileconf;
 my %usefiles;
 my @appfiles;
-my($arch, $variant, $ident);
+my($arch, $variant);
 
+my $ident   = $confile;
 my $version = from_file('../src/etc/version');
-my $number  = from_file('../build/number') || 0;
+my $number  = from_file("$dir/number") || 0;
 $number ++;
-to_file('../build/number', $number);
+to_file('$dir/number', $number);
 conf_files( '../src/etc/files', 0 );
 
-open( CONFH, "> ../build/conf.h" )        || die "cannot open conf.h: $!\n";
-open( CONFC, "> ../build/conf.c" )        || die "cannot open conf.c: $!\n";
-open( CONFM, "> ../build/makefile.conf" ) || die "cannot open Makefile.conf: $!\n";
-open( CONFD, "> ../build/makefile.deps" ) || die "cannot open Makefile.deps: $!\n";
+open( CONFH, "> $dir/conf.h" )        || die "cannot open conf.h: $!\n";
+open( CONFC, "> $dir/conf.c" )        || die "cannot open conf.c: $!\n";
+open( CONFM, "> $dir/makefile.conf" ) || die "cannot open Makefile.conf: $!\n";
+open( CONFD, "> $dir/makefile.deps" ) || die "cannot open Makefile.deps: $!\n";
 
-copy( '../src/etc/Makefile', '../build/Makefile' );
+copy( '../src/etc/Makefile', "$dir/Makefile" );
 
 
 print CONFM "\n# this file is generated automatically - do not edit\n\n";
@@ -250,15 +260,15 @@ close CONFC;
 close CONFH;
 
 if( -f "../src/machdep/$arch/$variant/etc/link.ld" ){
-    print CONFM "LINK_SCRIPT = ../src/machdep/$arch/$variant/etc/link.ld\n";
+    print CONFM "LINK_SCRIPT = ../../src/machdep/$arch/$variant/etc/link.ld\n";
 }else{
-    print CONFM "LINK_SCRIPT = ../src/machdep/$arch/common/etc/link.ld\n";
+    print CONFM "LINK_SCRIPT = ../../src/machdep/$arch/common/etc/link.ld\n";
 }
 print CONFM "\n";
 if( -f "../src/machdep/$arch/$variant/etc/makefile.inc" ){
-    print CONFM qq(.include "../src/machdep/$arch/$variant/etc/makefile.inc"\n);
+    print CONFM qq(.include "../../src/machdep/$arch/$variant/etc/makefile.inc"\n);
 }else{
-    print CONFM qq(.include "../src/machdep/$arch/common/etc/makefile.inc"\n);
+    print CONFM qq(.include "../../src/machdep/$arch/common/etc/makefile.inc"\n);
 }
 
 
@@ -268,9 +278,9 @@ my @srcs;
 for my $file (use_files(), @appfiles){
     my($base) = $file =~ m|.*/([^/]+)\.(\S+)$|;
 
-    print CONFD "$base.o: ../src/$file\n";
+    print CONFD "$base.o: ../../src/$file\n";
     push @objs, "$base.o";
-    push @srcs, "../src/$file";
+    push @srcs, "../../src/$file";
 }
 
 print CONFM "\nOBJS = conf.o @objs\n\n";
