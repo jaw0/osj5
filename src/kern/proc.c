@@ -608,6 +608,7 @@ sigunblock(proc_t proc){
     w = (int)proc->wchan % WAITTABLESIZE;
     plx = splhigh();
 
+    /* remove from wait table */
     if( proc->wprev )
         proc->wprev->wnext = proc->wnext;
     if( proc->wnext )
