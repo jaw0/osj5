@@ -30,7 +30,8 @@ panic(const char *m, int l, const char *f){
 #ifdef PLATFORM_EMUL
 	system("stty -raw echo");
         kill(getpid(), 6);
-        _exit(0);
+        *(char*)1 = 1;
+        _exit(1);
 #else
 #ifdef USE_GDB
 	if( bootflags & BOOT_USEGDB )
