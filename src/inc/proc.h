@@ -121,6 +121,8 @@ extern volatile struct Proc *currproc;
 extern struct Proc *schedulerproc;
 extern volatile long timeremain;		/* NB: yes, this must be signed */
 
+#define sleep(s)	usleep(s * 1000000)
+
 extern void  yield(void);
 extern void  usleep(u_long);
 extern void  sigsuspend(proc_t);

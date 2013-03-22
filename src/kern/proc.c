@@ -22,7 +22,7 @@
 #include <fs.h>
 #include <bootflags.h>
 
-#define STACK_MIN	1024
+#define STACK_MIN	2048
 #define INIT_STACK	4096
 
 volatile struct Proc *proclist = 0;
