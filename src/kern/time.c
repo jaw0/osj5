@@ -13,6 +13,7 @@
 #include <time.h>
 
 utime_t systime = 0;
+utime_t next_timeout = 0;
 
 void
 systime_tick(void){
@@ -21,9 +22,8 @@ systime_tick(void){
     systime += PROC_TIME;
 
 #ifdef USE_PROC
-    /* keep track of proc stats */
-    if( currproc )
-        currproc->estcpu ++;
+    if( next_timeout && systime >= next_timeout )
+        wakeup( &next_timeout );
 
     if( currproc && (--timeremain <= 0) ){
         sched_yield();

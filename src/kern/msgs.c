@@ -48,7 +48,13 @@ sendmsg(proc_t proc, u_long msgval, u_long ret){
     }
     proc->msgtail = msg;
 
+    if( ! proc->flags & PRF_MSGPEND ) proc->throwing = 0;
+
     proc->flags |= PRF_MSGPEND;
+
+    if( proc->state == PRS_BLOCKED && proc->flags & PRF_SIGWAKES )
+        sigunblock( proc );
+
     splx(plx);
 
     return 0;
@@ -64,7 +70,11 @@ ksendmsg(proc_t proc, u_long msg){
         return;
 
     proc->sigmsgs |= 1<<msg;
+    if( ! proc->flags & PRF_MSGPEND ) proc->throwing = 0;
     proc->flags   |= PRF_MSGPEND;
+
+    if( proc->state == PRS_BLOCKED && proc->flags & PRF_SIGWAKES )
+        sigunblock( proc );
 }
 
 static void
