@@ -179,7 +179,6 @@ init_proc(proc_t p){
     }
 #endif
 
-    readylist_add(p);
 
 #ifdef USE_CONSOLE
     if( (bootflags & BOOT_SINGLE) && kconsole_port ){
@@ -359,9 +358,10 @@ sysmaint(void){
     currproc->flags     = PRF_AUTOREAP | PRF_IMPORTANT;
 
     while(1){
-        dt = get_time() - lastt;
+        // run sooner on first iteration - so ps output is nonzero
+        timeout = lastt ? get_time() + MAINT_TIME : get_time() + PROC_TIME;
+        dt      = (int)(get_time() - lastt) / PROC_TIME;
         lastt   = get_time();
-        timeout = get_time() + MAINT_TIME;
 
         for(p=(proc_t)proclist; p; p=p->next){
             PROCOK(p);
@@ -404,9 +404,9 @@ sysmaint(void){
                 if( p->timeallotted != p->p_allotted ){
                     int alloted = p->timeallotted - p->p_allotted;
                     int yielded = p->timeyielded  - p->p_yielded;
-                    int used = (alloted - yielded) * PROC_TIME;
-
-                    p->estcpu = ( 100 * KESTCPU * used / dt + p->estcpu ) / 2;
+                    int used = alloted - yielded;
+                    int est  = 100 * KESTCPU * used / dt;
+                    p->estcpu = ( est + p->estcpu ) / 2;
 
                     p->timeused += used;
                     p->timeused /=2;
@@ -414,7 +414,6 @@ sysmaint(void){
                     p->p_allotted = p->timeallotted;
                     p->p_yielded  = p->timeyielded;
 
-                    printf("stats %s: al %d, y %d, u %d, est %d\n", p->name, alloted, yielded, used, p->estcpu);
                 }else{
                     p->estcpu /= 2;
                 }
@@ -624,6 +623,11 @@ tsleep(void *wchan, int prio, const char *wmsg, int timo){
 
     w = _wait_hash( (int)wchan );
 
+    if( currproc->wchan ){
+        kprintf("already waiting on %x %s s %x\n", currproc->wchan, currproc->wmsg, currproc->state);
+        PANIC("tsleep again!");
+    }
+
     plx = splhigh();
     currproc->wchan   = wchan;
     currproc->wmsg    = wmsg;
@@ -635,6 +639,8 @@ tsleep(void *wchan, int prio, const char *wmsg, int timo){
         waittable[ w ]->wprev = (proc_t)currproc;
     waittable[ w ] = (proc_t)currproc;
 
+    if( currproc->wnext == currproc || currproc->wprev == currproc )
+        PANIC("insert wait loop");
     currproc->prio    = prio;
     currproc->state |= PRS_BLOCKED;
 
@@ -671,6 +677,7 @@ wakeup(void *wchan){
     plx = splhigh();
     for(p=waittable[w]; p; p=n){
         n = p->wnext;
+        if( p == n ) PANIC("waitlist loop!");
         if( p->wchan == wchan )
             sigunblock(p);
     }
