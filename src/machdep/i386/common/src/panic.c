@@ -27,6 +27,8 @@ panic(const char *m, int l, const char *f){
 	if( ! npanic++ )
 		kprintf("PANIC: %s at line %d of %s (currproc=%x)\nhalting\n", m, l, f, currproc);
 
+	stack_trace(0);
+
 #ifdef PLATFORM_EMUL
 	system("stty -raw echo");
         kill(getpid(), 6);
@@ -49,8 +51,7 @@ panic(const char *m, int l, const char *f){
 	    cli();
 	}
 #  endif
-	stack_trace(0);
-	
+
 	asm("cli");
 	asm("hlt");
 #endif

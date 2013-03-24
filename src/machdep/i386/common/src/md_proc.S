@@ -118,7 +118,13 @@ ENTRY(_yield)
         movl %edi, _C_LABEL(currproc)
         movb $0, _C_LABEL(yieldflag)                    /* yieldflag = 0 */
 
+        call _need_yield_bottom
+        cmpl $0, %eax
+        je A$
         call _yield_bottom
+
+A$:
         POPALOT()
+        movb $0, _C_LABEL(cpl)                          /* spl0 */
         ret
 

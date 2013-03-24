@@ -112,6 +112,7 @@ typedef struct Proc *proc_t;
 #endif
 #define MAINT_TIME	5000000		/* usec - how often to recalc things */
 #define WAITTABLESIZE	23
+#define READYLISTSIZE	16
 #define WCHAN_NEVER	0		/* a wchan that is never woken */
 #define KESTCPU		16384
 

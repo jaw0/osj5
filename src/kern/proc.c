@@ -25,10 +25,9 @@
 #ifdef PLATFORM_ARM_CM
 #  define STACK_MIN	1024
 #else
-#  define STACK_MIN	2048
+#  define STACK_MIN	4096
 #endif
 #define INIT_STACK	4096
-#define PRIO_MAX	15
 
 
 struct ReadyList {
@@ -38,7 +37,7 @@ struct ReadyList {
 
 
 volatile struct Proc *proclist = 0;
-volatile struct ReadyList readylist[PRIO_MAX + 1];
+volatile struct ReadyList readylist[READYLISTSIZE];
 volatile long timeremain = 0;
 volatile struct Proc *currproc = 0;
 struct Proc *idle_proc = 0;
@@ -303,7 +302,7 @@ dispose_of_cadaver(proc_t pid){
     /* remove from readylist */
     splhigh();
 
-    for(i=0; i<=PRIO_MAX; i++){
+    for(i=0; i<READYLISTSIZE; i++){
         struct ReadyList *rl = readylist + i;
 
         if( rl->head == pid ) rl->head = pid->rnext;
@@ -364,6 +363,7 @@ sysmaint(void){
         lastt   = get_time();
 
         for(p=(proc_t)proclist; p; p=p->next){
+            // printf("sm %x %x\n", p, p->next);
             PROCOK(p);
 
             if( p == currproc )
@@ -405,6 +405,7 @@ sysmaint(void){
                     int alloted = p->timeallotted - p->p_allotted;
                     int yielded = p->timeyielded  - p->p_yielded;
                     int used = alloted - yielded;
+                    if( used < 0 ) used = 0;
                     int est  = 100 * KESTCPU * used / dt;
                     p->estcpu = ( est + p->estcpu ) / 2;
 
@@ -621,11 +622,13 @@ tsleep(void *wchan, int prio, const char *wmsg, int timo){
         return -1;
     }
 
+    if( prio < 0 ) prio = currproc->prio;
     w = _wait_hash( (int)wchan );
 
+    // kprintf("tsleep %x %s on %s\n", currproc, currproc->name, wmsg);
     if( currproc->wchan ){
         kprintf("already waiting on %x %s s %x\n", currproc->wchan, currproc->wmsg, currproc->state);
-        PANIC("tsleep again!");
+        PANIC("tsleep dupe!");
     }
 
     plx = splhigh();
@@ -640,8 +643,8 @@ tsleep(void *wchan, int prio, const char *wmsg, int timo){
     waittable[ w ] = (proc_t)currproc;
 
     if( currproc->wnext == currproc || currproc->wprev == currproc )
-        PANIC("insert wait loop");
-    currproc->prio    = prio;
+        PANIC("insert waitlist loop");
+    currproc->prio   = prio;
     currproc->state |= PRS_BLOCKED;
 
     if( currproc->timeout )
@@ -695,14 +698,14 @@ readylist_add(proc_t proc){
     PROCOK(proc);
     if( proc->rnext || proc->rprev ){
         kprintf("cannot add to readylist proc %x (%s), (%x,%x) cp %x\n",
-                proc, proc->name, proc->rnext, proc->rprev, currproc);
+                proc, proc->name, proc->rprev, proc->rnext, currproc);
         return;
     }
 
     int plx = splhigh();
     proc->rnext = 0;
 
-    if( proc->prio > PRIO_MAX ) proc->prio = PRIO_MAX;
+    if( proc->prio >= READYLISTSIZE ) proc->prio = READYLISTSIZE - 1;
     struct ReadyList *rl = readylist + proc->prio;
 
     if( rl->tail ){
@@ -724,12 +727,12 @@ readylist_add(proc_t proc){
 
 proc_t
 readylist_next(void){
-    proc_t next = idle_proc;
+    proc_t next = 0;
     int i;
 
     int plx = splhigh();
 
-    for(i=0; i<=PRIO_MAX; i++){
+    for(i=0; i<READYLISTSIZE; i++){
         struct ReadyList *rl = readylist + i;
         if( ! rl->head ) continue;
 
@@ -743,11 +746,20 @@ readylist_next(void){
             rl->tail = 0;
         }
 
+        /* make sure it is still runnable */
+        if( next->state != PRS_RUNNABLE ){
+            next = 0;
+            continue;
+        }
+
         break;
     }
 
     splx(plx);
-    return next;
+
+    if( next ) return next;
+    return idle_proc;
+
 }
 
 
@@ -767,10 +779,10 @@ proc_t
 _yield_next_proc(void){
     proc_t nextproc;
 
-    // ARM nvic already prevents lower prio ints
-#ifdef PLATFORM_I386
-    splproc();
-#endif
+    /* NB: we are already (at least) at splproc */
+
+    if( currproc && currproc->state == PRS_RUNNABLE )
+        readylist_add( currproc );
 
     /* who runs next? */
     nextproc = readylist_next();
@@ -783,13 +795,10 @@ _yield_next_proc(void){
     if( currproc ){
         if( timeremain > 0 )
             currproc->timeyielded += timeremain;
-
-        if( currproc->state == PRS_RUNNABLE && currproc != nextproc )
-            readylist_add( currproc );
     }
 
-    /* kprintf(" ynp curr %x (%s), next %x (%s); curr sp %x, next sp %x start %x\n",
-       currproc, currproc->name, nextproc, nextproc->name, currproc->sp, nextproc->sp, nextproc->stack_start); */
+    //kprintf(" ynp curr %x (%s), next %x (%s); curr sp %x, next sp %x start %x\n",
+    //   currproc, currproc->name, nextproc, nextproc->name, currproc->sp, nextproc->sp, nextproc->stack_start);
 
 
 #ifdef CHECKPROC
@@ -810,19 +819,11 @@ void
 _yield_bottom(void){
 
     /* are there any pending msgs that need to be delivered? */
-    if( (currproc->flags & PRF_MSGPEND)
-#ifndef PLATFORM_ARM_CM
-        /* arm port sets this below */
-        && !currproc->throwing
-#endif
-        ){
-        currproc->throwing = 1;
+    if( (currproc->flags & PRF_MSGPEND) ){
         spl0();
         _xthrow();
         currproc->throwing = 0;
     }
-
-    spl0();
 }
 
 int

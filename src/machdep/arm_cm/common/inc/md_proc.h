@@ -80,8 +80,8 @@ spllower(int ncpl) {
 
 static inline void
 md_yield(){
-    spl0();
     sched_yield();
+    spl0();
 }
 
 
