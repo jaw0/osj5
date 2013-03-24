@@ -17,6 +17,10 @@ option CHECKPROC		# additional error checking in proc
 option GETLINEHIST
 # option E9_EMUL_DEBUGGING
 
+srcfile         app/emul_proctest.c
+option PROJECT_MAIN     proctest
+
+
 ################################################################
 # FLFS options
     # what should happen when creating a file that already exists?

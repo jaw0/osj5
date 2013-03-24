@@ -22,20 +22,33 @@
 #include <fs.h>
 #include <bootflags.h>
 
-#define STACK_MIN	2048
+#ifdef PLATFORM_ARM_CM
+#  define STACK_MIN	1024
+#else
+#  define STACK_MIN	4096
+#endif
+
 #define INIT_STACK	4096
 
+
+struct ReadyList {
+    struct Proc *head;
+    struct Proc *tail;
+};
+
+
 volatile struct Proc *proclist = 0;
-
+volatile struct ReadyList readylist[READYLISTSIZE];
 volatile long timeremain = 0;
-volatile struct Proc *currproc = 0, *readylist = 0, *realtimelist = 0, *realtimetail = 0;
-struct Proc *schedulerproc = 0;
-
+volatile struct Proc *currproc = 0;
+struct Proc *idle_proc = 0;
 static struct Proc *waittable[WAITTABLESIZE];
 
-static void scheduler(void), prioritizer(void);
+
+
+static void sysmaint(void), idleloop(void);
 static int dispose_of_cadaver(proc_t);
-void realtimelist_add(proc_t);
+void readylist_add(proc_t);
 void realtimelist_remove(void);
 void idle(void);
 
@@ -67,13 +80,14 @@ start_proc(int ssize, void *entry, const char *name){
     /* set up new proc's stack */
     proc->sp = (u_long)_setup_initial_stack((u_long*)proc, stack, entry);
 
-    // kprintf("proc %X sp %X\n", proc, proc->sp);
+    /* kprintf("proc %X sp %X\n", proc, proc->sp); */
     /* change a few entries in proc */
     proc->name        = name;
     proc->alloc_size  = asize;
     proc->stack_start = stack;
     proc->memused     = asize;
     proc->timeslice   = 5;	/* QQQ */
+    proc->prio        = 1;
 
 #ifdef CHECKPROC
     proc->magic = PROCMAGIC;
@@ -111,6 +125,8 @@ start_proc(int ssize, void *entry, const char *name){
 
     splx(plx);
 
+    readylist_add(proc);
+
     return proc;
 
 }
@@ -123,11 +139,14 @@ start_proc(int ssize, void *entry, const char *name){
 void
 init_proc(proc_t p){
 
+    bzero(readylist, sizeof(readylist));
+
     /* set up initial proc */
     bzero(p, sizeof(struct Proc));
     bzero(waittable, WAITTABLESIZE * sizeof(struct Proc *));
 
     p->timeslice = 5;
+    p->prio      = 1;
 
     p->timeallotted = p->timeslice;
     p->flags  = PRF_NONBLOCK | PRF_AUTOREAP;
@@ -148,11 +167,18 @@ init_proc(proc_t p){
     proclist = currproc;
     timeremain = p->timeslice;
 
+#ifdef USE_NSTDIO
+    p->stdin  = console_port;
+    p->stdout = console_port;
+    p->stderr = console_port;
+#endif
+
 #ifdef MOUNT_ROOT
     if( !chdir( MOUNT_ROOT ) ){
         bootmsg("root on %s\n", MOUNT_ROOT);
     }
 #endif
+
 
 #ifdef USE_CONSOLE
     if( (bootflags & BOOT_SINGLE) && kconsole_port ){
@@ -163,13 +189,12 @@ init_proc(proc_t p){
 #endif
     bootmsg("proc starting: init");
 
-    /* start scheduler in a child process */
-    schedulerproc = start_proc(2048, scheduler, "scheduler");
-    bootmsg(" scheduler");
+    /* start maint proc in a child process */
+    start_proc(1024, sysmaint, "sysmaint");
+    bootmsg(" sysmaint");
 
-    /* start prioritizer */
-    start_proc(2048, prioritizer, "prioritizer");
-    bootmsg(" prioritizer");
+    idle_proc = start_proc(1024, idleloop, "idleloop");
+    bootmsg(" idleloop" );
 
     bootmsg("\nproc starting multiuser\n");
 
@@ -178,11 +203,6 @@ init_proc(proc_t p){
     irq_enable();
 
     currproc->flags &= ~PRF_NONBLOCK;
-#ifdef USE_NSTDIO
-    p->stdin  = console_port;
-    p->stdout = console_port;
-    p->stderr = console_port;
-#endif
 }
 
 
@@ -243,18 +263,9 @@ reapkids(void){
 static int
 dispose_of_cadaver(proc_t pid){
     struct Proc *p;
-    int plx;
+    int plx, i;
 
     PROCOK(pid);
-
-    if( currproc->flags & PRF_REALTIME ){
-        /* we cannot allow realtime processes to change the proclist
-           because if we preempt the scheduler, this will cause confusion */
-
-        /* yield'ing will force the process to be run via the normal
-           runlist, ergo not pre-empting scheduler */
-        yield();
-    }
 
     if( ! (pid->state & PRS_DEAD) )
         /* attempt to dispose of the living */
@@ -289,22 +300,20 @@ dispose_of_cadaver(proc_t pid){
             pid->mommy->booboo = pid->brother;
     }
 
-    /* remove from ready and realtime lists */
+    /* remove from readylist */
+    splhigh();
+
+    for(i=0; i<READYLISTSIZE; i++){
+        struct ReadyList *rl = readylist + i;
+
+        if( rl->head == pid ) rl->head = pid->rnext;
+        if( rl->tail == pid ) rl->tail = pid->rprev;
+    }
+
     if( pid->rnext )
         pid->rnext->rprev = pid->rprev;
     if( pid->rprev )
         pid->rprev->rnext = pid->rnext;
-
-    if( pid->rtnext )
-        pid->rtnext->rtprev = pid->rtprev;
-    if( pid->rtprev )
-        pid->rtprev->rtnext = pid->rtnext;
-
-    if( readylist == pid )
-        readylist = pid->rnext;
-    if( realtimelist == pid )
-        realtimelist = pid->rtnext;
-
 
     splx(plx);
     bzero(pid, sizeof(struct Proc));
@@ -316,62 +325,101 @@ dispose_of_cadaver(proc_t pid){
     return 0;
 }
 
+static void
+idleloop(void){
+
+    currproc->timeslice = 255;
+    currproc->flags = PRF_IMPORTANT;
+    currproc->state = PRS_BLOCKED;
+    yield();
+
+    while(1){
+        currproc->state = PRS_BLOCKED;
+        currproc->wmsg  = "idle";
+        idle();
+        yield();
+    }
+}
+
 /*
-  prioritizer runs as a seperate process
-  which sets the priority of processes
-  based on cpu use, ...
+  perform system maintenance
 */
 
 static void
-prioritizer(void){
-    struct Proc *p;
-    int plx;
-    utime_t lastt;
-    int dt;
+sysmaint(void){
+    volatile int i;
+    struct Proc *p, *r, *rl;
+    int plx, s;
+    u_long lastt = 0, dt;
+    utime_t timeout;
 
-    currproc->timeslice = 255;
-    currproc->flags = PRF_AUTOREAP | PRF_IMPORTANT;
+    currproc->timeslice = 5;
+    currproc->prio      = 4;
+    currproc->flags     = PRF_AUTOREAP | PRF_IMPORTANT;
 
     while(1){
-
-        /* kprintf("*P*"); */
-
-        lastt = get_time();
-        usleep(PRIO_TIME);
-
-        /* calculate estimated cpu use params */
-        dt = get_time() - lastt;
-        dt = (dt + PRIO_TIME/2) / PRIO_TIME;
-        if( dt > 31 )
-            dt = 31;
-        dt = 1 << dt;
+        // run sooner on first iteration - so ps output is nonzero
+        timeout = lastt ? get_time() + MAINT_TIME : get_time() + PROC_TIME;
+        dt      = (int)(get_time() - lastt) / PROC_TIME;
+        lastt   = get_time();
 
         for(p=(proc_t)proclist; p; p=p->next){
-            /* recalc estimated cpu */
-            p->estcpu /= dt;
-            /* QQQ base prio on estcpu? or yielded/allotted? or both? */
-            if( p->timeallotted ){
+            // printf("sm %x %x\n", p, p->next);
+            PROCOK(p);
+
+            if( p == currproc )
+                /* skip self */
+                continue;
+
+            if( p->state & PRS_BLOCKED ){
+
+                if( p->flags & PRF_NONBLOCK ){
+                    /* force non-blocking processes to be not blocked */
+                    /* (they can still be dead) */
+                    sigunblock(p);
+                }
+
+                /* timeout */
+                if( p->timeout && p->timeout <= get_time() ){
+                    p->timeout = 0;
+                    sigunblock(p);
+                    if( p->wchan != WCHAN_NEVER )
+                        ksendmsg(p, MSG_TIMEOUT);
+                }
+            }
+
+            /* handle alarm clocks */
+            if( p->alarm && p->alarm <= get_time() ){
+                p->alarm = 0;
+                if( p->state & PRS_BLOCKED )
+                    sigunblock(p);
+                ksendmsg(p, MSG_ALARM);
+            }
+
+            if( p->timeout && (p->timeout < timeout) ) timeout = p->timeout;
+            if( p->alarm   && (p->alarm   < timeout) ) timeout = p->alarm;
+
+
+            /* statistics */
+            if( lastt && dt && p->timeallotted ){
                 if( p->timeallotted != p->p_allotted ){
-                    p->timeused +=
-                        (p->timeallotted - p->p_allotted
-                         - p->timeyielded + p->p_yielded) * 16 /
-                        (p->timeallotted - p->p_allotted);
+                    int alloted = p->timeallotted - p->p_allotted;
+                    int yielded = p->timeyielded  - p->p_yielded;
+                    int used = alloted - yielded;
+                    if( used < 0 ) used = 0;
+                    int est  = 100 * KESTCPU * used / dt;
+                    p->estcpu = ( est + p->estcpu ) / 2;
+
+                    p->timeused += used;
                     p->timeused /=2;
 
                     p->p_allotted = p->timeallotted;
                     p->p_yielded  = p->timeyielded;
+
+                }else{
+                    p->estcpu /= 2;
                 }
-
-                p->prio = (p->timeused
-                           * (p->estcpu * 16 * PROC_TIME) / (PRIO_TIME * 2)) / 8
-                    + p->nice;
-
-            }else{
-                p->prio = p->nice;
             }
-            if( p->prio < 0 ) p->prio = 0;
-            if( p->prio > 64) p->prio = 64;
-
 
             if( p->state & PRS_DEAD && (!p->mommy || p->mommy==currproc
                                         || p->mommy->flags & PRF_AUTOREAP) ){
@@ -386,124 +434,10 @@ prioritizer(void){
             }
 
         }
-    }
-}
 
-/*
-  scheduler runs as a seperate process
-  which schedules processes to run
-
-  NB: scheduler must not ever block
-*/
-
-static void
-scheduler(void){
-    volatile int i;
-    struct Proc *p, *r, *rl;
-    int plx, s;
-    u_long lastt, dt;
-
-    currproc->timeslice = 255;
-    currproc->flags = PRF_NONBLOCK | PRF_AUTOREAP | PRF_IMPORTANT;
-
-    while(1){
-
-        /* readylist = 0 forces this process to
-           run in the event it gets preempted */
-        readylist = 0;
-    startover:
-        r = rl = 0;
-
-        for(p=(proc_t)proclist; p; p=p->next){
-            /* kprintf("sched %X\n", (u_long)p);*/
-            PROCOK(p);
-
-            p->rnext = p->rprev = 0;
-
-            if( p == currproc )
-                /* skip self */
-                continue;
-
-            if( p->flags & PRF_REALTIME ){
-                if( p->rtnext || p->rtprev || realtimelist == p ){
-                    /* this process is already on the realtime run list */
-                    /* (this cannot happen, of course, or we wouldnt be here) */
-                    continue;
-                }else{
-                    /* a real-time process which has used up its timeslice and been pre-empted */
-                    /* add it to the run list */
-                }
-            }
-
-            if( p->state & PRS_BLOCKED ){
-
-                if( p->flags & PRF_NONBLOCK ){
-                    /* force non-blocking processes to be not blocked */
-                    /* (they can still be dead) */
-                    sigunblock(p);
-                }
-
-                /* timeout? - how should we let the proc know it timed out? */
-                if( p->timeout && p->timeout <= get_time() ){
-                    p->timeout = 0;
-                    sigunblock(p);
-                    if( p->wchan != WCHAN_NEVER )
-                        ksendmsg(p, MSG_TIMEOUT);
-                }
-
-                /* QQQ - sould a signal unblock proc? */
-            }
-
-            /* handle alarm clocks */
-            if( p->alarm && p->alarm <= get_time() ){
-                if( p->state & PRS_BLOCKED )
-                    sigunblock(p);
-                ksendmsg(p, MSG_ALARM);
-            }
-
-            /* in case handler aborted with clearing flag */
-            if( !(p->flags & PRF_MSGPEND) ) p->throwing = 0;
-
-            if( !p->pcnt ){
-                if( p->state == PRS_RUNNABLE ){
-                    p->pcnt = p->prio;
-                    if( r ){
-                        r->rnext = p;
-                        p->rprev = r;
-                        r = p;
-                    }else{
-                        r = rl = p;
-                    }
-                }
-                /* blocked processes decr pcnt to 0 where they stay
-                   until woken
-                */
-            }else{
-                p->pcnt --;
-            }
-
-        } /* Eo for */
-
-
-        if( ! r ){
-            /* nothing is runnable */
-            /* kprintf("sched idle\n"); */
-            idle();
-            goto startover;
-        }
-
-        /* add self to end of ready list */
-        r->rnext = (proc_t)currproc;
-        currproc->rprev = r;
-
-        /* install readylist */
-        plx = splproc();
-        readylist = rl;
-        spl0();
-
-        /* kprintf("sched done\n");*/
-        /* yield the remainder of our slice */
-        yield();
+        /* sleep until the next timeout */
+        next_timeout = timeout;
+        tsleep( &next_timeout, currproc->prio, "time", 0);
     }
 }
 
@@ -594,6 +528,14 @@ sigkill(proc_t proc){
     _end_proc(proc, -1);
 }
 
+int
+_wait_hash(int wchan){
+
+    wchan ^= wchan >> 16;
+    wchan ^= wchan >> 8;
+    return wchan % WAITTABLESIZE;
+}
+
 
 /*
   unblock a blocked process
@@ -605,7 +547,7 @@ sigunblock(proc_t proc){
     int w;
 
     PROCOK(proc);
-    w = (int)proc->wchan % WAITTABLESIZE;
+    w = _wait_hash( (int) proc->wchan );
     plx = splhigh();
 
     /* remove from wait table */
@@ -617,15 +559,33 @@ sigunblock(proc_t proc){
         waittable[w] = proc->wnext;
 
     proc->wnext = proc->wprev = 0;
-    proc->state &= ~ PRS_BLOCKED;
-    proc->wmsg = 0;
+    proc->wmsg  = 0;
+    proc->wchan = 0;
 
-    if( proc->flags & PRF_REALTIME && proc->state == PRS_RUNNABLE ){
-        realtimelist_add(proc);
-        sched_yield();
+    if( proc->state & PRS_BLOCKED ){
+        proc->state &= ~ PRS_BLOCKED;
+
+        if( proc->state == PRS_RUNNABLE ){
+            readylist_add(proc);
+            if( proc->flags & PRF_REALTIME ) sched_yield();
+        }
     }
 
     splx(plx);
+}
+
+
+void
+_set_timeout(utime_t timeo){
+
+    if( !next_timeout || (timeo < next_timeout) )
+        wakeup( &next_timeout );
+}
+
+void
+set_alarm(int timeo){
+    currproc->alarm = get_time() + timeo;
+    _set_timeout( currproc->alarm );
 }
 
 /*
@@ -663,11 +623,18 @@ tsleep(void *wchan, int prio, const char *wmsg, int timo){
         return -1;
     }
 
-    w = (int)wchan % WAITTABLESIZE;
+    if( prio < 0 ) prio = currproc->prio;
+    w = _wait_hash( (int)wchan );
 
-    plx = splproc();
-    currproc->wchan = wchan;
-    currproc->wmsg  = wmsg;
+    // kprintf("tsleep %x %s on %s\n", currproc, currproc->name, wmsg);
+    if( currproc->wchan ){
+        kprintf("already waiting on %x %s s %x\n", currproc->wchan, currproc->wmsg, currproc->state);
+        PANIC("tsleep dupe!");
+    }
+
+    plx = splhigh();
+    currproc->wchan   = wchan;
+    currproc->wmsg    = wmsg;
     currproc->timeout = timo ? get_time() + timo : 0;
 
     currproc->wnext = waittable[ w ];
@@ -676,10 +643,16 @@ tsleep(void *wchan, int prio, const char *wmsg, int timo){
         waittable[ w ]->wprev = (proc_t)currproc;
     waittable[ w ] = (proc_t)currproc;
 
+    if( currproc->wnext == currproc || currproc->wprev == currproc )
+        PANIC("insert waitlist loop");
+    currproc->prio   = prio;
     currproc->state |= PRS_BLOCKED;
+
+    if( currproc->timeout )
+        _set_timeout( currproc->timeout );
+
     yield();
 
-    currproc->prio = prio;
     return currproc->timeout ? currproc->timeout <= get_time() : 0;
 }
 
@@ -699,13 +672,16 @@ rt_tsleep(void *wchan, const char *wmsg, int timo){
 void
 wakeup(void *wchan){
     struct Proc *p;
+    struct Proc *n;
     int plx;
     int w;
 
-    w = (int)wchan % WAITTABLESIZE;
+    w = _wait_hash( (int)wchan );
 
-    plx = splproc();
-    for(p=waittable[w]; p; p=p->wnext){
+    plx = splhigh();
+    for(p=waittable[w]; p; p=n){
+        n = p->wnext;
+        if( p == n ) PANIC("waitlist loop!");
         if( p->wchan == wchan )
             sigunblock(p);
     }
@@ -714,73 +690,77 @@ wakeup(void *wchan){
 }
 
 /*
-  add a process to realtime run list
+  add a process to ready list
 */
 
 void
-realtimelist_add(proc_t proc){
+readylist_add(proc_t proc){
 
     PROCOK(proc);
+    if( proc->rnext || proc->rprev ){
+        kprintf("cannot add to readylist proc %x (%s), (%x,%x) cp %x\n",
+                proc, proc->name, proc->rprev, proc->rnext, currproc);
+        return;
+    }
 
     int plx = splhigh();
-    proc->rtnext = 0;
-    if( realtimetail ){
-        realtimetail->rtnext = proc;
-        proc->rtprev = (proc_t)realtimetail;
-    }else{
-        proc->rtprev = 0;
-    }
-    realtimetail = proc;
+    proc->rnext = 0;
 
-    if( !realtimelist ){
-        realtimelist = proc;
+    if( proc->prio >= READYLISTSIZE ) proc->prio = READYLISTSIZE - 1;
+    struct ReadyList *rl = readylist + proc->prio;
+
+    if( rl->tail ){
+        rl->tail->rnext = proc;
     }
-    sched_yield();
+    proc->rprev = rl->tail;
+    rl->tail = proc;
+
+    if( !rl->head ){
+        rl->head = proc;
+    }
+
     splx(plx);
 }
 
 /*
-  remove front process from realtime run list
+  remove front process from ready list
 */
 
 proc_t
-realtimelist_next(void){
-    proc_t next;
-
-    if( ! realtimelist )
-        return 0;
+readylist_next(void){
+    proc_t next = 0;
+    int i;
 
     int plx = splhigh();
-    next = (proc_t)realtimelist;
-    realtimelist = next->rtnext;
-    next->rtnext = 0;
 
-    if( realtimelist ){
-        realtimelist->rtprev = 0;
-    }else{
-        realtimetail = 0;
+    for(i=0; i<READYLISTSIZE; i++){
+        struct ReadyList *rl = readylist + i;
+        if( ! rl->head ) continue;
+
+        next = rl->head;
+        rl->head = next->rnext;
+        next->rnext = 0;
+
+        if( rl->head ){
+            rl->head->rprev = 0;
+        }else{
+            rl->tail = 0;
+        }
+
+        /* make sure it is still runnable */
+        if( next->state != PRS_RUNNABLE ){
+            next = 0;
+            continue;
+        }
+
+        break;
     }
 
     splx(plx);
-    return next;
-}
 
-proc_t
-readylist_next(void){
-    proc_t next;
+    if( next ) return next;
+    return idle_proc;
 
-    if( ! readylist )
-        return 0;
-
-    next = (proc_t)readylist;
-    readylist = next->rnext;
-    next->rnext = 0;
-
-    if( readylist ){
-        readylist->rprev = 0;
-    }
-
-    return next;
 }
 
 
@@ -800,41 +780,34 @@ proc_t
 _yield_next_proc(void){
     proc_t nextproc;
 
-    // ARM nvic already prevents lower prio ints
-#ifdef PLATFORM_I386
-    splproc();
-#endif
+    /* NB: we are already (at least) at splproc */
+
+    if( currproc && currproc->state == PRS_RUNNABLE )
+        readylist_add( currproc );
 
     /* who runs next? */
-    if( realtimelist ){
-        int pl = splhigh();
-        nextproc = realtimelist_next();
-        splx(pl);
-    }
-    else if( readylist ){
-        nextproc = readylist_next();
-    }
-    else if( schedulerproc ){
-        nextproc = schedulerproc;
-    }
-    else{
-        PANIC("_yield: no next proc");
+    nextproc = readylist_next();
+
+    if( ! nextproc ){
+        PANIC("no nextproc!");
     }
 
     /* stats */
-    if( timeremain > 0 )
-        currproc->timeyielded += timeremain;
+    if( currproc ){
+        if( timeremain > 0 )
+            currproc->timeyielded += timeremain;
+    }
 
-    /* kprintf(" ynp curr %x, next %x; curr sp %x, next sp %x\n",
-       currproc, nextproc, currproc->sp, nextproc->sp); */
+    //kprintf(" ynp curr %x (%s), next %x (%s); curr sp %x, next sp %x start %x\n",
+    //   currproc, currproc->name, nextproc, nextproc->name, currproc->sp, nextproc->sp, nextproc->stack_start);
 
 
 #ifdef CHECKPROC
-    if( !nextproc || nextproc->sp < (u_long)nextproc->stack_start ){
-        kprintf("stack overflow: next %x, sp %x, start %x\n", nextproc, nextproc->sp, nextproc->stack_start);
+    if( nextproc != currproc && nextproc->sp < (u_long)nextproc->stack_start ){
+        kprintf("stack overflow: next %x (%s), sp %x, start %x\n", nextproc, nextproc->name, nextproc->sp, nextproc->stack_start);
         PANIC("stack overflow");
     }
-    if( nextproc->sp < nextproc->lowsp ) nextproc->lowsp = nextproc->sp;
+    if( nextproc->sp && nextproc->sp < nextproc->lowsp ) nextproc->lowsp = nextproc->sp;
 #endif
 
     nextproc->timeallotted += nextproc->timeslice;
@@ -847,19 +820,11 @@ void
 _yield_bottom(void){
 
     /* are there any pending msgs that need to be delivered? */
-    if( (currproc->flags & PRF_MSGPEND)
-#ifndef PLATFORM_ARM_CM
-        /* arm port sets this below */
-        && !currproc->throwing
-#endif
-        ){
-        currproc->throwing = 1;
+    if( (currproc->flags & PRF_MSGPEND) ){
         spl0();
         _xthrow();
         currproc->throwing = 0;
     }
-
-    spl0();
 }
 
 int

@@ -27,7 +27,8 @@ option CHECKPROC		# additional error checking in proc
 
 option GETLINEHIST
 
-srcfile         app/maple_mini_blinky.c
+# srcfile         app/maple_mini_i2c.c
+srcfile         app/maple_mini_oled.c
 option PROJECT_MAIN     main
 
 ################################################################

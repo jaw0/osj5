@@ -17,7 +17,7 @@
 #include <calendar.h>
 
 // use 64bit nums?
-// #define PRINTF64
+#define PRINTF64
 
 /*
   a minimal implementation of printf

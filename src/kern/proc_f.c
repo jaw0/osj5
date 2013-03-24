@@ -98,7 +98,7 @@ proc_ps(proc_t p){
 
 	    (p->wmsg ? p->wmsg : "     "),
 
-	    (p->estcpu * 100 * PROC_TIME) / (PRIO_TIME * 2),
+            p->estcpu / KESTCPU,
 
 	    p->timeallotted ?
 	    ((p->timeallotted - p->timeyielded) * 100 / p->timeallotted) : 0,
@@ -138,8 +138,8 @@ DEFUN(ps, "list processes")
     }else{
         proc_ps(p);
 
-        printf("magic=%9.9d sp=0x%08.8x state=0x%02.2x flags=0x%02.2x wchan=0x%08.8x pcnt=0x%02.2x\n",
-               p->magic, p->sp, p->state, p->flags, p->wchan, p->pcnt);
+        printf("magic=%9.9d sp=0x%08.8x state=0x%02.2x flags=0x%02.2x wchan=0x%08.8x\n",
+               p->magic, p->sp, p->state, p->flags, p->wchan);
 #ifdef USE_NSTDIO
         printf("stdin=0x%08.8x stdout=0x%08.8x stderr=0x%08.8x cwd=0x%08.8x\n",
                p->stdin, p->stdout, p->stderr, p->cwd);
@@ -150,7 +150,7 @@ DEFUN(ps, "list processes")
                p->clist, p->msghead, p->msgtail);
         printf("memused=0x%08.8x timeused=0x%08.8x timeyld=0x%08.8x timeallot=0x%08.8x\n",
                p->memused, p->timeused, p->timeyielded, p->timeallotted);
-        printf("estcpu=%03.3d next=0x%08.8x prev=0x%08.8x\n",
+        printf("estcpu=%08.8d next=0x%08.8x prev=0x%08.8x\n",
                p->estcpu, p->next, p->prev);
 #ifdef CHECKPROC
         printf("lowsp=%08.8X (%d)\n", p->lowsp, (char*)p - (char*)p->lowsp);

@@ -39,10 +39,10 @@ struct Proc {
 #define PRF_MSGPEND	8	/* a message is pending */
 #define PRF_AUTOREAP	16	/* process will not reap dead kids, have scheduler do it */
 #define PRF_IMPORTANT	32	/* important system process */
+#define PRF_SIGWAKES	64	/* signals wake blocked procs */
 
 	int prio;			/* process priority - generally in the range of 0-16 */
 	int nice;			/* value to adjust prio (above) */
-    	int pcnt;			/* priority counter */
 
 	void *wchan;			/* what are we waiting for */
 	const char *wmsg;		/* short description of what is being waited for */
@@ -85,7 +85,6 @@ struct Proc {
 	struct Proc *brother, *sister;	/* siblings */
 	struct Proc *next,    *prev;	/* proclist */
 	struct Proc *rnext,   *rprev;	/* readylist */
-	struct Proc *rtnext,  *rtprev;	/* realtimelist */
 	struct Proc *wnext,   *wprev;	/* wait table */
 
 #ifdef GETLINEHIST
@@ -111,10 +110,11 @@ typedef struct Proc *proc_t;
 #ifndef PROC_TIME
 #  define PROC_TIME	50000		/* usec - timer int rate */
 #endif
-#define PRIO_TIME	1000000		/* usec - how often to recalc priorities */
+#define MAINT_TIME	5000000		/* usec - how often to recalc things */
 #define WAITTABLESIZE	23
+#define READYLISTSIZE	16
 #define WCHAN_NEVER	0		/* a wchan that is never woken */
-
+#define KESTCPU		16384
 
 extern volatile struct Proc *proclist;
 extern volatile struct Proc *currproc;

@@ -15,7 +15,13 @@
 void sighandler();
 unsigned long bootflags = 0;
 
-int main(int argc, char**argv){ start(); }
+int main(int argc, char**argv){
+
+    if( argc > 1 && argv[1][0] == '-' && argv[1][1] == 's' )
+        bootflags = 0xFF;
+
+    start();
+}
 
 void
 init_hw(void){
