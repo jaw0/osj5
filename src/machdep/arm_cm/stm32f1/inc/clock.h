@@ -1,4 +1,6 @@
 
 
-extern int sys_clock_freq(void);
+#define SYSCLOCK	72000000
+#define APB2CLOCK	72000000
+#define APB1CLOCK	36000000
 

@@ -10,14 +10,15 @@
 
 #include <stm32f10x.h>
 #include <proc.h>
+#include <gpio.h>
 
 static void
 blinky(void){
 
     while(1){
-        GPIOB->ODR = (GPIOB->ODR & 0xFFFFFFFD) | 2;
+        gpio_set( GPIO_B1 );
         usleep( 250000 );
-        GPIOB->ODR = (GPIOB->ODR & 0xFFFFFFFD) | 0;
+        gpio_clear( GPIO_B1 );
         usleep( 250000 );
     }
 }
@@ -25,13 +26,7 @@ blinky(void){
 void
 main(void){
 
-    /* Enable everything but wdg */
-    RCC->APB2ENR |= 0x38FFFD;
-    RCC->APB1ENR |= 0x3afec1ff;
-    RCC->AHBENR  |= 0x557;
-
-    /* blink B1 */
-    GPIOB->CRL = 0x10;
+    gpio_init( GPIO_B1, GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
 
     /* fork off a blink proc */
     start_proc( 1024, blinky, "blinky" );

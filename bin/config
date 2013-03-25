@@ -153,6 +153,7 @@ while( <> ){
 
 	my ($dev, $n) = $dev =~ /(\S*\D+)(\d*)$/;
 
+        $devs{ $dev } = $n if $n > $devs{$dev};
 	$devs{ $dev } ++;
         feature( $dev, 'device' );
 

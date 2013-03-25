@@ -1,0 +1,41 @@
+
+A0      ADC0    PWM2/1
+A1      ADC1    PWM2/2
+A2      ADC2    PWM2/3
+A3      ADC3    PWM2/4
+A4      ADC4
+A5      ADC5
+A6      ADC6    PWM3/1
+A7      ADC7    PWM3/2
+A8              PWM1/1
+A9      usart1  PWM1/2
+A10     usart1  PWM1/3
+A11             PWM1/4
+A12
+A13     JTAG/SW
+A14     JTAG/SW
+A15     JTAG
+
+B0      ADC8    PWM3/3
+B1      bluelt  PWM3/4
+B2
+B3      JTAG
+B4      JTAG
+B5
+B6      i2c1    PWM4/1
+B7      i2c1    PWM4/2
+B8      button  PWM4/3
+(no pin)
+B10     i2c2
+B11     i2c2
+B12     spi2
+B13     spi2
+B14     spi2
+B15     spi2
+
+C13     OSC
+C14     OSC
+C15     OSC
+
+
+

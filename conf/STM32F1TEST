@@ -8,7 +8,9 @@ arch    arm_cm
 variant stm32f1
 
 #option  HSECLOCK        8000000         # external xtal
-#option  SYSCLOCK        60000000        # run system at this speed
+#option  SYSCLOCK        72000000        # run system at this speed
+
+option  PROC_TIME       1000
 
 feature PROC
 feature NSTDIO
@@ -27,8 +29,11 @@ option CHECKPROC		# additional error checking in proc
 
 option GETLINEHIST
 
-# srcfile         app/maple_mini_i2c.c
+#srcfile         app/maple_mini_blinky.c
+#srcfile         app/maple_mini_i2c.c
 srcfile         app/maple_mini_oled.c
+#srcfile         app/maple_mini_pwm.c
+
 option PROJECT_MAIN     main
 
 ################################################################
@@ -46,6 +51,11 @@ filesys flfs
 ################################################################
 
 #flashdev ram:	type flfs @ 0	size 2048	block 64	flags SSF_NOERASE
+
+################################################################
+
+feature gpio
+feature pwm
 
 ################################################################
 

@@ -6,7 +6,7 @@
 */
 
 // parts adapted from:
-//   http://code.google.com/p/aeroquad/source/browse/trunk/AeroQuad/Libmaple/libmaple/libmaple/i2c.c?spec=svn961&r=961
+//   https://github.com/leaflabs/libmaple/blob/master/libmaple/i2c.c
 
 
 #include <conf.h>
@@ -16,6 +16,7 @@
 #include <error.h>
 #include <clock.h>
 #include <i2c.h>
+#include <gpio.h>
 
 /* NB: stm32f1 + f4 are compat, but at different addrs */
 #include <stm32.h>
@@ -101,19 +102,21 @@ i2c_init(struct Device_Conf *dev){
         i2cinfo[i].addr = addr = I2C1;
         i2cinfo[i].irq  = IRQ_I2C1_EV;
 
-        RCC->APB2ENR |= 9;		// gpioB + AFI
+        RCC->APB2ENR |= 1;		// AFI
         RCC->APB1ENR |= 0x200000;	// i2c1
-        GPIOB->CRL   |= 0xEE000000;	// open-drain, AFI, 50MHz
-        GPIOB->ODR    = 0xFF;
+        gpio_init( GPIO_B6, GPIO_AF_OUTPUT_OD | GPIO_OUTPUT_10MHZ );
+        gpio_init( GPIO_B7, GPIO_AF_OUTPUT_OD | GPIO_OUTPUT_10MHZ );
+
         break;
     case 1:
         // CL=B10, DA=B11
         i2cinfo[i].addr = addr = I2C2;
         i2cinfo[i].irq  = IRQ_I2C2_EV;
 
-        RCC->APB2ENR |= 9;		// gpioB + AFI
+        RCC->APB2ENR |= 1;		// AFI
         RCC->APB1ENR |= 0x400000;	// i2c2
-        GPIOB->CRH   |= 0xFF00;		// open-drain, AFI, 50MHz
+        gpio_init( GPIO_B10, GPIO_AF_OUTPUT_OD | GPIO_OUTPUT_10MHZ );
+        gpio_init( GPIO_B11, GPIO_AF_OUTPUT_OD | GPIO_OUTPUT_10MHZ );
 
         break;
     case 2:
