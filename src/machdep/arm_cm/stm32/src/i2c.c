@@ -23,8 +23,6 @@
 
 // #define VERBOSE
 
-#define APB1CLOCK	36000000
-
 #define CR1_PE		1
 #define CR1_START	0x100
 #define CR1_STOP	0x200
@@ -205,7 +203,7 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
 
     while( ii->state != I2C_STATE_IDLE ){
         tsleep( ii, -1, "i2c", timeo );
-        if( ++i > 10 ) return 1;
+        if( ++i > 10 ) return I2C_XFER_TIMEOUT;
     }
 
     ii->msg       = msgs;
