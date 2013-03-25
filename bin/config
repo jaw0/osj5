@@ -86,7 +86,7 @@ while( <> ){
     }
 
     elsif( $cmd eq "feature" ){
-	print CONFH "#define USE_$f[1]\n";
+	print CONFH "#define USE_\U$f[1]\n";
         feature( lc($f[1]), 'feature' );
     }
     elsif( $cmd eq 'files' ){
@@ -153,11 +153,12 @@ while( <> ){
 
 	my ($dev, $n) = $dev =~ /(\S*\D+)(\d*)$/;
 
+	print CONFH "#define USE_\U$dev\E\n" unless $devs{$dev};
+
         $devs{ $dev } = $n if $n > $devs{$dev};
 	$devs{ $dev } ++;
         feature( $dev, 'device' );
 
-	print CONFH "#define USE_\U$dev\E\n" if( !$n );
 	($port) = /port\s*([^\s]*)/   if /port/;
 	($baud) = /baud\s*([^\s]*)/   if /baud/;
 	($irq) = /irq\s*([^\s]*)/     if /irq/;
