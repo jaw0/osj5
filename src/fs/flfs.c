@@ -199,18 +199,18 @@ chunklength(struct FLFS *flfs, int offset){
     struct FileData *fd;
     u_long l;
 
-    spin_lock( &filesystemlock );
+    sync_lock( &filesystemlock, "flfs.L" );
     for(fd=openforwrite; fd; fd=fd->next){
         if( fd->flfs == flfs &&
             ( fd->cnkstart == offset
               || fd->filestart == offset ) ){	/* to catch ssf_blkwrite devs */
 
-            spin_unlock( &filesystemlock );
+            sync_unlock( &filesystemlock );
             return fd->cnktlen;
         }
     }
 
-    spin_unlock( &filesystemlock );
+    sync_unlock( &filesystemlock );
     kprintf("filesystem %s is corrupt\n", flfs->me->name);
     PANIC( "unknown chunk length" );
     return 0;
@@ -290,10 +290,10 @@ flfs_open_r(MountEntry *me, const char *name){
         return 0;
     }
     /* make sure it is not open for writing */
-    spin_lock( &filesystemlock );
+    sync_lock( &filesystemlock, "flfs.L" );
     for(ofd=openforwrite; ofd; ofd=ofd->next){
         if( flfs == ofd->flfs && offset == ofd->filestart ){
-            spin_unlock( &filesystemlock );
+            sync_unlock( &filesystemlock );
             free(fd->buffer, flfs->fblksize);
             free(fd, sizeof(struct FileData));
             fsmsg("file is already open for writing\n");
@@ -302,13 +302,13 @@ flfs_open_r(MountEntry *me, const char *name){
     }
 
     if( diskread(flfs, offset, fd->buffer, flfs->fblksize) <= 0 ){
-        spin_unlock( &filesystemlock );
+        sync_unlock( &filesystemlock );
         free(fd->buffer, flfs->fblksize);
         free(fd, sizeof(struct FileData));
         DIAG("read %s,%d failed (line %d)\n", flfs->me->name, offset, __LINE__);
         return 0;
     }
-    spin_unlock( &filesystemlock );
+    sync_unlock( &filesystemlock );
 
     fc = (struct FSChunk *)fd->buffer;
     ff = (struct FSFile  *)(fd->buffer + sizeof(struct FSChunk));
@@ -408,13 +408,13 @@ flfs_open_w(MountEntry *me, const char *name){
     fd->how  = FDH_WRITE;
 
     /* add to open file list */
-    spin_lock( &filesystemlock );
+    sync_lock( &filesystemlock, "flfs.L" );
     fd->cnkstart  = 0xFFFFFFFF;
     fd->filestart = 0xFFFFFFFF;
     fd->next = openforwrite;
     fd->prev = 0;
     openforwrite = fd;
-    spin_unlock( &filesystemlock );
+    sync_unlock( &filesystemlock );
 
     offset = findavailable(f, FCT_FILE);
     if( offset == -1 ){
@@ -426,14 +426,14 @@ flfs_open_w(MountEntry *me, const char *name){
             free(fd, sizeof(struct FileData));
 
             /* remove from open file list */
-            spin_lock( &filesystemlock );
+            sync_lock( &filesystemlock, "flfs.L" );
             if( fd->next )
                 fd->next->prev = fd->prev;
             if( fd->prev )
                 fd->prev->next = fd->next;
             if( openforwrite == fd )
                 openforwrite = fd->next;
-            spin_unlock( &filesystemlock );
+            sync_unlock( &filesystemlock );
 
             return 0;
         }
@@ -547,14 +547,14 @@ flfs_close(FILE *f){
         fflush( flfs->me->fdev );
 
         /* remove from open file list */
-        spin_lock( &filesystemlock );
+        sync_lock( &filesystemlock, "flfs.L" );
         if( fd->next )
             fd->next->prev = fd->prev;
         if( fd->prev )
             fd->prev->next = fd->next;
         if( openforwrite == fd )
             openforwrite = fd->next;
-        spin_unlock( &filesystemlock );
+        sync_unlock( &filesystemlock );
     }
 
     free(fd->buffer, flfs->fblksize);
@@ -726,14 +726,14 @@ findavailable(FILE *f, int type){
     }
 
     /* make sure it is unused */
-    spin_lock( &filesystemlock );
+    sync_lock( &filesystemlock, "flfs.L" );
     for(ofd=openforwrite; ofd; ofd=ofd->next){
         if( fd->flfs == ofd->flfs &&
             ( ofd->cnkstart <= offset && ofd->cnkstart + ofd->cnktlen > offset
               || ofd->filestart == offset )
             ){
             /* someone else has this chunk */
-            spin_unlock( &filesystemlock );
+            sync_unlock( &filesystemlock );
             freed = -1;
             goto lookagain;
         }
@@ -748,7 +748,7 @@ findavailable(FILE *f, int type){
         fd->cnkstat  = fc->type;
         fd->bufpos   = 0;
 
-        spin_unlock( &filesystemlock );
+        sync_unlock( &filesystemlock );
         return fd->cnkstart;
 
     }
@@ -758,7 +758,7 @@ findavailable(FILE *f, int type){
     fd->cnkstat  = fc->type;
     fd->cnkdlen  = fd->cnktlen - sizeof(struct FSChunk);
     fd->cnknext  = 0;
-    spin_unlock( &filesystemlock );
+    sync_unlock( &filesystemlock );
 
     fc->type    = type;
     fc->totlen  = 0xFFFFFFFF;

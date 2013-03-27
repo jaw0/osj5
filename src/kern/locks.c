@@ -19,21 +19,22 @@ extern void yield(void);
   NB: locks are not safe for bottom-half use
 */
 void
-spin_lock(lock_t* p){
+sync_lock(lock_t* p, const char *wname){
+    if(!wname) wname = "lock";
 
-    while( spin_lockedp(p) || !spin_try_lock(p) )
-        tsleep( (void*)p, 0, "lock", 0 );
+    while( sync_lockedp(p) || !sync_try_lock(p) )
+        tsleep( (void*)p, 0, wname, 0 );
 }
 
 /* use gcc builtins */
 /* return 1 for success, 0 for fail */
 int
-spin_try_lock(lock_t *p){
+sync_try_lock(lock_t *p){
     return !__sync_lock_test_and_set(p, 1);
 }
 
 void
-spin_unlock(lock_t *p){
+sync_unlock(lock_t *p){
     __sync_lock_release(p);
     wakeup( (void*)p );
 }

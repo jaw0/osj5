@@ -6,11 +6,11 @@
 
 typedef int lock_t;
 
-extern int spin_try_lock(lock_t *);
-extern void spin_lock(lock_t *);
-extern void spin_unlock(lock_t *);
+extern int sync_try_lock(lock_t *);
+extern void sync_lock(lock_t *, const char *);
+extern void sync_unlock(lock_t *);
 
-#define spin_lockedp(l)		(*(l))
+#define sync_lockedp(l)		(*(l))
 
 #endif /* __locks_h__ */
 
