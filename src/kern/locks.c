@@ -23,7 +23,7 @@ sync_lock(lock_t* p, const char *wname){
     if(!wname) wname = "lock";
 
     while( sync_lockedp(p) || !sync_try_lock(p) )
-        tsleep( (void*)p, 0, wname, 0 );
+        tsleep( (void*)p, -1, wname, 0 );
 }
 
 /* use gcc builtins */
