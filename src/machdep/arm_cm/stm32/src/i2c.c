@@ -12,6 +12,7 @@
 #include <conf.h>
 #include <proc.h>
 #include <arch.h>
+#include <locks.h>
 #include <dev.h>
 #include <error.h>
 #include <clock.h>
@@ -78,6 +79,7 @@ struct I2CInfo {
     I2C_TypeDef 	*addr;
     int 	  	irq;
 
+    lock_t		lock;
     int			state;
     u_long		errorflags;
     i2c_msg		*msg;
@@ -142,6 +144,7 @@ i2c_init(struct Device_Conf *dev){
     nvic_enable( i2cinfo[i].irq,     0 );	// highest priority
     nvic_enable( i2cinfo[i].irq + 1, 0 );	// highest priority
 
+    speed = APB1CLOCK/addr->CCR/2000;
     bootmsg("%s at io 0x%x irq %d speed %dkHz\n", dev->name, i2cinfo[i].addr, i2cinfo[i].irq, speed);
     return 0;
 }
@@ -195,15 +198,18 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
     I2C_TypeDef *dev   = ii->addr;
     int i = 0;
 
+    if( unit >= N_I2C ) return -1;
+
     /* wait for device */
 #ifdef VERBOSE
     printf("i2c xfer waiting, state %d\n", ii->state);
 #endif
     cur_crumb = 0;
 
-    while( ii->state != I2C_STATE_IDLE ){
-        tsleep( ii, -1, "i2c", timeo );
-        if( ++i > 10 ) return I2C_XFER_TIMEOUT;
+    sync_lock( & ii->lock, "i2c.L" );
+
+    if( ii->state != I2C_STATE_IDLE ){
+        // reset ?
     }
 
     ii->msg       = msgs;
@@ -220,21 +226,20 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
 
     tsleep( ii, -1, "i2c", timeo );
 
-    _i2c_dump_crumb();
 #ifdef VERBOSE
+    _i2c_dump_crumb();
     printf("i2c xfer done %d\n\n", ii->state);
 #endif
 
-    if( ii->state == I2C_STATE_ERROR ){
-        ii->state = I2C_STATE_IDLE;
-        return ii->errorflags;
+    int r;
+    switch(ii->state){
+    case I2C_STATE_XFER_DONE:	r = I2C_XFER_OK;	break;
+    case I2C_STATE_ERROR:	r = ii->errorflags;	break;
+    default:			r = I2C_XFER_TIMEOUT;	break;	// QQQ - reset?
     }
 
-    if( ii->state != I2C_STATE_XFER_DONE ){
-        // QQQ - reset?
-        return I2C_XFER_TIMEOUT;
-    }
     ii->state = I2C_STATE_IDLE;
+    wakeup( & ii->lock );
 
     return I2C_XFER_OK;
 }
