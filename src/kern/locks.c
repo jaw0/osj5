@@ -12,7 +12,8 @@
 #include <proc.h>
 #include <locks.h>
 
-extern void yield(void);
+#define sync_lockedp(l)		(*(l))
+
 
 /*
   obtain a lock
