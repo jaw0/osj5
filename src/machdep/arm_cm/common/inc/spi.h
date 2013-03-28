@@ -9,12 +9,24 @@
 #define __spi_h__
 
 
+#define SPI_XFER_TIMEOUT	-1
+#define SPI_XFER_OK		0
+
+
 #define SPI_FLAG_READ	0x1
 #define SPI_FLAG_CRC7	0x2
 
+struct SPIConf {
+    int		unit;
+    u_long	flags;
+    int		speed;
+    int		nss;
+    char	ss[8];
+};
 
-#define SPI_XFER_TIMEOUT	-1
-#define SPI_XFER_OK		0
+
+int spi_write1(const struct SPIConf *, int);
+int spi_xfer(const struct SPIConf *, int, char *, int);
 
 
 #endif /* __spi_h__ */

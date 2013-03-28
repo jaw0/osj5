@@ -119,7 +119,7 @@ spi_init(struct Device_Conf *dev){
         RCC->APB2ENR |= 1<<12;	// spi
         gpio_init( GPIO_A5, GPIO_AF_OUTPUT_PP | GPIO_OUTPUT_50MHZ );
         gpio_init( GPIO_A6, GPIO_INPUT_FLOATING );
-        gpio_init( GPIO_A7, GPIO_AF_OUTPUT_OD | GPIO_OUTPUT_50MHZ );
+        gpio_init( GPIO_A7, GPIO_AF_OUTPUT_PP | GPIO_OUTPUT_50MHZ );
         break;
     case 1:
         // on ahb1, dma1 chan 4+5
@@ -135,7 +135,7 @@ spi_init(struct Device_Conf *dev){
         RCC->APB1ENR |= 1<<14;	// spi
         gpio_init( GPIO_B13, GPIO_AF_OUTPUT_PP | GPIO_OUTPUT_50MHZ );
         gpio_init( GPIO_B14, GPIO_INPUT_FLOATING );
-        gpio_init( GPIO_B15, GPIO_AF_OUTPUT_OD | GPIO_OUTPUT_50MHZ );
+        gpio_init( GPIO_B15, GPIO_AF_OUTPUT_PP | GPIO_OUTPUT_50MHZ );
         break;
     default:
         // ...
@@ -226,6 +226,7 @@ _irq_spi_handler(int unit){
         SPI_CRUMB("spi-txe", 0, 0);
 
         dev->CR2 &= ~( CR2_TXEIE | CR2_ERRIE );	// disable irq
+        nvic_clearpending( ii->irq );
 
         if( ii->state != SPI_STATE_XFER_DONE ){
             ii->state = SPI_STATE_XFER_DONE;
@@ -262,21 +263,28 @@ _spi_dump_crumb(void){
 
 // set/clear cs pins
 static void
-_spi_cspins(int nss, char *ss, int on){
+_spi_cspins(const struct SPIConf *cf, int on){
+    int nss = cf->nss;
+    const char *ss = cf->ss;
 
     while(nss--){
         int s = *ss ++;
         int m = (s & 0x80) ? 1 : 0;	// hi bit = on/off
 
-        if( s == m )
+        if( on == m )
             gpio_set( s & 0x7F );
         else
             gpio_clear( s & 0x7F );
+#ifdef VERBOSE
+        printf("pin %x %s\n", (s & 0x7f), (on==m)?"on":"off");
+#endif
     }
 }
+
+
 /****************************************************************/
 
-static inline void
+static void
 _dma_start(struct SPIInfo *ii, int read, int len, char *data){
     SPI_TypeDef *dev   = ii->addr;
     DMA_Channel_TypeDef *dmac = read ? ii->rxdma : ii->txdma;
@@ -295,9 +303,22 @@ _dma_start(struct SPIInfo *ii, int read, int len, char *data){
     dmac->CCR |= DMACCR_EN;
 }
 
-static inline void
-_devs_disable(struct SPIInfo *ii){
-    // disable spi+dma
+
+/****************************************************************/
+
+static void
+_spi_conf_start(const struct SPIConf *cf, struct SPIInfo *ii){
+    SPI_TypeDef *dev   = ii->addr;
+
+    _spi_cspins(cf, 1);
+    if( cf->speed ) set_speed(ii, cf->speed);
+
+    if( cf->flags & SPI_FLAG_CRC7 ) dev->CR1 |= CR1_CRCEN;
+    dev->CR1 |= CR1_MSTR | CR1_SSI;
+}
+
+static void
+_spi_conf_done(const struct SPIConf *cf, struct SPIInfo *ii){
     SPI_TypeDef *dev   = ii->addr;
 
     dev->CR1  &= ~ (CR1_SPE | CR1_CRCEN);
@@ -305,15 +326,21 @@ _devs_disable(struct SPIInfo *ii){
 
     ii->rxdma->CCR &= ~ DMACCR_EN;
     ii->txdma->CCR &= ~ DMACCR_EN;
+
+    // restore cs pins
+    _spi_cspins(cf, 0);
 }
 
-int
-spi_xfer(int unit, int flags, int nss, char *ss, int len, char *data, int timeo){
-    struct SPIInfo *ii = spiinfo + unit;
-    SPI_TypeDef *dev   = ii->addr;
-    int i = 0;
+/****************************************************************/
 
-    if( unit >= N_SPI ) return -1;
+int
+spi_xfer(const struct SPIConf *cf, int len, char *data, int timeo){
+    if( cf->unit >= N_SPI ) return -1;
+
+    struct SPIInfo *ii = spiinfo + cf->unit;
+    SPI_TypeDef *dev   = ii->addr;
+    int flags = cf->flags;
+    int i = 0;
 
 #ifdef VERBOSE
     printf("spi xfer waiting, state %x\n", ii->state);
@@ -332,14 +359,10 @@ spi_xfer(int unit, int flags, int nss, char *ss, int len, char *data, int timeo)
     printf("spi xfer starting, %d bytes\n", len);
 #endif
 
-    // enable cs pins
-    _spi_cspins(nss, ss, 1);
-    // start up dma
+    _spi_conf_start(cf, ii);
     dev->CR2 |= (flags & SPI_FLAG_READ) ? CR2_RXDMAEN : CR2_TXDMAEN;
     _dma_start( ii, flags & SPI_FLAG_READ, len, data );
-
-    if( flags & SPI_FLAG_CRC7 ) dev->CR1 |= CR1_CRCEN;
-    dev->CR1 |= CR1_SPE | CR1_MSTR | CR1_SSI;	// and go!
+    dev->CR1 |= CR1_SPE;	// go!
 
     int x = tsleep( ii, -1, ii->name, timeo );
 
@@ -356,18 +379,17 @@ spi_xfer(int unit, int flags, int nss, char *ss, int len, char *data, int timeo)
     }
 
 #ifdef VERBOSE
+    _spi_dump_crumb();
     printf("spi xfer finishing\n");
 #endif
 
     // wait !busy ( ~ 7 bit times from the txe-irq )
+    // probably finished during the time it took to get here
     while( dev->SR & SR_BSY ) ;
-    _devs_disable(ii);
 
-    // restore cs pins
-    _spi_cspins(nss, ss, 0);
+    _spi_conf_done(cf, ii);
 
 #ifdef VERBOSE
-    _spi_dump_crumb();
     printf("spi xfer done %d\n\n", ii->state);
 #endif
 
@@ -377,3 +399,59 @@ spi_xfer(int unit, int flags, int nss, char *ss, int len, char *data, int timeo)
     return r;
 }
 
+
+// write just one byte. not really worth the irq overhead.
+int
+spi_write1(const struct SPIConf *cf, int data){
+    if( cf->unit >= N_SPI ){
+        printf("invalid spi unit %d\n", cf->unit);
+        return -1;
+    }
+    struct SPIInfo *ii = spiinfo + cf->unit;
+    SPI_TypeDef *dev   = ii->addr;
+    int i = 0;
+
+    sync_lock(&ii->lock, "spi.L");
+
+    if( ii->state != SPI_STATE_IDLE ){
+        // reset ?
+    }
+
+    ii->state = SPI_STATE_BUSY;
+
+#ifdef VERBOSE
+    printf("spi xfer starting, 1 byte\n");
+#endif
+
+    _spi_conf_start(cf, ii);
+    dev->CR1 |= CR1_SPE;	// and go!
+
+    while( !(dev->SR & SR_TXE) ) ;		// it should be empty
+    dev->DR = data;
+
+#ifdef VERBOSE
+    printf("spi xfer finishing\n");
+#endif
+
+    // wait !busy
+    while( dev->SR & SR_BSY ) yield();
+
+    _spi_conf_done(cf, ii);
+
+#ifdef VERBOSE
+    printf("spi xfer done %d\n\n", ii->state);
+#endif
+
+    ii->state = SPI_STATE_IDLE;
+    sync_unlock( &ii->lock );
+
+    return 0;
+}
+
+int
+spi_sdcmd(struct SPIConf *cf, int wlen, const char *wbuf, int rlen, char *rbuf, int dlen, char *data){
+
+
+
+
+}
