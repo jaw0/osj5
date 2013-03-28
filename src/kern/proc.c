@@ -627,12 +627,14 @@ tsleep(void *wchan, int prio, const char *wmsg, int timo){
     w = _wait_hash( (int)wchan );
 
     // kprintf("tsleep %x %s on %s\n", currproc, currproc->name, wmsg);
+
+    plx = splhigh();
+
     if( currproc->wchan ){
         kprintf("already waiting on %x %s s %x\n", currproc->wchan, currproc->wmsg, currproc->state);
         PANIC("tsleep dupe!");
     }
 
-    plx = splhigh();
     currproc->wchan   = wchan;
     currproc->wmsg    = wmsg;
     currproc->timeout = timo ? get_time() + timo : 0;
@@ -652,6 +654,9 @@ tsleep(void *wchan, int prio, const char *wmsg, int timo){
         _set_timeout( currproc->timeout );
 
     yield();
+
+    if( currproc->wchan )
+        kprintf("/tsleep %x %s on %s %x, %x\n", currproc, currproc->name, wmsg, currproc->wchan, currproc->state);
 
     return currproc->timeout ? currproc->timeout <= get_time() : 0;
 }
