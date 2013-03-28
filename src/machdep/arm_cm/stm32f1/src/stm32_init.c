@@ -177,6 +177,15 @@ nvic_enable(int irq, int prio){
     NVIC->ISER[bi] |= 1<<bb;	// enable
 }
 
+void
+nvic_clearpending(int irq){
+
+    int bi = irq / 32;
+    int bb = irq & 31;
+
+    NVIC->ICPR[bi] |= 1<<bb;
+}
+
 /****************************************************************/
 
 void
