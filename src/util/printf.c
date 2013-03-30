@@ -18,6 +18,9 @@
 
 // use 64bit nums?
 #define PRINTF64
+// floats?
+#define PRINTFFLOAT
+
 
 /*
   a minimal implementation of printf
@@ -52,13 +55,14 @@ enum {
     PF_SIGNED,		/* arg is signed */
     PF_SHOW_PLS,    	/* arg is signed, show + if positive */
     PF_LEFT,        	/* left justify, not right */
-    PF_QUAD	    	/* arg is a quad */
+    PF_QUAD,	    	/* arg is a quad */
+    PF_FLT_F,
+    PF_FLT_E
 };
 
 #define B(x)		(1<<(x))
 #define isdig(x)	(((x)>='0') && ((x)<='9'))
 
-#define PRINTF64
 typedef unsigned long long u_quad;
 #ifdef PRINTF64
 typedef u_quad	u_num_t;
@@ -75,10 +79,18 @@ int snprintf(char *, int, const char *, ...);
 static int putnum(int (*)(void*, char), void *, u_num_t, int, int, int, int);
 int fncprintf(int (*)(void*, char), void *, const char *, ...);
 
+#ifdef PRINTFFLOAT
+static int putfloat(int (*)(void*, char), void *, float, int, int, int);
+#endif
+
+
 int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
     const char *p = fmt;
     char *s;
     u_num_t val;
+#ifdef PRINTFFLOAT
+    float fval;
+#endif
     int width = 0, prec = 0;
     u_short flags;
     int base;
@@ -276,6 +288,19 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
 
                 pos += putnum(ofnc, arg, val, base, width, prec, flags);
                 break;
+#ifdef PRINTFFLOAT
+            case 'f': case 'F':
+                flags |= B(PF_FLT_F);
+                goto doflt;
+            case 'e': case 'E':
+                flags |= B(PF_FLT_E);
+                /* fall through */
+            case 'g': case 'G':
+            doflt:
+                fval = va_arg(ap, double);
+                pos += putfloat(ofnc, arg, fval, width, prec, flags);
+                break;
+#endif
             case '*':
                 width = va_arg(ap,int);
                 goto rflag;
@@ -345,6 +370,14 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
     return pos;
 }
 
+static inline void
+padding(int (*ofnc)(void*, char), void *arg, int n, int ch){
+    while( n-- ){
+        (*ofnc)(arg, ch);
+    }
+}
+
+
 #ifdef PRINTF64
 #  define NUMSZMAX 64
 #  define NUMTMAX  0x7FFFFFFFFFFFFFFFULL
@@ -403,9 +436,7 @@ putnum(int (*ofnc)(void*, char), void *arg, u_num_t val, int base, int width, in
     if( width > 0 && ! (flags&B(PF_LEFT)) ){
         l += width;
         n = 0;
-        while( width-- ){
-            (*ofnc)(arg, ' ');
-        }
+        padding(ofnc, arg, width, ' ');
     }
 #endif
     /* copy output */
@@ -419,14 +450,76 @@ putnum(int (*ofnc)(void*, char), void *arg, u_num_t val, int base, int width, in
     if( width > 0 && (flags&B(PF_LEFT)) ){
         l += width;
         n = 0;
-        while( width-- ){
-            (*ofnc)(arg, ' ');
-        }
+        padding(ofnc, arg, width, ' ');
     }
 #endif
 
     return l;
 }
+
+
+#ifdef PRINTFFLOAT
+//    PF_SHOW_PLS,    	/* arg is signed, show + if positive */
+//    PF_LEFT,        	/* left justify, not right */
+
+static int
+putfloat(int (*ofnc)(void*, char), void *arg, float val, int width, int prec, int flags){
+    const char *s = 0;
+    int slen = 0;
+    if( !prec ) prec = 6;
+
+    if( isnan(val) ){
+        s = "NaN";
+        slen = 3;
+    }
+    if( isinf(val) ){
+        if( val < 0 ){
+            s = "-Inf";
+            slen = 4;
+        }else{
+            s = "Inf";
+            slen = 3;
+        }
+    }
+
+    if( s ){
+        int pad = width - slen;
+        if( pad < 0 ) pad = 0;
+        if( !(flags & B(PF_LEFT)) )
+            padding(ofnc, arg, pad, ' ');
+        // copy out
+        while( *s ) (*ofnc)(arg, *s ++);
+        if( flags & B(PF_LEFT) )
+            padding(ofnc, arg, pad, ' ');
+
+        return slen + pad;
+    }
+
+    /* RSN - %e, %g */
+    int sign = 1;
+    if( val < 0 ){ sign = -1; val = - val; }
+    int ipart = val;
+    int fpart = (val - ipart) * powf(10, prec);
+    int iwidth  = width - prec - 1;
+    int lwidth  = (flags & B(PF_LEFT)) ? 0 : iwidth;
+
+    int tlen = putnum(ofnc, arg, sign*ipart, 10, lwidth, lwidth, flags);
+    (*ofnc)(arg, '.');
+    tlen ++;
+
+    int flen = putnum(ofnc, arg, fpart, 10, prec, prec, B(PF_ZERO) | B(PF_SIGNED) | (flags&B(PF_SHOW_PLS)) );
+    tlen += flen;
+
+    if( tlen < width ){
+        // right pad
+        padding(ofnc, arg, width - tlen, ' ');
+        tlen = width;
+    }
+
+    return tlen;
+
+}
+#endif
 
 days_in_month(int m, int y){
 
@@ -524,6 +617,8 @@ fncprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, ...){
 
 
 #ifdef TESTING
+#include <math.h>
+#include <string.h>
 void main(void){
     char buffer[128];
     int i;
@@ -534,8 +629,16 @@ void main(void){
     snprintf(buffer, 128, "%d %c %s %02.2x\n", (int)324, (int)0x45, "foobar", (int)32);
     puts(buffer);
 
-    printf("%ld %c %s %02.2x\n", (int)324, (int)0x45, "foobar", (int)32);
-    printf("%.6ld %c %s %02.2x\n", (int)324, (int)0x45, "foobar", (int)32);
+    //printf("%ld %c %s %02.2x\n",   (int)324, (int)0x45, "foobar", (int)32);
+    //printf("%.6ld %c %s %02.2x\n", (int)324, (int)0x45, "foobar", (int)32);
+
+
+#ifdef PRINTFFLOAT
+    printf("%f, %.2f, %8.2f, %.4f.\n", 12.3456789012345, 12.3456789, 12.3456789, 12.0034567);
+    printf("%8.2f.\n", 12.3456789);
+    printf("%-8.2f.\n", 12.3456789);
+
+#endif
 
 }
 
