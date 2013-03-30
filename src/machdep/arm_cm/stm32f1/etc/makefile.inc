@@ -10,6 +10,7 @@ OBJCOPY = $(CONF_PREFIX)objcopy
 
 LINK = $(CONF_PREFIX)gcc
 LINK_FLAGS = -Wl,-T$(LINK_SCRIPT)  -nostartfiles
+LIBS = -lm
 
 CFLAGS = -ffreestanding
 
