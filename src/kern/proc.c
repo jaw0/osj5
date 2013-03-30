@@ -28,8 +28,9 @@
 #  define STACK_MIN	4096
 #endif
 
-#define INIT_STACK	4096
-
+#ifndef INIT_STACK
+#  define INIT_STACK	4096
+#endif
 
 struct ReadyList {
     struct Proc *head;
@@ -173,7 +174,7 @@ init_proc(proc_t p){
     p->stderr = console_port;
 #endif
 
-#ifdef MOUNT_ROOT
+#if defined(USE_FILESYS) && defined(MOUNT_ROOT)
     if( !chdir( MOUNT_ROOT ) ){
         bootmsg("root on %s\n", MOUNT_ROOT);
     }
