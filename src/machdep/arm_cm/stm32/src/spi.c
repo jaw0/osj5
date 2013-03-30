@@ -17,7 +17,7 @@
 #include <gpio.h>
 #include <stm32.h>
 
-#define VERBOSE
+//#define VERBOSE
 
 
 #define CR1_CRCEN	0x2000
@@ -102,7 +102,7 @@ spi_init(struct Device_Conf *dev){
     SPI_TypeDef *addr;
     int dmairq, dman;
 
-    bzero(spiinfo+unit, sizeof(struct SPIInfo));
+    bzero(ii, sizeof(struct SPIInfo));
 
     switch(unit){
     case 0:
@@ -255,7 +255,7 @@ _spi_dump_crumb(void){
 
 #ifdef VERBOSE
     for(i=0; i<cur_crumb; i++){
-        printf("[spi] %s\t%x %x\n", crumbs[i].event, crumbs[i].arg0, crumbs[i].arg1);
+        kprintf("[spi] %s\t%x %x\n", crumbs[i].event, crumbs[i].arg0, crumbs[i].arg1);
     }
 #endif
 }
@@ -276,7 +276,7 @@ _spi_cspins(const struct SPIConf *cf, int on){
         else
             gpio_clear( s & 0x7F );
 #ifdef VERBOSE
-        printf("pin %x %s\n", (s & 0x7f), (on==m)?"on":"off");
+        kprintf("pin %x %s\n", (s & 0x7f), (on==m)?"on":"off");
 #endif
     }
 }
@@ -289,7 +289,7 @@ _dma_start(struct SPIInfo *ii, int read, int len, char *data){
     SPI_TypeDef *dev   = ii->addr;
     DMA_Channel_TypeDef *dmac = read ? ii->rxdma : ii->txdma;
 
-    printf("dma %s %x\n", (read?"rx":"tx"), dmac);
+    // kprintf("dma %s %x\n", (read?"rx":"tx"), dmac);
     dmac->CPAR  = (u_long) & dev->DR;
     dmac->CMAR  = (u_long) data;
     dmac->CNDTR = len;
@@ -404,7 +404,7 @@ spi_xfer(const struct SPIConf *cf, int len, char *data, int timeo){
 int
 spi_write1(const struct SPIConf *cf, int data){
     if( cf->unit >= N_SPI ){
-        printf("invalid spi unit %d\n", cf->unit);
+        kprintf("invalid spi unit %d\n", cf->unit);
         return -1;
     }
     struct SPIInfo *ii = spiinfo + cf->unit;
@@ -414,13 +414,15 @@ spi_write1(const struct SPIConf *cf, int data){
     sync_lock(&ii->lock, "spi.L");
 
     if( ii->state != SPI_STATE_IDLE ){
-        // reset ?
+        // QQQ
+        kprintf("spi busy\n");
+        return;
     }
 
     ii->state = SPI_STATE_BUSY;
 
 #ifdef VERBOSE
-    printf("spi xfer starting, 1 byte\n");
+    kprintf("spi xfer starting, 1 byte\n");
 #endif
 
     _spi_conf_start(cf, ii);
@@ -430,16 +432,18 @@ spi_write1(const struct SPIConf *cf, int data){
     dev->DR = data;
 
 #ifdef VERBOSE
-    printf("spi xfer finishing\n");
+    kprintf("spi xfer finishing\n");
 #endif
 
     // wait !busy
-    while( dev->SR & SR_BSY ) yield();
+    while( dev->SR & SR_BSY ){
+        if( currproc ) yield();
+    }
 
     _spi_conf_done(cf, ii);
 
 #ifdef VERBOSE
-    printf("spi xfer done %d\n\n", ii->state);
+    kprintf("spi xfer done %d\n\n", ii->state);
 #endif
 
     ii->state = SPI_STATE_IDLE;
