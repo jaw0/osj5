@@ -140,8 +140,9 @@ oled_init(struct Device_Conf *dev){
     _oled_logo( ii );
 
 #ifdef OLED_BUS_SPI
-    bootmsg("%s at spi 0x%x size %dx%d\n", dev->name, ii->addr, ii->_width, ii->_height);
+    bootmsg("%s at spi%d size %dx%d\n", dev->name, ii->addr, ii->_width, ii->_height);
 #else
+    // RSN i2c
 #endif
 
     return 0;
@@ -172,6 +173,7 @@ _oled_cmds(struct OLED *ii, const u_char *cmd, int len){
 static void
 _oled_flush(struct OLED *ii){
 
+#ifdef OLED_BUS_SPI
     if( currproc ){
         spi_xfer(&spicf_dpy, sizeof(ii->dpybuf), ii->dpybuf, 1000000);
     }else{
@@ -179,6 +181,9 @@ _oled_flush(struct OLED *ii){
         for(i=0; i<sizeof(ii->dpybuf); i++)
             spi_write1(&spicf_dpy, ii->dpybuf[i]);
     }
+#else
+    // RSN - i2c
+#endif
 }
 
 static void
@@ -205,7 +210,7 @@ _oled_scroll(struct OLED *ii){
     int i;
 
     int rowb  = ii->text_scale * ii->_width * FONT_GLYPH_HEIGHT / 8;
-    int rows  = ii->text_scale * ii->_height / FONT_GLYPH_HEIGHT;
+    int rows  = ii->_height / FONT_GLYPH_HEIGHT / ii->text_scale;
     int charb = rowb / rows;
 
 
@@ -275,6 +280,7 @@ _oled_render_glyph(struct OLED *ii, int ch){
         for(x=0; x<ii->text_scale * FONT_GLYPH_WIDTH; x++){
             int gl = font[ch * FONT_GLYPH_WIDTH + x / ii->text_scale ];
             if( ii->text_attr ) gl = ~gl;
+            if( x + ii->x >= ii->_width ) break;
 
             ii->dpybuf[ ii->y/8 * ii->width + x + ii->x ] = gl;
         }
@@ -376,10 +382,13 @@ _oled_putchar(struct OLED *ii, int ch){
 
     ii->x3_mode = 0;
 
+#if 0
+    // autowrap?
     if( ii->x >= ii->width ){
         ii->x = 0;
         ii->y += ii->text_scale * FONT_GLYPH_HEIGHT;
     }
+#endif
 
     if( ii->y >= ii->height ){
         _oled_scroll(ii);
@@ -401,13 +410,15 @@ static void
 _oled_logo(struct OLED *ii){
     extern const char *ident;
 
-    // memset(ii->dpybuf, 0x10, sizeof(ii->dpybuf));
-    // _oled_flush(ii);
-    // memset(ii->dpybuf, 0, sizeof(ii->dpybuf));
-
+#if OLED_HEIGHT == 32
     _oled_puts(ii, "\e[2sOS/J5    \e[7m \e[0m\r\n\e[0s" );
     _oled_puts(ii, ident);
     _oled_puts(ii, "\r\nstarting...\r\n");
+#else
+    _oled_puts(ii, "\e[4sOS/J5\r\n\e[2s" );
+    _oled_puts(ii, ident);
+    _oled_puts(ii, "\r\nstarting...");
+#endif
     _oled_flush(ii);
 }
 
