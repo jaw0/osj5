@@ -8,9 +8,10 @@
 
 */
 
-#include "conf.h"
-#include "stm32f10x.h"
-#include "proc.h"
+#include <conf.h>
+#include <stm32f10x.h>
+#include <proc.h>
+#include <alloc.h>
 
 
 #define HSICLOCK 8000000
@@ -205,6 +206,12 @@ void
 init_hw(void){
     clock_init();
     tick_init();
+
+#ifdef KSTACK_SIZE
+    extern void _switch_kstack(char*);
+    char *nsp = alloc(KSTACK_SIZE);
+    _switch_kstack(nsp + KSTACK_SIZE);
+#endif
 }
 
 /****************************************************************/
@@ -221,7 +228,6 @@ init_hw2(void){
 
     bootmsg("bootflags = 0x%x, cpuid %x, flash mem %dk\n", bootflags, SCB->CPUID, *R_FLASHKB);
     bootmsg("uid %x-%x-%x\n", R_UNIQUE[0], R_UNIQUE[1], R_UNIQUE[2]);
-    bootmsg("\n");
 
     // RSN - uid, devid, mem, ...
 

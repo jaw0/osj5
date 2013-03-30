@@ -23,13 +23,21 @@
 #include <bootflags.h>
 
 #ifdef PLATFORM_ARM_CM
-#  define STACK_MIN	1024
+#  ifdef KSTACK_SIZE
+#    define STACK_MIN	256
+#  else
+#    define STACK_MIN	1024
+#  endif
 #else
 #  define STACK_MIN	4096
 #endif
 
 #ifndef INIT_STACK
-#  define INIT_STACK	4096
+#  ifdef KSTACK_SIZE
+#    define INIT_STACK  2048
+#  else
+#    define INIT_STACK	4096
+#  endif
 #endif
 
 struct ReadyList {
@@ -168,12 +176,6 @@ init_proc(proc_t p){
     proclist = currproc;
     timeremain = p->timeslice;
 
-#ifdef USE_NSTDIO
-    p->stdin  = console_port;
-    p->stdout = console_port;
-    p->stderr = console_port;
-#endif
-
 #if defined(USE_FILESYS) && defined(MOUNT_ROOT)
     if( !chdir( MOUNT_ROOT ) ){
         bootmsg("root on %s\n", MOUNT_ROOT);
@@ -188,13 +190,20 @@ init_proc(proc_t p){
         shell();
     }
 #endif
+
+#ifdef USE_NSTDIO
+    p->stdin  = console_port;
+    p->stdout = console_port;
+    p->stderr = console_port;
+#endif
+
     bootmsg("proc starting: init");
 
     /* start maint proc in a child process */
-    start_proc(1024, sysmaint, "sysmaint");
+    start_proc(256, sysmaint, "sysmaint");
     bootmsg(" sysmaint");
 
-    idle_proc = start_proc(1024, idleloop, "idleloop");
+    idle_proc = start_proc(256, idleloop, "idleloop");
     bootmsg(" idleloop" );
 
     bootmsg("\nproc starting multiuser\n");
@@ -787,6 +796,8 @@ _yield_next_proc(void){
     proc_t nextproc;
 
     /* NB: we are already (at least) at splproc */
+    //kprintf("ynp sp %x, psp %x, msp %x, control %x\n",
+    //        get_sp(), get_psp(), get_msp(), get_control());
 
     if( currproc && currproc->state == PRS_RUNNABLE )
         readylist_add( currproc );

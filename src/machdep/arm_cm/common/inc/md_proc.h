@@ -110,8 +110,11 @@ _setup_initial_stack(u_long *s, char *start /* NOT USED */, void *entry){
     *--s = 0;			// r6
     *--s = 0;			// r5
     *--s = 0;			// r4
-    *--s = 0xFFFFFFF9;		// lr - EXC_RETURN(thread mode, MSP, no floats)
-
+#ifdef KSTACK_SIZE
+    *--s = 0xFFFFFFFD;		// lr - EXC_RETURN(thread mode, MSP, no floats)
+#else
+    *--s = 0xFFFFFFF9;		// lr - EXC_RETURN(thread mode, PSP, no floats)
+#endif
     return s;
 }
 

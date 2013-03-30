@@ -164,7 +164,7 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                 int hr, min, sec, usec, dy, mon, yr;
                 int i;
 
-                val = va_arg(ap, u_num_t);
+                val = va_arg(ap, u_quad);
 
                 usec = val % 1000000;
                 val /= 1000000;
