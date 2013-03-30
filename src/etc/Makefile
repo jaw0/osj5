@@ -8,7 +8,8 @@ CPPFLAGS += -I. -I../../src/inc -I../../src/machdep/$(CONF_ARCH)/$(CONF_VARIANT)
 all: osj5$(LINK_SUFFIX)
 
 osj5$(LINK_SUFFIX): assym.h $(OBJS)
-	$(LINK) $(CONF_FLAGS) $(LINK_FLAGS) -o osj5$(LINK_SUFFIX) $(OBJS)
+	$(LINK) $(CONF_FLAGS) $(LINK_FLAGS) -o osj5$(LINK_SUFFIX) $(OBJS) $(LIBS)
+	-size osj5$(LINK_SUFFIX)
 
 clean:
 	-rm $(CLEANFILES)
