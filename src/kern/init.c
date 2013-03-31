@@ -39,7 +39,7 @@ autoconfig(void){
 #ifdef USE_FILESYS
         if( all_devices[i].name && f > 0 )
             /* mount device in dev: */
-            mount( f, all_devices[i].name, 0);
+            devmount( f, all_devices[i].name );
 #endif
 
     }
@@ -67,6 +67,11 @@ init(proc_t proc){
     autoconfig();
 
     kflush(0);	/* flush buffered output */
+
+#ifdef PROJECT_INIT
+    extern void PROJECT_INIT(void);
+    PROJECT_INIT();
+#endif
 
 #ifdef USE_PROC
     init_proc(proc);
