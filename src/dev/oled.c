@@ -21,7 +21,7 @@
 #include <i2c.h>
 #include <gpio.h>
 
-#include "font_5x7.h"
+#include "font_ucs_9x15.h"
 
 
 #define ORIENT_0	0
@@ -29,15 +29,21 @@
 #define ORIENT_180	2
 #define ORIENT_270	3
 
+#define OLED_FLAG_AUTOFLUSH	1
+
 
 int oled_putchar(FILE*, char);
+int oled_getchar(FILE*);
+int oled_noop(FILE*);
+int oled_status(FILE*);
+int oled_flush(FILE*);
 
 const struct io_fs oled_port_fs = {
     oled_putchar,
-    0, //oled_getchar,
-    0,
-    0,
-    0, // oled_status,
+    oled_getchar,
+    oled_noop,	// close
+    oled_flush,
+    oled_status,
     0,
     0,
     0,
@@ -90,6 +96,7 @@ struct OLED {
     int x,y;
     int text_attr;
     int text_scale;
+    int text_flags;
 
     int x3_argn;
     char x3_arg[MAXX3ARG];
@@ -126,6 +133,7 @@ oled_init(struct Device_Conf *dev){
 
     finit( & oledinfo[unit].file );
     oledinfo[unit].file.fs = &oled_port_fs;
+    ii->file.d  = (void*)ii;
 
     gpio_init( OLED_SPI_CS, GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
     gpio_init( OLED_SPI_DC, GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
@@ -145,7 +153,6 @@ oled_init(struct Device_Conf *dev){
     // RSN i2c
 #endif
 
-    return 0;
     return (int) &oledinfo[unit].file;
 }
 
@@ -158,12 +165,9 @@ _oled_cmds(struct OLED *ii, const u_char *cmd, int len){
 
 #ifdef OLED_BUS_SPI
     int i, d;
-    //for(d=0; d<1000000; d++) asm("nop");
 
     for(i=0; i<len; i++){
-        //for(d=0; d<100000; d++) asm("nop");
         spi_write1(&spicf_cmd, cmd[i]);
-        //for(d=0; d<100000; d++) asm("nop");
     }
 #else
     // RSN - i2c
@@ -204,15 +208,88 @@ _oled_set_orientation(struct OLED *ii, int orient){
     }
 }
 
+static inline void
+_oled_set_pixel(struct OLED *ii, int x, int y, int val){
+    int px, py;
+
+    switch( ii->orientation ){
+    case ORIENT_0:
+        px = x; py = y;
+        break;
+    case ORIENT_90:
+        py = x;
+        px = ii->_width - y - 1;
+	break;
+    case ORIENT_180:
+        px = ii->_width - x - 1;
+        py = ii->_height - y - 1;
+        break;
+    case ORIENT_270:
+        px = y;
+        py = ii->_height - x - 1;
+        break;
+    }
+
+    if( px >= ii->_width || py >= ii->_height || px < 0 || py < 0 ) return;
+
+    if( val )
+        ii->dpybuf[ (py / 8) * ii->_width + px ] |= 1 <<(py & 7);
+    else
+        ii->dpybuf[ (py / 8) * ii->_width + px ] &= ~( 1 <<(py & 7) );
+
+}
+
+static inline int
+_oled_get_pixel(struct OLED *ii, int x, int y){
+    int px, py;
+
+    switch( ii->orientation ){
+    case ORIENT_0:
+        px = x; py = y;
+        break;
+    case ORIENT_90:
+        py = x;
+        px = ii->_width - y - 1;
+	break;
+    case ORIENT_180:
+        px = ii->_width - x - 1;
+        py = ii->_height - y - 1;
+        break;
+    case ORIENT_270:
+        px = y;
+        py = ii->_height - x - 1;
+        break;
+    }
+
+    if( px >= ii->_width || py >= ii->_height || px < 0 || py < 0 ) return 0;
+
+    int pl = ii->dpybuf[ (py / 8) * ii->_width + px ];
+    return (pl & (1<<(py&7))) ? 1 : 0;
+}
+
 static void
 _oled_scroll(struct OLED *ii){
     u_char *db = ii->dpybuf;
-    int i;
+    int x, y;
 
+    int fh = ii->text_scale * FONT_GLYPH_HEIGHT;
+    int sb = fh - (ii->height - ii->y);
+
+    for(y=0; y<ii->height; y++){
+        for(x=0; x<ii->width; x++){
+            int pix = _oled_get_pixel(ii, x, y + sb);
+            _oled_set_pixel(ii, x, y, pix);
+        }
+    }
+
+    ii->y -= sb;
+
+
+#if 0
+    // only for 8bit high fonts
     int rowb  = ii->text_scale * ii->_width * FONT_GLYPH_HEIGHT / 8;
     int rows  = ii->_height / FONT_GLYPH_HEIGHT / ii->text_scale;
     int charb = rowb / rows;
-
 
     switch( ii->orientation ){
     case ORIENT_0:
@@ -238,43 +315,16 @@ _oled_scroll(struct OLED *ii){
             bzero( db + rowb * i, charb );
         break;
     }
-}
-
-static inline void
-_oled_set_pixel(struct OLED *ii, int x, int y, int val){
-    int px, py;
-
-    switch( ii->orientation ){
-    case ORIENT_0:
-        px = x; py = y;
-        break;
-    case ORIENT_90:
-        py = x;
-        px = ii->_width - y - 1;
-	break;
-    case ORIENT_180:
-        px = ii->_width - x - 1;
-        py = ii->_height - y - 1;
-        break;
-    case ORIENT_270:
-        px = y;
-        py = ii->_height - x - 1;
-        break;
-    }
-
-    if( px >= ii->_width || py >= ii->_height ) return;
-
-    if( val )
-        ii->dpybuf[ (py / 8) * ii->_width + px ] |= 1 <<(py & 7);
-    else
-        ii->dpybuf[ (py / 8) * ii->_width + px ] &= ~( 1 <<(py & 7) );
-
+#endif
 }
 
 static void
 _oled_render_glyph(struct OLED *ii, int ch){
     int x, y;
 
+    if( ch >= sizeof(font)/FONT_GLYPH_WIDTH/sizeof(font[0]) ) ch = 0;
+
+#if 0
     // optimize the common case
     if( ii->orientation == ORIENT_0 && ii->text_scale == 1 && FONT_GLYPH_HEIGHT == 8 && !(ii->y & 7) ){
         for(x=0; x<ii->text_scale * FONT_GLYPH_WIDTH; x++){
@@ -285,9 +335,12 @@ _oled_render_glyph(struct OLED *ii, int ch){
             ii->dpybuf[ ii->y/8 * ii->width + x + ii->x ] = gl;
         }
 
-        ii->dpybuf[ ii->y/8 * ii->width + x + ii->x + FONT_GLYPH_WIDTH ] = ii->text_attr ? 0xFF : 0;
+        int gx = x + ii->x + FONT_GLYPH_WIDTH;
+        if( gx < ii->_width )
+            ii->dpybuf[ ii->y/8 * ii->width + gx ] = ii->text_attr ? 0xFF : 0;
         return;
     }
+#endif
 
     for(x=0; x<ii->text_scale * FONT_GLYPH_WIDTH; x++){
         int gl = font[ch * FONT_GLYPH_WIDTH + x / ii->text_scale ];
@@ -375,6 +428,10 @@ _oled_putchar(struct OLED *ii, int ch){
         ii->y += ii->text_scale * FONT_GLYPH_HEIGHT;
         break;
     default:
+        if( ii->y >= ii->height - FONT_GLYPH_HEIGHT ){
+            _oled_scroll(ii);
+        }
+
         _oled_render_glyph(ii, ch);
         ii->x += ii->text_scale * (FONT_GLYPH_WIDTH + 1);
         break;
@@ -390,10 +447,6 @@ _oled_putchar(struct OLED *ii, int ch){
     }
 #endif
 
-    if( ii->y >= ii->height ){
-        _oled_scroll(ii);
-        ii->y -= ii->text_scale * FONT_GLYPH_HEIGHT;
-    }
 
 done:
     return;
@@ -410,40 +463,48 @@ static void
 _oled_logo(struct OLED *ii){
     extern const char *ident;
 
-#if OLED_HEIGHT == 32
-    _oled_puts(ii, "\e[2sOS/J5    \e[7m \e[0m\r\n\e[0s" );
+    _oled_puts(ii, "\e[2sOS/J5\r\n\e[0s" );
     _oled_puts(ii, ident);
     _oled_puts(ii, "\r\nstarting...\r\n");
-#else
-    _oled_puts(ii, "\e[4sOS/J5\r\n\e[2s" );
-    _oled_puts(ii, ident);
-    _oled_puts(ii, "\r\nstarting...");
-#endif
+
     _oled_flush(ii);
 }
 
 /*****************************************************************/
-void
-oled_flush(int unit){
-    struct OLED *ii = oledinfo + unit;
-
-    _oled_flush(ii);
-}
-
-
-/****************************************************************/
 
 int
 oled_putchar(FILE *f, char ch){
-    struct OLED *ii;
-    ii = (struct OLED*)f->d;
+    struct OLED *ii = (struct OLED*)f->d;
 
     _oled_putchar(ii, ch);
-    _oled_flush(ii);
+
+    if( ii->text_flags & OLED_FLAG_AUTOFLUSH || ch == '\n' )
+        _oled_flush(ii);
+
     return 1;
 }
 
+int
+oled_flush(FILE *f){
+    struct OLED *ii = (struct OLED*)f->d;
 
+    _oled_flush(ii);
+}
+
+int
+oled_getchar(FILE *f){
+    return -1;
+}
+
+int
+oled_noop(FILE*f){
+    return 1;
+}
+
+int
+oled_status(FILE*f){
+    return FST_O;
+}
 
 /****************************************************************/
 
