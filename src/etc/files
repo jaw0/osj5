@@ -18,7 +18,7 @@ flash:          dev/flash.c
 console:        dev/console.c
 # hd:           dev/ide.c dev/disk.c
 udsk:           dev/unixdisk.c dev/disk.c
-oled:           dev/oled.c
+oled:           dev/oled.cc util/gfxdpy.cc
 
 flfs:           fs/flfs.c
 msdosfs:        dev/disk.c fs/msdosfs.c

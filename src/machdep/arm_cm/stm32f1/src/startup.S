@@ -91,11 +91,21 @@ FillZerobss:
   str  r3, [r2], #4
 
 LoopFillZerobss:
-  ldr  r3, = _ebss
+  ldr  r3, =_ebss
   cmp  r2, r3
   bcc  FillZerobss
 
-/* Call the application's entry point.*/
+  /* run C++ constructors */
+  ldr r4, =__init_array_start
+  ldr r5, =__init_array_end
+LoopInit:
+  cmp r4, r5
+  beq LoopInitZ
+  ldr r0, [r4], #4
+  blx r0
+  b LoopInit
+LoopInitZ:
+  /* Call the application's entry point.*/
   bl  start
   bx  lr
 .size  Reset_Handler, .-Reset_Handler

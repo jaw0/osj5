@@ -102,7 +102,7 @@ extern int fbwrite(FILE*, const char*, int, offset_t);
 extern int fseek(FILE*, long, int);	/* 0=from begining; 1=from current; 2=from end */
 extern long ftell(FILE*);
 extern int fstat(FILE*, struct stat *);
-extern fioctl(FILE*, int, void*);
+extern int fioctl(FILE*, int, void*);
 
 extern char *getline(char*, int, int);
 extern char *fgets(char*, int, FILE*);

@@ -6,6 +6,7 @@ LINK_SUFFIX = .elf
 
 AS = $(CONF_PREFIX)as $(CONF_FLAGS)
 CC = $(CONF_PREFIX)gcc $(CONF_FLAGS)
+CXX = $(CONF_PREFIX)g++ $(CONF_FLAGS) -fno-rtti -fconserve-space -fno-exceptions -fno-unwind-tables
 OBJCOPY = $(CONF_PREFIX)objcopy
 
 LINK = $(CONF_PREFIX)gcc
