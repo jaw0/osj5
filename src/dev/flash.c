@@ -187,7 +187,7 @@ flash_bwrite(FILE *f, const char *b, int len, offset_t offset){
     case FLM_AMD:
     case FLM_SSTI:
         /* ~ 7 us per byte */
-        spin_lock( & d->lock );
+        sync_lock( & d->lock, "flash" );
         for(i=0; i<len; i++){
             send_cmd(d, CMD_BYTEWRITE);
             d->addr[ offset + i ] = buf[i];
@@ -195,12 +195,12 @@ flash_bwrite(FILE *f, const char *b, int len, offset_t offset){
             while( d->addr[ offset + i ] & 0x80 != buf[i] & 0x80 ){
                 if( d->addr[ offset + i ] & 0x20 &&
                     d->addr[ offset + i ] & 0x80 != buf[i] & 0x80 ){
-                    spin_unlock( & d->lock );
+                    sync_unlock( & d->lock );
                     return i;
                 }
             }
         }
-        spin_unlock( & d->lock );
+        sync_unlock( & d->lock );
         break;
 
     case FLM_ATMEL:
@@ -213,7 +213,7 @@ flash_bwrite(FILE *f, const char *b, int len, offset_t offset){
             return -1;
         }
 
-        spin_lock( & d->lock );
+        sync_lock( & d->lock, "flash" );
 
         i = 0;
         while( i < len ){
@@ -235,13 +235,13 @@ flash_bwrite(FILE *f, const char *b, int len, offset_t offset){
             while( d->addr[ offset + i ] & 0x80 != buf[i] & 0x80 ){
                 if( d->addr[ offset + i ] & 0x20 &&
                     d->addr[ offset + i ] & 0x80 != buf[i] & 0x80 ){
-                    spin_unlock( & d->lock );
+                    sync_unlock( & d->lock );
                     return i;
                 }
             }
             i += l;
         }
-        spin_unlock( & d->lock );
+        sync_unlock( & d->lock );
         break;
 
     }
@@ -287,13 +287,13 @@ flash_learn(int i){
     }
 #endif
 
-    spin_lock( & fdk->lock );
+    sync_lock( & fdk->lock, "flash" );
     send_cmd(fdk, CMD_READID);
     usleep( 10000 );		/* atmel specs say to wait 10ms */
     fdk->manuf = fdk->addr[0];
     fdk->devid = fdk->addr[1];
     send_cmd(fdk, CMD_READ);
-    spin_unlock( & fdk->lock );
+    sync_unlock( & fdk->lock );
 
     switch( fdk->manuf ){
     case FLM_AMD:
@@ -369,7 +369,7 @@ erase(struct Flash_Disk *fdk, int a){
     case FLM_AMD:
     case FLM_SSTI:
         /* ~ 1 sec */
-        spin_lock( & fdk->lock );
+        sync_lock( & fdk->lock, "flash" );
         send_cmd(fdk, CMD_SECTERASE);
         fdk->addr[ a ] = 0x30;
 
@@ -379,7 +379,7 @@ erase(struct Flash_Disk *fdk, int a){
             }
             usleep(250000);
         }
-        spin_lock( & fdk->lock );
+        sync_lock( & fdk->lock, "flash" );
         break;
 
     case FLM_ATMEL:
