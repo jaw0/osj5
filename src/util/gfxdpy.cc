@@ -256,6 +256,7 @@ GFXdpy::putchar(int ch){
 
     case 'J' | GOTBRACK:
         clear_screen();
+        cx = cy = 0;
         break;
 
     case 'H' | GOTBRACK:
