@@ -1,0 +1,152 @@
+#!/usr/local/bin/perl
+# -*- perl -*-
+
+# Copyright (c) 2013
+# Author: Jeff Weisberg <jaw @ tcp4me.com>
+# Created: 2013-Mar-28 21:15 (EDT)
+# Function: 
+#
+# $Id$
+
+use strict;
+
+my $DIR = "/home/athena/src/font/ucs";
+my $file = shift @ARGV;
+
+open(F, "$DIR/$file") || die "cannot open: $!\n";
+
+my %CHARNAME;
+while(<DATA>){
+    my($c, $name) = /^(.) (.*)/;
+    $CHARNAME{$c} = $name;
+}
+
+
+my($bbx, $bby, $ox, $oy);
+my $cchar;
+my @bitmap;
+my %font;
+
+print "\n// file: $DIR/$file\n";
+
+while(<F>){
+    chop;
+    my($k, $v) = split /\s+/, $_, 2;
+
+    if( $k eq 'FONT' ){ print "// font: $v\n"; next; }
+    if( $k eq 'FONTBOUNDINGBOX' ){
+        ($bbx, $bby, $ox, $oy) = split /\s+/, $v;
+        next;
+    }
+    if( $k eq 'STARTCHAR' ){
+        $cchar = $v;
+        next;
+    }
+    if( $k eq 'BITMAP' ){
+        while(<F>){
+            chop;
+            last if /ENDCHAR/;
+            push @bitmap, hex($_);
+        }
+        $font{ $cchar } = [@bitmap];
+        # print "$cchar => @bitmap\n";
+        @bitmap = ();
+        $cchar  = '';
+    }
+}
+
+my $type = 'unsigned char';
+$type   = 'unsigned short' if $bby > 8;
+$type   = 'unsigned long'  if $bby > 16;
+
+my $xbits = 8;
+$xbits = 16 if $bbx > 8;
+$xbits = 32 if $bbx > 16;
+
+print <<EOH;
+#define FONT_GLYPH_HEIGHT $bby
+#define FONT_GLYPH_WIDTH  $bbx
+
+static $type font[] = {
+EOH
+;
+
+# print join(' ', keys %font), "\n";
+
+for my $n (0..255){
+    mkglyph( $n );
+}
+
+print "};\n";
+exit;
+
+################################################################
+
+# rotate pixels
+sub mkglyph {
+    my $n = shift;
+
+    my $c    = chr($n);
+    my $name = $CHARNAME{$c} || $c;
+    $name = "U+$n" unless $font{$name};
+    my $b = $font{$name} || [];
+
+
+    print "\t";
+    for my $x (0 .. $bbx-1){
+        my $line = 0;
+        for my $y (0 .. $bby-1){
+            my $p = ($b->[$y] & (1<<($xbits-$x-1))) ? 1 : 0;
+            $line |= $p << $y;
+        }
+        printf "0x%x, ", $line;
+    }
+
+    print "\t// $n\t$name\n";
+}
+
+################################################################
+__END__
+  space
+! exclam
+" quotedbl
+# numbersign
+$ dollar
+% percent
+& ampersand
+' quotesingle
+( parenleft
+) parenright
+* asterisk
++ plus
+, comma
+- hyphen
+. period
+/ slash
+0 zero
+1 one
+2 two
+3 three
+4 four
+5 five
+6 six
+7 seven
+8 eight
+9 nine
+: colon
+; semicolon
+< less
+= equal
+> greater
+? question
+@ at
+[ bracketleft
+\ backslash
+] bracketright
+^ asciicircum
+_ underscore
+` grave
+{ braceleft
+| bar
+} braceright
+~ asciitilde
