@@ -213,7 +213,7 @@ _oled_puts(OLED *ii, const char *s){
         ii->putchar(*s ++);
 }
 
-void
+extern "C" void
 oled0_puts(const char *s){
     OLED *ii = oledinfo;
     while( *s )
@@ -226,7 +226,7 @@ _oled_logo(OLED *ii){
 
     _oled_puts(ii, "\e[16m\e[2sOS/J5\r\n\e[0s" );
     _oled_puts(ii, ident);
-    _oled_puts(ii, "\r\nstarting...\r\n");
+    _oled_puts(ii, "\r\nstarting...\r\n\e[10m");
 
     ii->flush();
 }
