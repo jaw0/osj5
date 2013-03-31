@@ -385,6 +385,9 @@ DEFALIAS(dir, ll)
                 case 'f':	how |= LSHOW_FSYS;	break;
                 case 'x':	how |= LSHOW_EXT;	break;
                 case 'l':	how |= LSHOW_LONG;	break;
+                case 'h':
+                    printf("-a\tall\n-d\tdevs\n-f\tfilesys\n-l\tlong\n");
+                    return 0;
                 }
             }
             what = argc>2 ? argv[2] : "";
