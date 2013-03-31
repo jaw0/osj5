@@ -22,6 +22,9 @@
 #include <gpio.h>
 
 #include "font_ucs_9x15.h"
+#ifndef FONT_STARTCHAR
+# define FONT_STARTCHAR 0
+#endif
 
 
 #define ORIENT_0	0
@@ -30,6 +33,11 @@
 #define ORIENT_270	3
 
 #define OLED_FLAG_AUTOFLUSH	1
+
+#define ATTR_REVERSE	1
+#define ATTR_ULINE	2
+#define ATTR_STRIKE	4
+#define ATTR_FAINT	8
 
 
 int oled_putchar(FILE*, char);
@@ -322,40 +330,34 @@ static void
 _oled_render_glyph(struct OLED *ii, int ch){
     int x, y;
 
+    int h = ii->text_scale * FONT_GLYPH_HEIGHT;
+
     if( ch >= sizeof(font)/FONT_GLYPH_WIDTH/sizeof(font[0]) ) ch = 0;
+    if( ch < FONT_STARTCHAR ) ch = FONT_STARTCHAR;
 
-#if 0
-    // optimize the common case
-    if( ii->orientation == ORIENT_0 && ii->text_scale == 1 && FONT_GLYPH_HEIGHT == 8 && !(ii->y & 7) ){
-        for(x=0; x<ii->text_scale * FONT_GLYPH_WIDTH; x++){
-            int gl = font[ch * FONT_GLYPH_WIDTH + x / ii->text_scale ];
-            if( ii->text_attr ) gl = ~gl;
-            if( x + ii->x >= ii->_width ) break;
-
-            ii->dpybuf[ ii->y/8 * ii->width + x + ii->x ] = gl;
-        }
-
-        int gx = x + ii->x + FONT_GLYPH_WIDTH;
-        if( gx < ii->_width )
-            ii->dpybuf[ ii->y/8 * ii->width + gx ] = ii->text_attr ? 0xFF : 0;
-        return;
-    }
-#endif
+    ch -= FONT_STARTCHAR;
 
     for(x=0; x<ii->text_scale * FONT_GLYPH_WIDTH; x++){
         int gl = font[ch * FONT_GLYPH_WIDTH + x / ii->text_scale ];
-        for(y=0; y<ii->text_scale * FONT_GLYPH_HEIGHT; y++){
+        for(y=0; y<h; y++){
             int pix = gl & (1<<(y/ii->text_scale));
-            if( ii->text_attr ) pix = ! pix;
+            if( ii->text_attr & ATTR_ULINE  && y == h-1) pix = 1;
+            if( ii->text_attr & ATTR_STRIKE && y == h/2) pix = 1;
+            if( ii->text_attr & ATTR_FAINT && (x+y)&1 )  pix = 0;
+            if( ii->text_attr & ATTR_REVERSE ) pix = ! pix;
 
             _oled_set_pixel(ii, x + ii->x, y + ii->y, pix);
         }
     }
 
     // blank gutter
-    int pix = ii->text_attr ? 1 : 0;
     for(x=0; x<ii->text_scale; x++){
-        for(y=0; y<ii->text_scale * FONT_GLYPH_HEIGHT; y++){
+        for(y=0; y<h; y++){
+            int pix = 0;
+            if( ii->text_attr & ATTR_ULINE  && y == h-1) pix = 1;
+            if( ii->text_attr & ATTR_STRIKE && y == h/2) pix = 1;
+            if( ii->text_attr & ATTR_REVERSE ) pix = ! pix;
+
             _oled_set_pixel(ii, x + ii->x + ii->text_scale * FONT_GLYPH_WIDTH, y + ii->y, pix);
         }
     }
@@ -403,7 +405,17 @@ _oled_putchar(struct OLED *ii, int ch){
         break;
 
     case 'm' | GOTBRACK:
-        ii->text_attr = ( ii->x3_arg[0] == 7 ) ? 1 : 0;
+        switch(ii->x3_arg[0]){
+        case 0:	 ii->text_attr  = 0;		break;	// reset
+        case 2:  ii->text_attr |= ATTR_FAINT;	break;
+        case 4:  ii->text_attr |= ATTR_ULINE;	break;
+        case 7:  ii->text_attr |= ATTR_REVERSE;	break;
+        case 9:  ii->text_attr |= ATTR_STRIKE;	break;
+        case 22: ii->text_attr &= ~ATTR_FAINT;	break;
+        case 24: ii->text_attr &= ~ATTR_ULINE;	break;
+        case 27: ii->text_attr &= ~ATTR_REVERSE;break;
+        case 29: ii->text_attr &= ~ATTR_STRIKE;	break;
+        }
         break;
 
     case 'r' | GOTBRACK:
