@@ -250,10 +250,10 @@ _oled_logo(OLED *ii){
 #if OLED_HEIGHT == 64
     _oled_puts(ii, "\e[16m\e[2sOS/J5\r\n\e[0s" );
 #else
-    _oled_puts(ii, "\e[16mOS/J5\r\n\e[10m" );
+    _oled_puts(ii, "\e[16mOS/J5      \x8F\r\n\e[10m" );
 #endif
     _oled_puts(ii, ident);
-    _oled_puts(ii, "\r\nstarting...\r\n\e[10m");
+    _oled_puts(ii, "\r\nstarting...\r\n\e[0m");
 
     ii->flush();
 }

@@ -266,7 +266,7 @@ GFXdpy::putchar(int ch){
 
     case 'm' | GOTBRACK:
         switch(x3_arg[0]){
-        case 0:	 text_attr  = 0;		break;	// reset
+        case 0:	 text_attr  = 0; font = fonts;	break;	// reset
         case 2:  text_attr |= ATTR_FAINT;	break;
         case 4:  text_attr |= ATTR_ULINE;	break;
         case 7:  text_attr |= ATTR_REVERSE;	break;
