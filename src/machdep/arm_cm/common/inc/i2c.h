@@ -38,6 +38,7 @@ typedef struct i2c_msg {
 #define I2C_XFER_OK		0
 
 extern int i2c_xfer(int, int, i2c_msg*, int);
+extern int i2c_write1(int, i2c_msg*);
 
 
 #endif /* __i2c_h__ */

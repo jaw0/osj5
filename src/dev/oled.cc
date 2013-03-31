@@ -29,7 +29,7 @@ extern "C" {
 # include <strings.h>
 };
 
-
+#define SSD1306_I2C_ADDR	0x3C
 
 int oled_putchar(FILE*, char);
 int oled_getchar(FILE*);
@@ -125,9 +125,11 @@ oled_init(struct Device_Conf *dev){
     oledinfo[unit].file.fs = &oled_port_fs;
     ii->file.d  = (void*)ii;
 
+#ifdef OLED_BUS_SPI
     gpio_init( OLED_SPI_CS, GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
     gpio_init( OLED_SPI_DC, GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
     gpio_set( OLED_SPI_CS );
+#endif
 
     // init dev
     if( ii->_height == 64 )
@@ -140,7 +142,7 @@ oled_init(struct Device_Conf *dev){
 #ifdef OLED_BUS_SPI
     bootmsg("%s at spi%d size %dx%d\n", dev->name, ii->addr, ii->_width, ii->_height);
 #else
-    // RSN i2c
+    bootmsg("%s at i2c%d size %dx%d\n", dev->name, ii->addr, ii->_width, ii->_height);
 #endif
 
     return (int) &oledinfo[unit].file;
@@ -152,15 +154,25 @@ oled_init(struct Device_Conf *dev){
 
 static void
 _oled_cmds(OLED *ii, const u_char *cmd, int len){
+    int i;
 
 #ifdef OLED_BUS_SPI
-    int i, d;
 
     for(i=0; i<len; i++){
         spi_write1(&spicf_cmd, cmd[i]);
     }
 #else
-    // RSN - i2c
+    i2c_msg m;
+    m.slave = SSD1306_I2C_ADDR;
+    m.clen  = 2;
+    m.dlen  = 0;
+    m.cdata[0] = 0;
+
+    for(i=0; i<len; i++){
+        m.cdata[1] = cmd[i];
+        i2c_write1(ii->addr, &m);
+    }
+
 #endif
 }
 
@@ -176,7 +188,18 @@ OLED::flush(void){
             spi_write1(&spicf_dpy, dpybuf[i]);
     }
 #else
-    // RSN - i2c
+    i2c_msg m;
+    m.slave = SSD1306_I2C_ADDR;
+    m.clen = 1;
+    m.cdata[0] = 0x40;
+    m.dlen = sizeof(dpybuf);
+    m.data = (char*)dpybuf;
+
+    if( currproc ){
+        i2c_xfer(addr, 1, &m, 1000000);
+    }else{
+        i2c_write1(addr, &m);
+    }
 #endif
 }
 
@@ -224,7 +247,11 @@ static void
 _oled_logo(OLED *ii){
     extern const char *ident;
 
+#if OLED_HEIGHT == 64
     _oled_puts(ii, "\e[16m\e[2sOS/J5\r\n\e[0s" );
+#else
+    _oled_puts(ii, "\e[16mOS/J5\r\n\e[10m" );
+#endif
     _oled_puts(ii, ident);
     _oled_puts(ii, "\r\nstarting...\r\n\e[10m");
 

@@ -48,7 +48,7 @@
 /* NB: stm32f1 + f4 are compat, but at different addrs */
 #include <stm32.h>
 
-// #define VERBOSE
+//#define VERBOSE
 
 #define CR1_PE		1
 #define CR1_START	0x100
@@ -75,6 +75,8 @@
 #define I2C_STATE_ERROR             -1
 
 
+static u_long cur_crumb = 0;
+
 #ifdef VERBOSE
 struct crumb {
     const char *event;
@@ -99,7 +101,6 @@ _i2c_drop_crumb(const char *event, u_long arg0, u_long arg1) {
 #define I2C_CRUMB(event, arg0, arg1)
 #endif
 
-static u_long cur_crumb = 0;
 
 struct I2CInfo {
     I2C_TypeDef 	*addr;
@@ -162,9 +163,6 @@ i2c_init(struct Device_Conf *dev){
     addr->CR1  &= ~3;
     addr->TRISE = (APB1CLOCK / 1000000) + 1;
     addr->CCR   = APB1CLOCK/speed/2;
-    addr->CR2  |= CR2_IRQ_BUF | CR2_IRQ_EVT | CR2_IRQ_ERR;		// enable irqs
-
-    addr->CR1  |= CR1_PE;	// enable
 
     i2cinfo[i].state = I2C_STATE_IDLE;
     nvic_enable( i2cinfo[i].irq,     0 );	// highest priority
@@ -180,7 +178,7 @@ static void
 _i2c_dump_crumb(void){
     int i;
 
-#if VERBOSE
+#ifdef VERBOSE
     for(i=0; i<cur_crumb; i++){
         printf("[i2c] %s\t%x %x\n", crumbs[i].event, crumbs[i].arg0, crumbs[i].arg1);
     }
@@ -215,59 +213,27 @@ _i2c_send_addr(I2C_TypeDef *dev, int addr, int rw){
     dev->DR = (addr << 1) | rw;
 }
 
-
-/****************************************************************/
-
-int
-i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
-    struct I2CInfo *ii = i2cinfo + unit;
-    I2C_TypeDef *dev   = ii->addr;
-    int i = 0;
-
-    if( unit >= N_I2C ) return -1;
-
-    /* wait for device */
-#ifdef VERBOSE
-    printf("i2c xfer waiting, state %d\n", ii->state);
-#endif
-    cur_crumb = 0;
-
-    sync_lock( & ii->lock, "i2c.L" );
-
-    if( ii->state != I2C_STATE_IDLE ){
-        // reset ?
+static inline void
+_i2c_wait_sb(I2C_TypeDef *dev){
+    while(1){
+        if( dev->SR1 & SR1_SB ) return;
     }
-
-    ii->msg       = msgs;
-    ii->num_msg   = nmsg;
-    ii->state     = I2C_STATE_BUSY;
-
-#ifdef VERBOSE
-    printf("i2c xfer starting, %d msgs\n", nmsg);
-#endif
-
-    dev->CR2     |= CR2_IRQ_EVT;
-
-    _i2c_start(dev);
-
-    tsleep( ii, -1, "i2c", timeo );
-
-#ifdef VERBOSE
-    _i2c_dump_crumb();
-    printf("i2c xfer done %d\n\n", ii->state);
-#endif
-
-    int r;
-    switch(ii->state){
-    case I2C_STATE_XFER_DONE:	r = I2C_XFER_OK;	break;
-    case I2C_STATE_ERROR:	r = ii->errorflags;	break;
-    default:			r = I2C_XFER_TIMEOUT;	break;	// QQQ - reset?
+}
+static inline void
+_i2c_wait_addr(I2C_TypeDef *dev){
+    int sr1, sr2;
+    while(1){
+        sr1 = dev->SR1;
+        sr2 = dev->SR2;
+        if( sr1 & SR1_ADDR ) return;
     }
+}
 
-    ii->state = I2C_STATE_IDLE;
-    wakeup( & ii->lock );
-
-    return I2C_XFER_OK;
+static inline void
+_i2c_wait_txe(I2C_TypeDef *dev){
+    while(1){
+        if( dev->SR1 & SR1_TXE ) return;
+    }
 }
 
 /****************************************************************/
@@ -309,6 +275,101 @@ static inline int
 _msg_done(i2c_msg *m){
     return (m->cpos >= m->clen) && (m->dpos >= m->dlen);
 }
+
+/****************************************************************/
+
+int
+i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
+    struct I2CInfo *ii = i2cinfo + unit;
+    I2C_TypeDef *dev   = ii->addr;
+    int i = 0;
+
+    if( unit >= N_I2C ) return -1;
+
+    /* wait for device */
+#ifdef VERBOSE
+    printf("i2c xfer waiting, state %d\n", ii->state);
+#endif
+    cur_crumb = 0;
+
+    sync_lock( & ii->lock, "i2c.L" );
+
+    if( ii->state != I2C_STATE_IDLE ){
+        // reset ?
+    }
+
+    ii->msg       = msgs;
+    ii->num_msg   = nmsg;
+    ii->state     = I2C_STATE_BUSY;
+
+#ifdef VERBOSE
+    printf("i2c xfer starting, %d msgs\n", nmsg);
+#endif
+
+    // enable irqs + device
+    dev->CR2  |= CR2_IRQ_BUF | CR2_IRQ_EVT | CR2_IRQ_ERR;
+    dev->CR1  |= CR1_PE;
+
+    _i2c_start(dev);
+
+    tsleep( ii, -1, "i2c", timeo );
+
+#ifdef VERBOSE
+    _i2c_dump_crumb();
+    printf("i2c xfer done %d\n\n", ii->state);
+#endif
+
+    int r;
+    switch(ii->state){
+    case I2C_STATE_XFER_DONE:	r = I2C_XFER_OK;	break;
+    case I2C_STATE_ERROR:	r = ii->errorflags;	break;
+    default:			r = I2C_XFER_TIMEOUT;	break;	// QQQ - reset?
+    }
+
+    // disable
+    dev->CR1 &= ~CR1_PE;
+    dev->CR2 &= ~ (CR2_IRQ_BUF | CR2_IRQ_EVT | CR2_IRQ_ERR);
+
+    ii->state = I2C_STATE_IDLE;
+    sync_unlock( & ii->lock );
+
+    return I2C_XFER_OK;
+}
+
+// write one msg - busy waiting
+int
+i2c_write1(int unit, i2c_msg *msg){
+    struct I2CInfo *ii = i2cinfo + unit;
+    I2C_TypeDef *dev   = ii->addr;
+
+    if( currproc )
+        return i2c_xfer(unit, 1, msg, 1000000);
+
+    kprintf("i2c w1 %d+%d\n", msg->clen, msg->dlen);
+
+    sync_lock( & ii->lock, "i2c.L" );
+    dev->CR1  |= CR1_PE;
+
+    _i2c_start(dev);
+    _i2c_wait_sb(dev);
+    _i2c_send_addr(dev, msg->slave, 0);
+    _i2c_wait_addr(dev);
+    _msg_init(msg);
+
+    while( !_msg_done(msg) ){
+        _i2c_wait_txe(dev);
+        dev->DR = _msg_next(msg);
+    }
+
+    _i2c_wait_txe(dev);
+    _i2c_stop(dev);
+
+    dev->CR1 &= ~CR1_PE;
+
+    sync_unlock( & ii->lock );
+    return I2C_XFER_OK;
+}
+
 
 /****************************************************************/
 
