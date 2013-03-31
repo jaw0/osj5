@@ -7,6 +7,7 @@
 
 extern "C" {
 # include <conf.h>
+# include <misc.h>
 # include <proc.h>
 # include <arch.h>
 # include <alloc.h>
@@ -22,12 +23,43 @@ extern "C" {
 # include <gfxdpy.h>
 # include <strings.h>
 };
+#include <font.h>
 
-// XXX
-#include "../dev/font_ucs_9x15.h"
-#ifndef FONT_STARTCHAR
-# define FONT_STARTCHAR 0
-#endif
+#include <font/ada_5x7.h>
+#include <font/ucs_4x6.h>
+#include <font/ucs_5x8.h>
+#include <font/ucs_6x10.h>
+#include <font/ucs_6x12.h>
+#include <font/ucs_9x15.h>
+#include <font/ucs_10x20.h>
+
+static const Font fonts[] = {
+    // default font:
+    { font_ucs_5x8_height, font_ucs_5x8_width, font_ucs_5x8_start, font_ucs_5x8_last,
+      font_ucs_5x8_size, (unsigned char *)font_ucs_5x8_data },
+
+    { font_ucs_4x6_height, font_ucs_4x6_width, font_ucs_4x6_start, font_ucs_4x6_last,
+      font_ucs_4x6_size, (unsigned char *)font_ucs_4x6_data },
+
+    { font_ada_5x7_height, font_ada_5x7_width, font_ada_5x7_start, font_ada_5x7_last,
+      font_ada_5x7_size, (unsigned char *)font_ada_5x7_data },
+
+    { font_ucs_5x8_height, font_ucs_5x8_width, font_ucs_5x8_start, font_ucs_5x8_last,
+      font_ucs_5x8_size, (unsigned char *)font_ucs_5x8_data },
+
+    { font_ucs_6x10_height, font_ucs_6x10_width, font_ucs_6x10_start, font_ucs_6x10_last,
+      font_ucs_6x10_size, (unsigned char *)font_ucs_6x10_data },
+
+    { font_ucs_6x12_height, font_ucs_6x12_width, font_ucs_6x12_start, font_ucs_6x12_last,
+      font_ucs_6x12_size, (unsigned char *)font_ucs_6x12_data },
+
+    { font_ucs_9x15_height, font_ucs_9x15_width, font_ucs_9x15_start, font_ucs_9x15_last,
+      font_ucs_9x15_size, (unsigned char *)font_ucs_9x15_data },
+
+    { font_ucs_10x20_height, font_ucs_10x20_width, font_ucs_10x20_start, font_ucs_10x20_last,
+      font_ucs_10x20_size, (unsigned char *)font_ucs_10x20_data },
+};
+
 
 
 #define FLAG_AUTOFLUSH	1
@@ -42,6 +74,13 @@ extern "C" {
 
 
 //****************************************************************
+
+void
+GFXdpy::init(void){
+    orientation = cx = cy = text_attr = text_flags = x3_argn = x3_mode = 0;
+    text_scale = 1;
+    font = fonts + 0;
+}
 
 void
 GFXdpy::set_orientation(int orient){
@@ -65,7 +104,7 @@ void
 GFXdpy::scroll(void){
     int x, y;
 
-    int fh = text_scale * FONT_GLYPH_HEIGHT;
+    int fh = text_scale * font->height;
     int sb = fh - (height - cy);
 
     for(y=0; y<height; y++){
@@ -78,7 +117,7 @@ GFXdpy::scroll(void){
     cy -= sb;
 }
 
-void
+inline void
 GFXdpy::set_pixel(int x, int y, int val){
     int px, py;
 
@@ -104,7 +143,7 @@ GFXdpy::set_pixel(int x, int y, int val){
     _set_pixel(px, py, val);
 }
 
-int
+inline int
 GFXdpy::get_pixel(int x, int y){
     int px, py;
 
@@ -130,19 +169,35 @@ GFXdpy::get_pixel(int x, int y){
     return _get_pixel(px, py);
 }
 
+inline int
+Font::get_charld(int ch, int x) const {
+
+    if( ch < startchar ) return 0;
+    if( ch > lastchar  ) return 0;
+    ch -= startchar;
+
+    int e = ch * width + x;
+
+    switch( byteschar ){
+    case 1:
+        return data[e];
+    case 2:
+        return ((unsigned short*)data)[e];
+    case 4:
+        return ((unsigned long*)data)[e];
+    }
+}
+
+
 void
 GFXdpy::render_glyph(int ch){
     int x, y;
 
-    int h = text_scale * FONT_GLYPH_HEIGHT;
+    int h = text_scale * font->height;
 
-    if( ch >= sizeof(font)/FONT_GLYPH_WIDTH/sizeof(font[0]) ) ch = 0;
-    if( ch < FONT_STARTCHAR ) ch = FONT_STARTCHAR;
+    for(x=0; x<text_scale * font->width; x++){
+        int gl = font->get_charld(ch, x / text_scale);
 
-    ch -= FONT_STARTCHAR;
-
-    for(x=0; x<text_scale * FONT_GLYPH_WIDTH; x++){
-        int gl = font[ch * FONT_GLYPH_WIDTH + x / text_scale ];
         for(y=0; y<h; y++){
             int pix = gl & (1<<(y/text_scale));
             if( text_attr & ATTR_ULINE  && y == h-1) pix = 1;
@@ -162,7 +217,7 @@ GFXdpy::render_glyph(int ch){
             if( text_attr & ATTR_STRIKE && y == h/2) pix = 1;
             if( text_attr & ATTR_REVERSE ) pix = ! pix;
 
-            set_pixel(x + cx + text_scale * FONT_GLYPH_WIDTH, y + cy, pix);
+            set_pixel(x + cx + text_scale * font->width, y + cy, pix);
         }
     }
 }
@@ -204,8 +259,8 @@ GFXdpy::putchar(int ch){
         break;
 
     case 'H' | GOTBRACK:
-        cx = x3_arg[0] * FONT_GLYPH_WIDTH  * text_scale;
-        cy = x3_arg[1] * FONT_GLYPH_HEIGHT * text_scale;
+        cx = x3_arg[0] * font->width  * text_scale;
+        cy = x3_arg[1] * font->height * text_scale;
         break;
 
     case 'm' | GOTBRACK:
@@ -219,6 +274,10 @@ GFXdpy::putchar(int ch){
         case 24: text_attr &= ~ATTR_ULINE;	break;
         case 27: text_attr &= ~ATTR_REVERSE;	break;
         case 29: text_attr &= ~ATTR_STRIKE;	break;
+
+        case 10: case 11: case 12: case 13: case 14:
+        case 15: case 16: case 17: case 18: case 19:
+            font = fonts + (x3_arg[0] - 10) % ELEMENTSIN(fonts);
         }
         break;
 
@@ -234,22 +293,22 @@ GFXdpy::putchar(int ch){
         break;
 
     case '\b':
-        cx -= text_scale * FONT_GLYPH_WIDTH;
+        cx -= text_scale * font->width;
         if( cx < 0 ) cx = 0;
         break;
     case '\r':
         cx = 0;
         break;
     case '\n':
-        cy += text_scale * FONT_GLYPH_HEIGHT;
+        cy += text_scale * font->height;
         break;
     default:
-        if( cy >= height - FONT_GLYPH_HEIGHT ){
+        if( cy >= height - font->height ){
             scroll();
         }
 
         render_glyph(ch);
-        cx += text_scale * (FONT_GLYPH_WIDTH + 1);
+        cx += text_scale * (font->width + 1);
         break;
     }
 
@@ -259,7 +318,7 @@ GFXdpy::putchar(int ch){
     // autowrap?
     if( cx >= width ){
         cx = 0;
-        cy += text_scale * FONT_GLYPH_HEIGHT;
+        cy += text_scale * font->height;
     }
 #endif
 

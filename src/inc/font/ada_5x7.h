@@ -1,10 +1,13 @@
 
 // https://github.com/adafruit/Adafruit-GFX-Library/blob/master/glcdfont.c
 
-#define FONT_GLYPH_HEIGHT	8
-#define FONT_GLYPH_WIDTH	5
+#define font_ada_5x7_height	8
+#define font_ada_5x7_width	5
+#define font_ada_5x7_start	0
+#define font_ada_5x7_last	255
+#define font_ada_5x7_size	sizeof(unsigned char)
 
-static unsigned char font[] = {
+static const unsigned char font_ada_5x7_data[] = {
         0x00, 0x00, 0x00, 0x00, 0x00,
 	0x3E, 0x5B, 0x4F, 0x5B, 0x3E,
 	0x3E, 0x6B, 0x4F, 0x6B, 0x3E,

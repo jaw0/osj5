@@ -30,13 +30,6 @@ extern "C" {
 };
 
 
-#include "font_ucs_9x15.h"
-#ifndef FONT_STARTCHAR
-# define FONT_STARTCHAR 0
-#endif
-
-
-
 
 int oled_putchar(FILE*, char);
 int oled_getchar(FILE*);
@@ -220,11 +213,18 @@ _oled_puts(OLED *ii, const char *s){
         ii->putchar(*s ++);
 }
 
+void
+oled0_puts(const char *s){
+    OLED *ii = oledinfo;
+    while( *s )
+        ii->putchar(*s ++);
+}
+
 static void
 _oled_logo(OLED *ii){
     extern const char *ident;
 
-    _oled_puts(ii, "\e[2sOS/J5\r\n\e[0s" );
+    _oled_puts(ii, "\e[16m\e[2sOS/J5\r\n\e[0s" );
     _oled_puts(ii, ident);
     _oled_puts(ii, "\r\nstarting...\r\n");
 

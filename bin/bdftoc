@@ -13,11 +13,17 @@ use strict;
 my $DIR = "/home/athena/src/font/ucs";
 my $file = shift @ARGV;
 
-open(F, "$DIR/$file") || die "cannot open: $!\n";
+my $START = 32;
+my $LAST  = 146;
+
+(my $fontname = "ucs_$file") =~ s/\..*//;
+
+open(F, "$DIR/$file") || die "cannot open $file: $!\n";
 
 my %CHARNAME;
 while(<DATA>){
-    my($c, $name) = /^(.) (.*)/;
+    s/\s+#.*//;
+    my($c, $name) = /^(\S+)\s+(.*)/;
     $CHARNAME{$c} = $name;
 }
 
@@ -64,16 +70,20 @@ $xbits = 16 if $bbx > 8;
 $xbits = 32 if $bbx > 16;
 
 print <<EOH;
-#define FONT_GLYPH_HEIGHT $bby
-#define FONT_GLYPH_WIDTH  $bbx
 
-static $type font[] = {
+#define font_${fontname}_height $bby
+#define font_${fontname}_width  $bbx
+#define font_${fontname}_start  $START
+#define font_${fontname}_last   $LAST
+#define font_${fontname}_size	sizeof($type)
+
+static const $type font_${fontname}_data[] = {
 EOH
 ;
 
 # print join(' ', keys %font), "\n";
 
-for my $n (0..255){
+for my $n ($START .. $LAST){
     mkglyph( $n );
 }
 
@@ -87,10 +97,8 @@ sub mkglyph {
     my $n = shift;
 
     my $c    = chr($n);
-    my $name = $CHARNAME{$c} || $c;
-    $name = "U+$n" unless $font{$name};
+    my $name = $CHARNAME{$c} || $CHARNAME{"u+$n"} || $c;
     my $b = $font{$name} || [];
-
 
     print "\t";
     for my $x (0 .. $bbx-1){
@@ -150,3 +158,22 @@ _ underscore
 | bar
 } braceright
 ~ asciitilde
+u+128	arrowleft
+u+129	arrowup
+u+130	arrowright
+u+131	arrowdown
+u+132	arrowupdn
+u+133	arrowboth
+u+134	uni2196		# NW arrow
+u+135	uni2197		# NE arrow
+u+136	uni2198		# SE arrow
+u+137	uni2199		# SW arrow
+u+138	uni21B0		# up+left
+u+139	uni21B1		# up+right
+u+140	uni21B6		# up+left round
+u+141	uni21B7		# up+right round
+u+142	uni21BA		# ccw arrow
+u+143	uni21BB		# cw arrow
+u+144	smileface
+u+145	uni2639		# frown
+u+146	uni2620		# skull+crossbones

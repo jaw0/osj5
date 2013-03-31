@@ -19,6 +19,8 @@
 
 #define MAXX3ARG 4
 
+class Font;
+
 class GFXdpy {
 public:
     int _height;
@@ -39,6 +41,7 @@ private:
     char x3_arg[MAXX3ARG];
     int  x3_mode;
 
+    const Font *font;
 
 public:
     virtual void flush(void);
@@ -47,7 +50,7 @@ public:
     virtual void clear_screen(void);
 
 
-    void init(void){ orientation = cx = cy = text_attr = text_flags = x3_argn = x3_mode = 0; text_scale = 1; }
+    void init(void);
     void set_pixel(int, int, int);
     int  get_pixel(int, int);
     void set_orientation(int);

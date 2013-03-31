@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# Copyright (c) 2013
+# Author: Jeff Weisberg <jaw @ tcp4me.com>
+# Created: 2013-Mar-31 13:05 (EDT)
+# Function: make fonts
+
+FONTS="4x6 5x7 5x8 6x9 6x10 6x12 6x13 8x13 9x15 10x20"
+
+for f in $FONTS; do
+    bin/bdftoc $f.bdf > src/inc/font/ucs_$f.h
+done
+
