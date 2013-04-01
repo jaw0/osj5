@@ -167,7 +167,7 @@ i2c_init(struct Device_Conf *dev){
         addr->CCR   = 0xC000 | (APB1CLOCK/speed/25);	// fast mode
         speed = APB1CLOCK/addr->CCR/25000;
     }else{
-        addr->CCR   = (APB1CLOCK/speed/2);	// fast mode
+        addr->CCR   = (APB1CLOCK/speed/2);
         speed = APB1CLOCK/addr->CCR/2000;
     }
 
