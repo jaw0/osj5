@@ -275,3 +275,10 @@ free(ptr, size)
 }
 
 
+void *
+malloc(int size){ return alloc(size); }
+
+void *
+calloc(int size, int len){ return alloc(size * len); }
+
+
