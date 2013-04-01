@@ -10,7 +10,7 @@ all: osj5$(LINK_SUFFIX)
 osj5$(LINK_SUFFIX): assym.h $(OBJS)
 	$(LINK) $(CONF_FLAGS) $(LINK_FLAGS) -o osj5$(LINK_SUFFIX) $(OBJS) $(LIBS)
 	#@size osj5$(LINK_SUFFIX)
-	@readelf -S osj5$(LINK_SUFFIX) | egrep 'isr|text|data|bss' | awk '{printf "%-16s %s\n", $$3, $$7}'
+	@readelf -S osj5$(LINK_SUFFIX) | egrep 'isr|text|data|bss' | awk '{printf "%-16s %s %s\n", $$3, $$5, $$7}'
 
 clean:
 	-rm $(CLEANFILES)
