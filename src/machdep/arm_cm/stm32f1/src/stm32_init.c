@@ -222,11 +222,13 @@ init_ints(void){
     SCB->SHPR[1]  = (IPL_PROC  << 24); /* SVC */
 }
 
+extern char _sdata, _estack;
 void
 init_hw2(void){
     int i;
 
-    bootmsg("bootflags = 0x%x, cpuid %x, flash mem %dk\n", bootflags, SCB->CPUID, *R_FLASHKB);
+    int ram = (&_estack - &_sdata)/1024;
+    bootmsg("bootflags = 0x%x, cpuid %x, %dk flash, %dk RAM\n", bootflags, SCB->CPUID, *R_FLASHKB, ram);
     bootmsg("uid %x-%x-%x\n", R_UNIQUE[0], R_UNIQUE[1], R_UNIQUE[2]);
 
     // RSN - uid, devid, mem, ...
