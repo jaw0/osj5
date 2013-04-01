@@ -12,6 +12,7 @@ struct Device_Conf {
 	int irq;
 	int baud;
 	u_long flags;
+        int arg[4];
 
 	int (*init)(struct Device_Conf*);
 	const char *name;

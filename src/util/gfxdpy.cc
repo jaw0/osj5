@@ -330,8 +330,7 @@ void clear_screen(void) {}
 half space
 
 bitmap()
-scroll_horiz()
-scroll_vert()
+draw_line, draw_rect/filled, draw_circle/filled
 draw_(filled)_shape()
 invert()
 set_rotatation()

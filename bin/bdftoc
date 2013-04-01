@@ -97,7 +97,7 @@ sub mkglyph {
     my $n = shift;
 
     my $c    = chr($n);
-    my $name = $CHARNAME{$c} || $CHARNAME{"u+$n"} || $c;
+    my $name = $CHARNAME{$c} || $CHARNAME{sprintf("u+%02X", $n)} || $c;
     my $b = $font{$name} || [];
 
     print "\t";
@@ -158,22 +158,22 @@ _ underscore
 | bar
 } braceright
 ~ asciitilde
-u+128	arrowleft
-u+129	arrowup
-u+130	arrowright
-u+131	arrowdown
-u+132	arrowupdn
-u+133	arrowboth
-u+134	uni2196		# NW arrow
-u+135	uni2197		# NE arrow
-u+136	uni2198		# SE arrow
-u+137	uni2199		# SW arrow
-u+138	uni21B0		# up+left
-u+139	uni21B1		# up+right
-u+140	uni21B6		# up+left round
-u+141	uni21B7		# up+right round
-u+142	uni21BA		# ccw arrow
-u+143	uni21BB		# cw arrow
-u+144	smileface
-u+145	uni2639		# frown
-u+146	uni2620		# skull+crossbones
+u+80	arrowleft
+u+81	arrowup
+u+82	arrowright
+u+83	arrowdown
+u+84	arrowupdn
+u+85	arrowboth
+u+86	uni2196		# NW arrow
+u+87	uni2197		# NE arrow
+u+88	uni2198		# SE arrow
+u+89	uni2199		# SW arrow
+u+8A	uni21B0		# up+left
+u+8B	uni21B1		# up+right
+u+8C	uni21B6		# up+left round
+u+8D	uni21B7		# up+right round
+u+8E	uni21BA		# ccw arrow
+u+8F	uni21BB		# cw arrow
+u+90	smileface
+u+91	uni2639		# frown
+u+92	uni2620		# skull+crossbones

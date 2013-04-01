@@ -150,14 +150,12 @@ while( <> ){
     elsif( $cmd eq "device" ){
 	my $dev = $f[1];
 	my( $port, $addr, $irq, $flags, $baud, $init ) = (0,0,0,0,0,0);
+        my $type = '';
+        my $args = '';
 
 	my ($dev, $n) = $dev =~ /(\S*\D+)(\d*)$/;
 
 	print CONFH "#define USE_\U$dev\E\n" unless $devs{$dev};
-
-        $devs{ $dev } = $n if $n > $devs{$dev};
-	$devs{ $dev } ++;
-        feature( $dev, 'device' );
 
 	($port) = /port\s*([^\s]*)/   if /port/;
 	($baud) = /baud\s*([^\s]*)/   if /baud/;
@@ -165,15 +163,22 @@ while( <> ){
 	($flags) = /flags\s*([^\s]*)/ if /flags/;
 	($addr) = /addr\s*([^\s]*)/   if /addr/;
 	($init) = /init\s*([^\s]*)/   if /init/;
+	($type) = /type\s*([^\s]*)/   if /type/;
+        ($args) = /args\s+([0-9a-fx, ]+)/ if /args/;
 
-	$init = $init || "${dev}_init";
+        $type ||= $dev;
+        $devs{ $type } = $n if $n > $devs{$type};
+	$devs{ $type } ++;
+        feature( $type, 'device' );
+
+	$init = $init || "${type}_init";
 
 	print CONFC "extern int $init(struct Device_Conf *);\n";
 	if( $n ne "" ){
-	    $devs .= "\t{ $n, $port, $addr, $irq, $baud, $flags, $init, ";
+	    $devs .= "\t{ $n, $port, $addr, $irq, $baud, $flags, { $args }, $init, ";
 	    $name = "$dev$n";
 	}else{
-	    $devs .= "\t{ 0, 0, 0, 0, 0, 0, $init, ";
+	    $devs .= "\t{ 0, 0, 0, 0, 0, 0, { $args }, $init, ";
 	    $name = "$dev";
 	}
 	if( /nodev/ ){

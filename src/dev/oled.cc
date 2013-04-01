@@ -27,6 +27,10 @@ extern "C" {
 
 #define SSD1306_I2C_ADDR	0x3C
 
+#define CONF_FLAG_UPSDOWN	0x1
+#define CONF_FLAG_HEIGHT32	0x2
+
+
 int oled_putchar(FILE*, char);
 int oled_getchar(FILE*);
 int oled_noop(FILE*);
@@ -61,29 +65,22 @@ static const u_char oled_origin[] = { 0x00, 0x10, 0x40 };
 static const u_char oled_invert[] = { 0xA7 };
 static const u_char oled_normal[] = { 0xA6 };
 
-#ifdef OLED_BUS_SPI
-static const struct SPIConf spicf_cmd = {
-    0,
-    0,
-    400000,
-    2, { OLED_SPI_CS, OLED_SPI_DC }
-};
-
-static const struct SPIConf spicf_dpy = {
-    0,
-    0,
-    400000,
-    2, { OLED_SPI_CS, OLED_SPI_DC | 0x80 }
-};
-#endif
-
 
 //****************************************************************
 
 class OLED : public GFXdpy {
 public:
-    FILE file;
-    int  addr;
+    FILE 	file;
+    int  	addr;
+    int  	port;
+    int		speed;
+    bool	flag_32high;
+    bool	flag_upsdown;
+    bool	flag_spi;
+
+    struct SPIConf spicf_dpy;
+    struct SPIConf spicf_cmd;
+
     // the 128x32 needs to be sent 128x64
     // use a full size buffer, or send twice?
     u_char dpybuf[ 128 * 64 / 8 ];
@@ -111,23 +108,37 @@ oled_init(struct Device_Conf *dev){
     ii->init();
 
     // parse out conf
-    ii->addr    = dev->addr;
-    ii->_width  = ii->width  = 128;
-    ii->_height = ii->height = OLED_HEIGHT;
+    ii->flag_32high  = dev->flags & CONF_FLAG_HEIGHT32;
+    ii->flag_upsdown = dev->flags & CONF_FLAG_UPSDOWN;
+    ii->flag_spi     = dev->port  & 0x80;	// high-bit => use spi
 
-#ifdef OLED_UPSIDEDOWN
-    ii->set_orientation( GFX_ORIENT_180 );
-#endif
+    ii->addr    = dev->addr;			// i2c slave addr
+    ii->port    = dev->port & 0x7F;		// spi or i2c device number
+    ii->speed	= dev->baud;
+    ii->_width  = ii->width  = 128;
+    ii->_height = ii->height = ii->flag_32high ? 32 : 64;
+
+    if( ! ii->addr ) ii->addr = SSD1306_I2C_ADDR;
+    if( ii->flag_upsdown )
+        ii->set_orientation( GFX_ORIENT_180 );
 
     finit( & oledinfo[unit].file );
     oledinfo[unit].file.fs = &oled_port_fs;
     ii->file.d  = (void*)ii;
 
-#ifdef OLED_BUS_SPI
-    gpio_init( OLED_SPI_CS, GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
-    gpio_init( OLED_SPI_DC, GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
-    gpio_set( OLED_SPI_CS );
-#endif
+    if( ii->flag_spi ){
+        ii->spicf_cmd.unit  = ii->spicf_dpy.unit  = ii->port;
+        ii->spicf_cmd.speed = ii->spicf_dpy.speed = ii->speed;
+        ii->spicf_cmd.flags = ii->spicf_dpy.flags = 0;
+        ii->spicf_cmd.nss   = ii->spicf_dpy.nss   = 2;
+        ii->spicf_cmd.ss[0] = ii->spicf_dpy.ss[0] = dev->arg[0];
+        ii->spicf_cmd.ss[1] = ii->spicf_dpy.ss[1] = dev->arg[1];
+        ii->spicf_dpy.ss[1] |= 0x80;
+
+        gpio_init( dev->arg[0], GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
+        gpio_init( dev->arg[1], GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
+        gpio_set( dev->arg[0] );
+    }
 
     // init dev
     if( ii->_height == 64 )
@@ -137,11 +148,11 @@ oled_init(struct Device_Conf *dev){
 
     _oled_logo( ii );
 
-#ifdef OLED_BUS_SPI
-    bootmsg("%s at spi%d size %dx%d\n", dev->name, ii->addr, ii->_width, ii->_height);
-#else
-    bootmsg("%s at i2c%d size %dx%d\n", dev->name, ii->addr, ii->_width, ii->_height);
-#endif
+    if( ii->flag_spi )
+        bootmsg("%s at spi%d size %dx%d\n", dev->name, ii->port, ii->_width, ii->_height);
+    else
+        bootmsg("%s at i2c%d size %dx%d\n", dev->name, ii->port, ii->_width, ii->_height);
+
 
     return (int) &oledinfo[unit].file;
 }
@@ -154,51 +165,52 @@ static void
 _oled_cmds(OLED *ii, const u_char *cmd, int len){
     int i;
 
-#ifdef OLED_BUS_SPI
+    if( ii->flag_spi ){
 
-    for(i=0; i<len; i++){
-        spi_write1(&spicf_cmd, cmd[i]);
+        for(i=0; i<len; i++){
+            spi_write1(& ii->spicf_cmd, cmd[i]);
+        }
+    }else{
+
+        i2c_msg m;
+        m.slave = SSD1306_I2C_ADDR;
+        m.clen  = 2;
+        m.dlen  = 0;
+        m.cdata[0] = 0;
+
+        for(i=0; i<len; i++){
+            m.cdata[1] = cmd[i];
+            i2c_write1(ii->port, &m);
+        }
     }
-#else
-    i2c_msg m;
-    m.slave = SSD1306_I2C_ADDR;
-    m.clen  = 2;
-    m.dlen  = 0;
-    m.cdata[0] = 0;
-
-    for(i=0; i<len; i++){
-        m.cdata[1] = cmd[i];
-        i2c_write1(ii->addr, &m);
-    }
-
-#endif
 }
 
+// flush display buffer to device
 void
 OLED::flush(void){
 
-#ifdef OLED_BUS_SPI
-    if( currproc ){
-        spi_xfer(&spicf_dpy, sizeof(dpybuf), (char*) dpybuf, 1000000);
+    if( flag_spi ){
+        if( currproc ){
+            spi_xfer(&spicf_dpy, sizeof(dpybuf), (char*) dpybuf, 1000000);
+        }else{
+            int i;
+            for(i=0; i<sizeof(dpybuf); i++)
+                spi_write1(&spicf_dpy, dpybuf[i]);
+        }
     }else{
-        int i;
-        for(i=0; i<sizeof(dpybuf); i++)
-            spi_write1(&spicf_dpy, dpybuf[i]);
-    }
-#else
-    i2c_msg m;
-    m.slave = SSD1306_I2C_ADDR;
-    m.clen = 1;
-    m.cdata[0] = 0x40;
-    m.dlen = sizeof(dpybuf);
-    m.data = (char*)dpybuf;
+        i2c_msg m;
+        m.slave = SSD1306_I2C_ADDR;
+        m.clen = 1;
+        m.cdata[0] = 0x40;
+        m.dlen = sizeof(dpybuf);
+        m.data = (char*)dpybuf;
 
-    if( currproc ){
-        i2c_xfer(addr, 1, &m, 1000000);
-    }else{
-        i2c_write1(addr, &m);
+        if( currproc ){
+            i2c_xfer(port, 1, &m, 1000000);
+        }else{
+            i2c_write1(port, &m);
+        }
     }
-#endif
 }
 
 //****************************************************************
@@ -245,15 +257,15 @@ static void
 _oled_logo(OLED *ii){
     extern const char *ident;
 
-#if OLED_HEIGHT == 64
-    _oled_puts(ii, "\e[16m\e[2sOS/J5\r\n\e[0s" );
-    _oled_puts(ii, ident);
-    _oled_puts(ii, "\r\nstarting...\r\n\e[0m");
-#else
-    _oled_puts(ii, "\e[17mOS/J5     \x8F\r\n\e[15m" );
-    _oled_puts(ii, ident);
-    _oled_puts(ii, "\r\n\e[0m");
-#endif
+    if( ii->flag_32high ){
+        _oled_puts(ii, "\e[17mOS/J5     \x8F\r\n\e[15m" );
+        _oled_puts(ii, ident);
+        _oled_puts(ii, "\r\n\e[0m");
+    }else{
+        _oled_puts(ii, "\e[16m\e[2sOS/J5\r\n\e[0s" );
+        _oled_puts(ii, ident);
+        _oled_puts(ii, "\r\nstarting...\r\n\e[0m");
+    }
     ii->flush();
 }
 
