@@ -292,7 +292,7 @@ GFXdpy::putchar(int ch){
         cy += text_scale * font->height;
         break;
     default:
-        if( cy >= height - font->height ){
+        if( cy > height - font->height ){
             scroll();
         }
 
