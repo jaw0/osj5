@@ -164,8 +164,9 @@ i2c_init(struct Device_Conf *dev){
     addr->TRISE = (APB1CLOCK / 1000000) + 1;
 
     if( speed > 100000 ){
-        addr->CCR   = 0xC000 | (APB1CLOCK/speed/25);	// fast mode
-        speed = APB1CLOCK/addr->CCR/25000;
+        int ccr = (APB1CLOCK/speed + 24)/25;	// ceil
+        addr->CCR   = 0xC000 | ccr;		// fast mode
+        speed = APB1CLOCK/ccr/25000;
     }else{
         addr->CCR   = (APB1CLOCK/speed/2);
         speed = APB1CLOCK/addr->CCR/2000;
@@ -175,7 +176,6 @@ i2c_init(struct Device_Conf *dev){
     nvic_enable( i2cinfo[i].irq,     0 );	// highest priority
     nvic_enable( i2cinfo[i].irq + 1, 0 );	// highest priority
 
-    speed = APB1CLOCK/addr->CCR/2000;
     bootmsg("%s at io 0x%x irq %d speed %dkHz\n", dev->name, i2cinfo[i].addr, i2cinfo[i].irq, speed);
     return 0;
 }
@@ -351,8 +351,6 @@ i2c_write1(int unit, i2c_msg *msg){
 
     if( currproc )
         return i2c_xfer(unit, 1, msg, 1000000);
-
-    kprintf("i2c w1 %d+%d\n", msg->clen, msg->dlen);
 
     sync_lock( & ii->lock, "i2c.L" );
     dev->CR1  |= CR1_PE;
