@@ -208,18 +208,6 @@ GFXdpy::render_glyph(int ch){
             set_pixel(x + cx, y + cy, pix);
         }
     }
-
-    // blank gutter
-    for(x=0; x<text_scale; x++){
-        for(y=0; y<h; y++){
-            int pix = 0;
-            if( text_attr & ATTR_ULINE  && y == h-1) pix = 1;
-            if( text_attr & ATTR_STRIKE && y == h/2) pix = 1;
-            if( text_attr & ATTR_REVERSE ) pix = ! pix;
-
-            set_pixel(x + cx + text_scale * font->width, y + cy, pix);
-        }
-    }
 }
 
 
@@ -336,3 +324,18 @@ int  get_pixel(int, int){ return 0; }
 void clear_screen(void) {}
 
 
+//****************************************************************
+#if 0
+
+half space
+
+bitmap()
+scroll_horiz()
+scroll_vert()
+draw_(filled)_shape()
+invert()
+set_rotatation()
+height, width,
+set_cursor(x, y)
+
+#endif
