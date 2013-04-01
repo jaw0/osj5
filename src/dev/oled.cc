@@ -15,14 +15,10 @@ extern "C" {
 # include <arch.h>
 # include <alloc.h>
 # include <nstdio.h>
-};
-extern "C" {
 # include <locks.h>
 # include <dev.h>
 # include <error.h>
 # include <spi.h>
-};
-extern "C" {
 # include <i2c.h>
 # include <gpio.h>
 # include <gfxdpy.h>
@@ -88,7 +84,9 @@ class OLED : public GFXdpy {
 public:
     FILE file;
     int  addr;
-    u_char dpybuf[ 128 * OLED_HEIGHT / 8 ];
+    // the 128x32 needs to be sent 128x64
+    // use a full size buffer, or send twice?
+    u_char dpybuf[ 128 * 64 / 8 ];
 
     virtual void flush(void);
     virtual void _set_pixel(int, int, int);
@@ -255,7 +253,6 @@ _oled_logo(OLED *ii){
     _oled_puts(ii, "\e[17mOS/J5     \x8F\r\n\e[15m" );
     _oled_puts(ii, ident);
     _oled_puts(ii, "\r\n\e[0m");
-
 #endif
     ii->flush();
 }
@@ -268,7 +265,7 @@ oled_putchar(FILE *f, char ch){
 
     ii->putchar(ch);
 
-    if( ii->text_flags & GFX_FLAG_AUTOFLUSH || ch == '\n' )
+    if( (ii->text_flags & GFX_FLAG_AUTOFLUSH) || (ch == '\n') )
         ii->flush();
 
     return 1;
@@ -297,19 +294,3 @@ oled_status(FILE*f){
 }
 
 /****************************************************************/
-
-#if 0
-
-bitmap(){
-
-}
-
-scroll_horiz()
-scroll_vert()
-draw_(filled)_shape()
-invert()
-set_rotatation()
-height, width,
-set_cursor(x, y)
-
-#endif
