@@ -154,7 +154,7 @@ i2c_init(struct Device_Conf *dev){
 
     int speed = dev->baud;
     if( !speed ) speed = 100000;
-
+    int fastmode = 0;
 
     addr->CR1 = 0x8000;		// reset
     addr->CR1 = 0;
@@ -162,7 +162,14 @@ i2c_init(struct Device_Conf *dev){
     addr->CR2   = APB1CLOCK / 1000000;
     addr->CR1  &= ~3;
     addr->TRISE = (APB1CLOCK / 1000000) + 1;
-    addr->CCR   = APB1CLOCK/speed/2;
+
+    if( speed > 100000 ){
+        addr->CCR   = 0xC000 | (APB1CLOCK/speed/25);	// fast mode
+        speed = APB1CLOCK/addr->CCR/25000;
+    }else{
+        addr->CCR   = (APB1CLOCK/speed/2);	// fast mode
+        speed = APB1CLOCK/addr->CCR/2000;
+    }
 
     i2cinfo[i].state = I2C_STATE_IDLE;
     nvic_enable( i2cinfo[i].irq,     0 );	// highest priority
