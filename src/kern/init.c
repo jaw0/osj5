@@ -58,6 +58,9 @@ init(proc_t proc){
     /* spit out banner */
     bootmsg("\n%s\n", version);
 
+    splx(IPL_PROC);
+    irq_enable();
+
     init_hw2();
 
 #ifdef USE_DDB
