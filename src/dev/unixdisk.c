@@ -69,11 +69,13 @@ udsk_init(struct Device_Conf *dev){
     udsk[c].fd = open("disk_cf_16mb", 2);
     udsk[c].file.d  = (void*)& udsk[c];
     udsk[c].file.fs = & udsk_fs;
+    finit( & udsk[c].file );
 
     bootmsg( "%s at unix\n",
 	     dev->name);
 
     disk_learn( dev, "ud", c, &udsk[c].file, 16*1024*2);
+    return 0;
 }
 
 int
