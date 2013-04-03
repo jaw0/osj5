@@ -2,7 +2,7 @@
   Copyright (c) 2013
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 2013-Mar-24 21:07 (EDT)
-  Function: spi using dma1
+  Function: stm32 spi using dma + sd card
 
 */
 
@@ -87,6 +87,17 @@ struct SPIInfo {
     lock_t		lock;
     int			state;
     u_long		errorflags;
+
+    int			sdmode;
+#  define SDMODE_NOT	0
+#  define SDMODE_READ	1
+#  define SDMODE_WRITE	2
+
+#ifdef USE_SDCARD
+    int			sdstate;
+    int			sdpos;
+    char		sddata[6];
+#endif
 
 } spiinfo[ N_SPI ];
 
@@ -174,7 +185,7 @@ set_speed(struct SPIInfo *ii, int speed){
     }
 
     dev->CR1 &= ~(7 << 3);
-    dev->CR1 |= clkdiv;
+    dev->CR1 |= clkdiv << 3;
 
     return cspeed;
 }
@@ -306,19 +317,17 @@ _dma_start(struct SPIInfo *ii, int read, int len, char *data){
 
 /****************************************************************/
 
-static void
-_spi_conf_start(const struct SPIConf *cf, struct SPIInfo *ii){
+static inline void
+_spi_conf_enable(const struct SPIConf *cf, struct SPIInfo *ii){
     SPI_TypeDef *dev   = ii->addr;
 
-    _spi_cspins(cf, 1);
     if( cf->speed ) set_speed(ii, cf->speed);
-
     if( cf->flags & SPI_FLAG_CRC7 ) dev->CR1 |= CR1_CRCEN;
     dev->CR1 |= CR1_MSTR | CR1_SSI;
 }
 
-static void
-_spi_conf_done(const struct SPIConf *cf, struct SPIInfo *ii){
+static inline void
+_spi_conf_disable(const struct SPIConf *cf, struct SPIInfo *ii){
     SPI_TypeDef *dev   = ii->addr;
 
     dev->CR1  &= ~ (CR1_SPE | CR1_CRCEN);
@@ -326,7 +335,19 @@ _spi_conf_done(const struct SPIConf *cf, struct SPIInfo *ii){
 
     ii->rxdma->CCR &= ~ DMACCR_EN;
     ii->txdma->CCR &= ~ DMACCR_EN;
+}
 
+static void
+_spi_conf_start(const struct SPIConf *cf, struct SPIInfo *ii){
+
+    _spi_cspins(cf, 1);
+    _spi_conf_enable(cf, ii);
+}
+
+static void
+_spi_conf_done(const struct SPIConf *cf, struct SPIInfo *ii){
+
+    _spi_conf_disable(cf, ii);
     // restore cs pins
     _spi_cspins(cf, 0);
 }
@@ -452,10 +473,228 @@ spi_write1(const struct SPIConf *cf, int data){
     return 0;
 }
 
+/****************************************************************/
+#ifdef USE_SDCARD
+
+static int
+_spi_tx1(SPI_TypeDef *dev, int val){
+    int sr, c;
+
+    // wait until ready
+    while(1){
+        sr = dev->SR;
+        if( sr & SR_TXE  ) break;
+    }
+
+    dev->DR = val;
+
+    while(1){
+        sr = dev->SR;
+        if( sr & SR_RXNE ){
+            c = dev->DR;
+            return c;
+        }
+    }
+}
+// same same
+#define _spi_rx1(d) _spi_tx1(d, 0xFF)
+
+static void
+_spi_tx_cmd(SPI_TypeDef *dev, int cmd, int arg){
+    _spi_tx1(dev, cmd | 0x40 );
+    _spi_tx1(dev, (arg>>24) & 0xFF );
+    _spi_tx1(dev, (arg>>16) & 0xFF );
+    _spi_tx1(dev, (arg>> 8) & 0xFF );
+    _spi_tx1(dev, (arg)     & 0xFF );
+    // CRC need to be correct only for cmd0 + cmd8
+    _spi_tx1(dev, (cmd == 8) ? 0x87 : 0x95);
+}
+
+static int
+_spi_rx_r1(SPI_TypeDef *dev){
+    int max = 0xFFFF;
+    int sr;
+
+    while( max-- > 0 ){
+        int c = _spi_rx1(dev);
+        // wait for bit7=0
+        if( !(c & 0x80) ) return c;
+    }
+    return 0xFF;
+}
+
+static int
+_spi_tx_cmd_rx1(SPI_TypeDef *dev, const struct SPIConf *cf, int cmd, int arg){
+
+    _spi_cspins(cf, 1);
+    _spi_tx_cmd(dev, cmd, arg);
+    int r = _spi_rx_r1(dev);
+    _spi_cspins(cf, 0);
+    return r;
+}
+
+static int
+_spi_tx_cmd_rx5(SPI_TypeDef *dev, const struct SPIConf *cf, int cmd, int arg, char *res){
+    int i;
+
+    _spi_cspins(cf, 1);
+    _spi_tx_cmd(dev, cmd, arg);
+    int r = _spi_rx_r1(dev);
+
+    for(i=0; i<4; i++)
+        res[i] = _spi_rx1(dev);
+    _spi_cspins(cf, 0);
+    return r;
+}
+
+_spi_tx_cmd_rx16(SPI_TypeDef *dev, const struct SPIConf *cf, int cmd, int arg, char *res){
+
+    _spi_cspins(cf, 1);
+    _spi_tx_cmd(dev, cmd, arg);
+    int r = _spi_rx_r1(dev);
+
+    // wait for data-token
+    int max = 200;
+    while( max-- > 0 ){
+        int c = _spi_rx1(dev);
+        if( c != 0xFF ) break;
+    }
+
+    int i;
+    for(i=0; i<16; i++)
+        res[i] = _spi_rx1(dev);
+
+    // discard crc
+    _spi_rx1(dev);
+    _spi_rx1(dev);
+
+    _spi_cspins(cf, 0);
+    return r;
+
+}
+
+// initialize card - busy wait
 int
-spi_sdcmd(struct SPIConf *cf, int wlen, const char *wbuf, int rlen, char *rbuf, int dlen, char *data){
+spi_sd_init(const struct SPIConf *cf, char *cid, char *csd){
+    if( cf->unit >= N_SPI ){
+        kprintf("invalid spi unit %d\n", cf->unit);
+        return -1;
+    }
+
+    struct SPIInfo *ii = spiinfo + cf->unit;
+    SPI_TypeDef *dev   = ii->addr;
+    int i, res;
+
+    // lock
+    sync_lock(&ii->lock, "spi.L");
+    int plx = spldisk();
+    // enable
+    set_speed(ii, 400000);
+    _spi_conf_enable(cf, ii);
+    dev->CR1 |= CR1_SPE;	// go!
+    // pins off
+    _spi_cspins(cf, 0);
+
+    // delay: TX 10 * 0xFF
+    for(i=0; i<10; i++)
+        _spi_tx1(dev, 0xFF);
+    // pins on
+    _spi_cspins(cf, 1);
+
+    // cmd0
+    i = _spi_tx_cmd_rx1(dev, cf, 0, 0);
+
+    if( i == 0xFF ){
+        // timed out. no card present
+        res = -1;
+        goto done;
+    }
+    kprintf("cmd0 %x\n", i);
+
+    // cmd8 - required to enable v2/HC features (>2GB)
+    int rcmd8, isv2=0;
+
+    _spi_tx1(dev, 0xFF);	// delay
+    i = _spi_tx_cmd_rx5(dev, cf, 8, 0x1AA, (char*)&rcmd8);
+    // no response or invalid cmd => v1.0, else v2.0
+    kprintf("cmd8 %x %x\n", i, rcmd8);
+    if( (i & 0x7E) == 0 ) isv2 = 1;	// 2.0 yay!
+    // RSN - check voltages
+
+    // loop until ready
+    //  cmd 55/41 => R1
+    int max = 1000;
+    while( max-- > 0 ){
+        int rcmd41;
+        _spi_tx1(dev, 0xFF);	// delay
+        i = _spi_tx_cmd_rx1(dev, cf, 55, 0);
+        _spi_tx1(dev, 0xFF);	// delay
+        i = _spi_tx_cmd_rx1(dev, cf, 41, isv2 ? 0x40000000 : 0);
+        if( !(i & 1) ) break;
+    }
+
+    if( i ){
+        res = -1;
+        goto done;
+    }
+
+    kprintf("sd41 %x, max %d\n", i, max);
+
+    // cmd 58 => R3
+    int ocr;
+    for(i=0;i<4;i++)
+        _spi_tx1(dev, 0xFF);	// delay
+
+    i = _spi_tx_cmd_rx5(dev, cf, 58, 0, (char*)&ocr);
+    // NB - ocr is byte swapped
+    kprintf("ocr %x %x\n", i, ocr);
+    // OCR - permitted voltages + CCS
+    int ishc = 0;
+    if( isv2 && (ocr & 0x40) ) ishc = 1;	// HC yay!
+    // card is ready
+
+    set_speed(ii, 5000000);
+    
+    // CID - 16 bytes, manuf, model, serialno,
+    // CSD - 16 bytes, timing, size
+    for(i=0;i<16;i++)
+        _spi_tx1(dev, 0xFF);	// delay
+    i = _spi_tx_cmd_rx16(dev, cf, 10, 0, cid);
+    kprintf("cid %x\n", i);
+    for(i=0;i<16;i++)
+        _spi_tx1(dev, 0xFF);	// delay
+
+    i = _spi_tx_cmd_rx16(dev, cf,  9, 0, csd);
+
+    _spi_tx1(dev, 0xFF);	// delay
+    kprintf("csd %x\n", i);
+
+    //hexdump(cid, 16);
+    //hexdump(csd, 16);
 
 
+    res = 0;
+
+  done:
+    // pins off
+    // disable
+    _spi_conf_done(cf, ii);
+    splx(plx);
+    // unlock
+    sync_unlock( &ii->lock );
+    return res;
+}
+
+
+// irq + DMA
+int
+spi_sd_xfer(const struct SPIConf *cf, int dlen, char *dbuf){
+
+
+    // send cmd/rcv r1
+    // wait for data token
+    // dma data
 
 
 }
+#endif
