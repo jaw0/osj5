@@ -49,8 +49,13 @@
 #define SPI_STATE_BUSY              4
 #define SPI_STATE_ERROR             -1
 
+#define DMA_MIN_SIZE	8
+
 
 static u_long cur_crumb = 0;
+static char dma_idle_source = 0xFF;
+static char dma_idle_sink;
+
 
 #ifdef VERBOSE
 struct crumb {
@@ -88,16 +93,10 @@ struct SPIInfo {
     int			state;
     u_long		errorflags;
 
-    int			sdmode;
-#  define SDMODE_NOT	0
-#  define SDMODE_READ	1
-#  define SDMODE_WRITE	2
-
-#ifdef USE_SDCARD
-    int			sdstate;
-    int			sdpos;
-    char		sddata[6];
-#endif
+    // currently doing:
+    spi_msg		*msg;
+    int			num_msg;
+    const struct SPIConf	*cf;
 
 } spiinfo[ N_SPI ];
 
@@ -353,6 +352,7 @@ _spi_conf_done(const struct SPIConf *cf, struct SPIInfo *ii){
 }
 
 /****************************************************************/
+
 
 int
 spi_xfer(const struct SPIConf *cf, int len, char *data, int timeo){
@@ -653,8 +653,6 @@ spi_sd_init(const struct SPIConf *cf, char *cid, char *csd){
     if( isv2 && (ocr & 0x40) ) ishc = 1;	// HC yay!
     // card is ready
 
-    set_speed(ii, 5000000);
-    
     // CID - 16 bytes, manuf, model, serialno,
     // CSD - 16 bytes, timing, size
     for(i=0;i<16;i++)
@@ -685,16 +683,5 @@ spi_sd_init(const struct SPIConf *cf, char *cid, char *csd){
     return res;
 }
 
-
-// irq + DMA
-int
-spi_sd_xfer(const struct SPIConf *cf, int dlen, char *dbuf){
-
-
-    // send cmd/rcv r1
-    // wait for data token
-    // dma data
-
-
-}
 #endif
+
