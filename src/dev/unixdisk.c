@@ -65,11 +65,11 @@ udsk_init(struct Device_Conf *dev){
     int port = dev->port;
 
     int c = dev->unit;
+    finit( & udsk[c].file );
     udsk[c].no   = c;
     udsk[c].fd = open("disk_cf_16mb", 2);
     udsk[c].file.d  = (void*)& udsk[c];
     udsk[c].file.fs = & udsk_fs;
-    finit( & udsk[c].file );
 
     bootmsg( "%s at unix\n",
 	     dev->name);

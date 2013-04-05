@@ -187,7 +187,7 @@ _i2c_dump_crumb(void){
 
 #ifdef VERBOSE
     for(i=0; i<cur_crumb; i++){
-        printf("[i2c] %s\t%x %x\n", crumbs[i].event, crumbs[i].arg0, crumbs[i].arg1);
+        kprintf("[i2c] %s\t%x %x\n", crumbs[i].event, crumbs[i].arg0, crumbs[i].arg1);
     }
 #endif
 }
@@ -287,30 +287,27 @@ _msg_done(i2c_msg *m){
 
 int
 i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
+    if( unit >= N_I2C ) return -1;
+
     struct I2CInfo *ii = i2cinfo + unit;
     I2C_TypeDef *dev   = ii->addr;
     int i = 0;
 
-    if( unit >= N_I2C ) return -1;
 
     /* wait for device */
 #ifdef VERBOSE
-    printf("i2c xfer waiting, state %d\n", ii->state);
+    kprintf("i2c xfer waiting, state %d\n", ii->state);
 #endif
-    cur_crumb = 0;
 
     sync_lock( & ii->lock, "i2c.L" );
 
-    if( ii->state != I2C_STATE_IDLE ){
-        // reset ?
-    }
-
+    cur_crumb = 0;
     ii->msg       = msgs;
     ii->num_msg   = nmsg;
     ii->state     = I2C_STATE_BUSY;
 
 #ifdef VERBOSE
-    printf("i2c xfer starting, %d msgs\n", nmsg);
+    kprintf("i2c xfer starting, %d msgs\n", nmsg);
 #endif
 
     // enable irqs + device
@@ -319,11 +316,21 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
 
     _i2c_start(dev);
 
-    tsleep( ii, -1, "i2c", timeo );
+    utime_t expires = timeo ? get_time() + timeo : 0;
+
+    while( ii->state == I2C_STATE_BUSY ){
+        if( currproc ){
+            tsleep( ii, -1, "i2c", timeo ? expires - get_time() : 0 );
+        }
+        if( expires && get_time() > expires ){
+            I2C_CRUMB("timeout", 0,0);
+            break;
+        }
+    }
 
 #ifdef VERBOSE
     _i2c_dump_crumb();
-    printf("i2c xfer done %d\n\n", ii->state);
+    kprintf("i2c xfer done %d\n\n", ii->state);
 #endif
 
     int r;

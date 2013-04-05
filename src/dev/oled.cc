@@ -129,7 +129,6 @@ oled_init(struct Device_Conf *dev){
     if( ii->flag_spi ){
         ii->spicf_cmd.unit  = ii->spicf_dpy.unit  = ii->port;
         ii->spicf_cmd.speed = ii->spicf_dpy.speed = ii->speed;
-        ii->spicf_cmd.flags = ii->spicf_dpy.flags = 0;
         ii->spicf_cmd.nss   = ii->spicf_dpy.nss   = 2;
         ii->spicf_cmd.ss[0] = ii->spicf_dpy.ss[0] = dev->arg[0];
         ii->spicf_cmd.ss[1] = ii->spicf_dpy.ss[1] = dev->arg[1];
@@ -166,10 +165,13 @@ _oled_cmds(OLED *ii, const u_char *cmd, int len){
     int i;
 
     if( ii->flag_spi ){
+        spi_msg m;
+        m.mode = SPIMO_WRITE;
+        m.dlen = len;
+        m.data = (char*)cmd;
 
-        for(i=0; i<len; i++){
-            spi_write1(& ii->spicf_cmd, cmd[i]);
-        }
+        spi_xfer(& ii->spicf_cmd, 1, &m, 100000);
+
     }else{
 
         i2c_msg m;
@@ -190,13 +192,13 @@ void
 OLED::flush(void){
 
     if( flag_spi ){
-        if( currproc ){
-            spi_xfer(&spicf_dpy, sizeof(dpybuf), (char*) dpybuf, 1000000);
-        }else{
-            int i;
-            for(i=0; i<sizeof(dpybuf); i++)
-                spi_write1(&spicf_dpy, dpybuf[i]);
-        }
+        spi_msg m;
+        m.mode = SPIMO_WRITE;
+        m.dlen = sizeof(dpybuf);
+        m.data = (char*)dpybuf;
+
+        spi_xfer(& spicf_dpy, 1, &m, 100000);
+
     }else{
         i2c_msg m;
         m.slave = SSD1306_I2C_ADDR;

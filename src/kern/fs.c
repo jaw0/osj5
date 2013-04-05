@@ -400,8 +400,15 @@ DEFALIAS(dir, ll)
         me = mountlist;
         while( me ){
             if( (me->flags & MNTE_F_DEV) && (how & LSHOW_DEVS)
-                || (me->flags & MNTE_F_FS) && (how & LSHOW_FSYS) )
-                printf("\t%s\n", me->name);
+                || (me->flags & MNTE_F_FS) && (how & LSHOW_FSYS) ){
+                printf("\t%s", me->name);
+                if( how & LSHOW_LONG ){
+                    if( me->fscf && me->fscf->name )
+                        printf("\ttype %s", me->fscf->name);
+
+                }
+                printf("\n");
+            }
             me = me->next;
         }
         return 0;

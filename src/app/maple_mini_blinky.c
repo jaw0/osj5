@@ -29,6 +29,6 @@ main(void){
     gpio_init( GPIO_B1, GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
 
     /* fork off a blink proc */
-    start_proc( 1024, blinky, "blinky" );
+    start_proc( 256, blinky, "blinky" );
 
 }

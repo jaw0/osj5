@@ -10,11 +10,13 @@
 
 #include <stm32f10x.h>
 #include <proc.h>
-#include "ssd1306.h"
 #include <i2c.h>
 #include <gpio.h>
 
-static u_char dpybuf[SSD1306_LCDHEIGHT * SSD1306_LCDWIDTH / 8 + 1] = {
+#define SSD1306_128_32
+#include "ssd1306.h"
+
+static u_char dpybuf[SSD1306_LCDHEIGHT * SSD1306_LCDWIDTH / 8] = {
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -65,13 +67,13 @@ i2c_msg dpyinit[25] = {
     ssd1306_command(0x1F),
     ssd1306_command(SSD1306_SETDISPLAYOFFSET),              // 0xD3
     ssd1306_command(0x0),                                   // no offset
-    ssd1306_command(SSD1306_SETSTARTLINE | 0x0),            // line #0
+    ssd1306_command(SSD1306_SETSTARTLINE | 0x0),            // 40 line #0
     ssd1306_command(SSD1306_CHARGEPUMP),                    // 0x8D
     ssd1306_command(0x14),					// switch vcc
     ssd1306_command(SSD1306_MEMORYMODE),                    // 0x20
     ssd1306_command(0x00),                                  // 0x0 act like ks0108
-    ssd1306_command(SSD1306_SEGREMAP | 0x1),
-    ssd1306_command(SSD1306_COMSCANDEC),
+    ssd1306_command(SSD1306_SEGREMAP | 0x1),	// A0
+    ssd1306_command(SSD1306_COMSCANDEC),	// C8
     ssd1306_command(SSD1306_SETCOMPINS),                    // 0xDA
     ssd1306_command(0x02),
     ssd1306_command(SSD1306_SETCONTRAST),                   // 0x81
@@ -87,6 +89,7 @@ i2c_msg dpyinit[25] = {
   ssd1306_command(SSD1306_DISPLAYON),			//--turn on oled panel
 
 };
+
 
 i2c_msg dpyinv[1] = {
     ssd1306_command(SSD1306_INVERTDISPLAY),
@@ -108,7 +111,7 @@ display(){
 
     i2c_xfer(0, 3, dpyset, 1000000);
 
-#if 0
+#if 1
     // the whole thing all at once
     m.slave = SSD1306_I2C_ADDRESS;
     m.flags = 0;

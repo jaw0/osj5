@@ -10,16 +10,16 @@
 
 
 typedef struct i2c_msg {
-    int		slave;
-    u_long	flags;
+    u_char	slave;
+    u_char	flags;
 #define I2C_MSGF_READ           0x1
 
-    int 	clen;
-    int		dlen;
+    u_short	clen;
+    u_short	dlen;
     char	*data;
     char	cdata[4];
 
-    int		cpos, dpos;
+    u_short	cpos, dpos;
 } i2c_msg;
 
 #define I2C_MSG_DL(sl, fl, dl, d)		{ sl, fl, 0, dl, d }

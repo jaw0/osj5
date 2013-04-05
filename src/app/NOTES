@@ -12,8 +12,8 @@ A9      usart1  PWM1/2                  serial
 A10     usart1  PWM1/3                  serial
 A11             PWM1/4                  pwm mot
 A12                                     out sens
-A13     JTAG/SW
-A14     JTAG/SW
+A13     JTAG/SW                         button
+A14     JTAG/SW                         button
 A15     JTAG                            out sens
 B0      ADC8    PWM3/3                  beeper
 B1      bluelt  PWM3/4                  blue lt
@@ -25,12 +25,12 @@ B6      i2c1    PWM4/1                  i2c
 B7      i2c1    PWM4/2                  i2c
 B8      button  PWM4/3                  button
 (no pin)
-B10     i2c2
-B11     i2c2
-B12     spi2                            sd
-B13     spi2                            sd
-B14     spi2                            sd
-B15     spi2                            sd
+B10     i2c2                            sd/dpy(cs)
+B11     i2c2                            sd/dpy(cd)
+B12     spi2                            sd/dpy
+B13     spi2                            sd/dpy
+B14     spi2                            sd/dpy
+B15     spi2                            sd/dpy
 
 C13     OSC-XXX
 C14     OSC-XXX
