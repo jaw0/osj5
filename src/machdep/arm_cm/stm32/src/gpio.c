@@ -47,6 +47,8 @@ gpio_init(int pin, int mode){
         addr->CRL &= ~(0xF << pos);
         addr->CRL |= mode << pos;
     }
+
+    addr->BSRR = 0x10000 << pin;	// off
     splx(plx);
 }
 

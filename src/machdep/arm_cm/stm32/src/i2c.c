@@ -48,7 +48,7 @@
 /* NB: stm32f1 + f4 are compat, but at different addrs */
 #include <stm32.h>
 
-//#define VERBOSE
+#define VERBOSE
 
 #define CR1_PE		1
 #define CR1_START	0x100
@@ -94,6 +94,7 @@ _i2c_drop_crumb(const char *event, u_long arg0, u_long arg1) {
         crumb->event = event;
         crumb->arg0 = arg0;
         crumb->arg1 = arg1;
+        //kprintf("%s\n", event);
     }
 }
 #define I2C_CRUMB(event, arg0, arg1) _i2c_drop_crumb(event, arg0, arg1)
@@ -302,6 +303,7 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
     sync_lock( & ii->lock, "i2c.L" );
 
     cur_crumb = 0;
+    int plx = spldisk();
     ii->msg       = msgs;
     ii->num_msg   = nmsg;
     ii->state     = I2C_STATE_BUSY;
@@ -315,6 +317,7 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
     dev->CR1  |= CR1_PE;
 
     _i2c_start(dev);
+    splx(plx);
 
     utime_t expires = timeo ? get_time() + timeo : 0;
 
@@ -398,6 +401,7 @@ _i2c_ev_irq(int unit){
 
     /* EV5: Start condition sent */
     if( sr1 & SR1_SB ){
+        I2C_CRUMB("start", 0,0);
         _msg_init(msg);
         dev->CR2 |= CR2_IRQ_BUF;
 
@@ -435,6 +439,7 @@ _i2c_ev_irq(int unit){
              * register.  We should get another TXE interrupt
              * immediately to fill DR again.
              */
+            I2C_CRUMB("tx-addr", 0, 0);
             if( _msg_len(msg) != 1 ){
                 dev->DR = _msg_next( msg );
             }

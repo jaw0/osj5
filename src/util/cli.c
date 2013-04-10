@@ -126,7 +126,6 @@ static const struct {
     { "d", 	     0,                          IN_ENV(d, TYPE_STR32) },
 
     { "tsl",     "process timeslice",        IN_PROC(timeslice, TYPE_UC) },
-    { "nice",    "process nice",             IN_PROC(nice, TYPE_UC) },
     { "currproc",0,                          &currproc,  TYPE_ULX | TYPE_RO },
 
     {0,0,0,0}

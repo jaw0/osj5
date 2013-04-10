@@ -277,6 +277,11 @@ int
 oled_putchar(FILE *f, char ch){
     OLED *ii = (OLED*)f->d;
 
+    if( ch == 0x0B ){
+        ii->flush();
+        return 1;
+    }
+
     ii->putchar(ch);
 
     if( (ii->text_flags & GFX_FLAG_AUTOFLUSH) || (ch == '\n') )

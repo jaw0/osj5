@@ -11,3 +11,11 @@ config:
 
 __asm("cpsid i")
 __asm("cpsie i")
+
+
+gfx
+        animated clear screen effects
+
+sound
+        MML, RTTTL, ABC
+

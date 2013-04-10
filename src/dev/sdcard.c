@@ -61,9 +61,9 @@ sdcard_init(struct Device_Conf *dev){
     char info[32];
     int i;
 
+    finit( & ii->file );
     ii->file.d  = (void*)ii;
     ii->file.fs = & sdcard_fs;
-    finit( & ii->file );
 
     ii->name = dev->name;
     ii->spicf.unit  = dev->port;
@@ -74,7 +74,6 @@ sdcard_init(struct Device_Conf *dev){
     gpio_init( dev->arg[0], GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
     gpio_set( dev->arg[0] );
 
-    //int r = spi_sd_init( & ii->spicf, (char*)ii->sdcid, (char*)ii->sdcsd );
     int r = initialize_card(ii);
 
     if( !r ) return 0;	/* no card installed */
@@ -113,8 +112,7 @@ sdcard_init(struct Device_Conf *dev){
             nsect, nsect>>11
         );
 
-
-    return 0;
+    return & ii->file;
 }
 
 /****************************************************************/
@@ -258,62 +256,93 @@ initialize_card(struct SDCinfo *ii){
 int
 sdcard_ioctl(FILE*f, int s, void*d){}
 
+static inline void
+_sdcard_blk(struct SDCinfo *ii, int pos, u_char *cmd){
+
+    if( ii->ishc ) pos /= 512;
+
+    cmd[1] = pos >> 24;
+    cmd[2] = pos >> 16;
+    cmd[3] = pos >> 8;
+    cmd[4] = pos;
+
+}
+
 int
 sdcard_bread(FILE*f, char*d, int len, offset_t pos){
     struct SDCinfo *ii = f->d;
     u_char cmd[6];
     spi_msg m[6];
+    int tot = 0;
 
     cmd[0] = 0x40 | 17;
 
+    while(len){
 
+        _sdcard_blk(ii, pos, cmd);
+        SDCMD(m[0], cmd);
+        SDRX1(m[1]);
+        m[2].mode  = SPIMO_UNTIL;
+        m[2].until = _wait_token;
+        m[2].dlen  = 1000;
+        m[3].mode  = SPIMO_READ;
+        m[3].dlen  = 512;
+        m[3].data  = d;
+        m[4].mode  = SPIMO_DELAY;	// skip crc
+        m[4].dlen  = 2;
+        SDFIN(m[5]);
+        m[5].dlen = 16;			// extra delay
 
-    
-    SDCMD(m[0], cmd);
-    SDRX1(m[1]);
-    m[2].mode  = SPIMO_UNTIL;
-    m[2].until = _wait_token;
-    m[2].dlen  = 1000;
-    m[3].mode  = SPIMO_READ;
-    m[3].dlen  = 512;
-    m[3].data  = d;
-    m[4].mode  = SPIMO_DELAY;	// skip crc
-    m[4].dlen  = 2;
-    SDFIN(m[5]);
-    m[5].dlen = 16;		// extra delay
+        int r = spi_xfer(& ii->spicf, 6, m, 1000000);
+        if( r != SPI_XFER_OK ) return -1;
 
-    int r = spi_xfer(& ii->spicf, 6, m, 1000000);
+        len -= 512;
+        pos += 512;
+        d   += 512;
+        tot += 512;
+    }
 
+    return tot;
 }
+
+static const u_short token = 0xFEFF;
 
 int
 sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
     struct SDCinfo *ii = f->d;
     u_char cmd[6];
     spi_msg m[6];
-    u_short token = 0xFEFF;
+    int tot = 0;
 
     cmd[0] = 0x40 | 24;
 
+    while(len){
 
+        _sdcard_blk(ii, pos, cmd);
 
-    
-    SDCMD(m[0], cmd);
-    SDRX1(m[1]);
-    m[2].mode  = SPIMO_WRITE;
-    m[2].data  = (char*)&token;	// delay + token
-    m[2].dlen  = 2;
-    m[3].mode  = SPIMO_WRITE;
-    m[3].dlen  = 512;
-    m[3].data  = (char*)d;
-    m[4].mode  = SPIMO_DELAY;	// skip crc
-    m[4].dlen  = 2;
-    SDFIN(m[5]);
-    m[5].dlen = 16;		// extra delay
+        SDCMD(m[0], cmd);
+        SDRX1(m[1]);
+        m[2].mode  = SPIMO_WRITE;
+        m[2].data  = (char*)&token;	// delay + token
+        m[2].dlen  = 2;
+        m[3].mode  = SPIMO_WRITE;
+        m[3].dlen  = 512;
+        m[3].data  = (char*)d;
+        m[4].mode  = SPIMO_DELAY;	// skip crc
+        m[4].dlen  = 2;
+        SDFIN(m[5]);
+        m[5].dlen = 16;			// extra delay
 
-    int r = spi_xfer(& ii->spicf, 6, m, 1000000);
+        int r = spi_xfer(& ii->spicf, 6, m, 1000000);
+        if( r != SPI_XFER_OK ) return -1;
 
+        len -= 512;
+        pos += 512;
+        d   += 512;
+        tot += 512;
+    }
 
+    return tot;
 }
 
 

@@ -228,7 +228,7 @@ DEFUN(trace, "show stack trace")
 	       bp->ret, bp->arg[0], bp->arg[1], bp->arg[2],
 	       bp->arg[3], bp->arg[4], bp->arg[5]);
 	if( max && (++n > max) ) break;
-	if( !bp || bp == 0xFFFFFFFF ) break;
+	if( !bp || bp == (void*)0xFFFFFFFF ) break;
     }
     return 0;
 }

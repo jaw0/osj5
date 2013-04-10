@@ -25,14 +25,8 @@ struct Proc {
 #endif
 
 	u_long sp;			/* saved stack ptr */
-        int timeslice;			/* how much time per slice */
-	int state;			/* state */
-#define PRS_RUNNABLE	0
-#define PRS_BLOCKED	1
-#define PRS_DEAD	2
-#define PRS_SUSPENDED	4
 
-	int flags;
+	u_char flags;
 #define PRF_NONBLOCK	1	/* process is not permitted to block */
 #define PRF_REALTIME	2	/* process is real-time critical */
 #define PRF_DEADKID	4	/* a child process has died */
@@ -40,9 +34,15 @@ struct Proc {
 #define PRF_AUTOREAP	16	/* process will not reap dead kids, have scheduler do it */
 #define PRF_IMPORTANT	32	/* important system process */
 #define PRF_SIGWAKES	64	/* signals wake blocked procs */
+	u_char state;			/* state */
+#define PRS_RUNNABLE	0
+#define PRS_BLOCKED	1
+#define PRS_DEAD	2
+#define PRS_SUSPENDED	4
 
-	int prio;			/* process priority - generally in the range of 0-16 */
-	int nice;			/* value to adjust prio (above) */
+        u_char prio;
+        u_char throwing;		/* xthrow recursion */
+        u_short timeslice;		/* how much time per slice */
 
 	void *wchan;			/* what are we waiting for */
 	const char *wmsg;		/* short description of what is being waited for */
@@ -55,11 +55,6 @@ struct Proc {
 	struct Msg *msghead;
 	struct Msg *msgtail;
 	u_long sigmsgs;			/* msgs sent by bottom-half (signals) (bitmask) */
-        int    throwing;		/* xthrow recursion */
-
-		/* for bookkeeping */
-	char *stack_start;
-	int  alloc_size;
 
 #ifdef USE_NSTDIO
 	struct FILE *stdin;		/* std io for process */
@@ -70,14 +65,19 @@ struct Proc {
 
 	const char *name;	        /* proc name - for diags */
 
-		/* stats */
+		/* for bookkeeping */
+	char *stack_start;
+	int  alloc_size;
+
+#ifndef PROC_SMALL
+    	       /* stats */
 	u_long memused;			/* total memory in use */
 	u_long timeyielded;		/* total time allotted but not used by proc */
 	u_long timeallotted;		/* total time allotted to proc */
 	u_long p_allotted, p_yielded;	/* previous values of above */
 	u_long timeused;		/* decaying average of timeslice used */
 	u_long estcpu;			/* decaying average of total cpu */
-
+#endif
 	int exitval;			/* value passed to exit */
 
 		/* various lists we may be on */

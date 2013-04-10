@@ -62,8 +62,6 @@ static const Font fonts[] = {
 
 
 
-#define FLAG_AUTOFLUSH	1
-
 #define ATTR_REVERSE	1
 #define ATTR_ULINE	2
 #define ATTR_STRIKE	4
@@ -115,6 +113,28 @@ GFXdpy::scroll(void){
     }
 
     cy -= sb;
+}
+
+void
+GFXdpy::scroll_horiz(int ya, int yz, int dx){
+    int x;
+
+    if( dx > 0 ){
+        for( ; ya<yz; ya++){
+            for(x=0; x<width-dx; x++){
+                int pix = get_pixel(x+dx, ya);
+                set_pixel(x, ya, pix);
+            }
+        }
+    }else{
+        dx = - dx;
+        for( ; ya<yz; ya++){
+            for(x=width-1; x>=dx; x--){
+                int pix = get_pixel(x-dx, ya);
+                set_pixel(x, ya, pix);
+            }
+        }
+    }
 }
 
 inline void
@@ -215,6 +235,7 @@ void
 GFXdpy::putchar(int ch){
 
     /* minimal X3.64 support */
+    /* RSN - DEC ReGIS graphics */
     if( x3_mode == GOTESC ){
         if( ch == '[' ){
             x3_mode = GOTBRACK;
@@ -243,6 +264,7 @@ GFXdpy::putchar(int ch){
         goto done;
 
     case 'J' | GOTBRACK:
+        // RSN - animated wipes
         clear_screen();
         cx = cy = 0;
         break;
@@ -276,8 +298,9 @@ GFXdpy::putchar(int ch){
         break;
 
     case 's' | GOTBRACK:
-        // scale - non-standard
+        // scale+flags - non-standard
         text_scale = x3_arg[0];
+        text_flags = x3_arg[1];
         if( text_scale < 1 ) text_scale = 1;
         break;
 
@@ -292,8 +315,11 @@ GFXdpy::putchar(int ch){
         cy += text_scale * font->height;
         break;
     default:
-        if( cy > height - font->height ){
+        if( cy > height - text_scale * font->height ){
             scroll();
+        }
+        if( (cx > width - text_scale * font->width) && text_flags & GFX_FLAG_AUTOSHIFT ){
+            scroll_horiz(cy, cy + text_scale * font->height, text_scale * font->width);
         }
 
         render_glyph(ch);
@@ -302,14 +328,6 @@ GFXdpy::putchar(int ch){
     }
 
     x3_mode = 0;
-
-#if 0
-    // autowrap?
-    if( cx >= width ){
-        cx = 0;
-        cy += text_scale * font->height;
-    }
-#endif
 
 
 done:

@@ -46,24 +46,6 @@ DEFUN(kill, "kill a process")
     return 0;
 }
 
-DEFUN(nice, "nice a process")
-{
-    proc_t p;
-    int n;
-
-    if( argc != 3 ){
-        f_error("nice niceval pid");
-        return -1;
-    }
-
-    p = (proc_t)atoi_base(16, argv[2]);
-    n = atoi(argv[1]);
-
-    printf("changing nice %d -> %d\n", p->nice, n);
-    p->nice = n;
-
-    return 0;
-}
 #endif /* USE_CLI */
 
 static void
@@ -80,9 +62,9 @@ static void
 proc_ps(proc_t p){
     int x;
 
-    printf( "%08.8x %08.8x %3d %3d %3d %c%c%c%c %c%c%c%c%c %5.5s %3d%% %3d%% %4dk %-6.6s %-8.8s\n",
+    printf( "%08.8x %08.8x %3d %3d %c%c%c%c %c%c%c%c%c %5.5s %3d%% %3d%% %4dk %-6.6s %-8.8s\n",
 	    p, p->mommy,
-	    p->prio, p->nice, p->timeslice,
+	    p->prio, p->timeslice,
 
             p==currproc ? 'R' : (p->state == PRS_RUNNABLE ? 'r' : '-'),
 
@@ -97,13 +79,16 @@ proc_ps(proc_t p){
 	    p->flags & PRF_MSGPEND   ? 'M' : '-',
 
 	    (p->wmsg ? p->wmsg : "     "),
-
+#ifdef PROC_SMALL
+            0, 0, 0,
+#else
             p->estcpu / KESTCPU,
 
 	    p->timeallotted ?
 	    ((p->timeallotted - p->timeyielded) * 100 / p->timeallotted) : 0,
 
 	    (p->memused + 1023)/ 1024,
+#endif
 	    (p->cwd ? p->cwd->name : ""),
 	    p->name);
 }
@@ -129,7 +114,7 @@ DEFUN(ps, "list processes")
 
     ps_header();
 
-    printf("PID      PPID     PRI NIC TSL STATE FLGS WCHAN %%CPU %%TSL   MEM CWD    COMMAND\n");
+    printf("PID      PPID     PRI TSL STATE FLGS WCHAN %%CPU %%TSL   MEM CWD    COMMAND\n");
     plx = splproc();
     if( !p ){
         for(p=(proc_t)proclist; p; p = p->next){
@@ -148,12 +133,17 @@ DEFUN(ps, "list processes")
                p->stack_start, p->alloc_size, p->exitval, p->sigmsgs);
         printf("clist=0x%08.8x msghead=0x%08.8x msgtail=0x%08.8x\n",
                p->clist, p->msghead, p->msgtail);
+#ifdef PROC_SMALL
+        printf("next=0x%08.8x prev=0x%08.8x\n",
+               p->next, p->prev);
+#else
         printf("memused=0x%08.8x timeused=0x%08.8x timeyld=0x%08.8x timeallot=0x%08.8x\n",
                p->memused, p->timeused, p->timeyielded, p->timeallotted);
         printf("estcpu=%08.8d next=0x%08.8x prev=0x%08.8x\n",
                p->estcpu, p->next, p->prev);
+#endif
 #ifdef CHECKPROC
-        printf("lowsp=%08.8X (%d)\n", p->lowsp, (char*)p - (char*)p->lowsp);
+        printf("lowsp=%08.8x (%d)\n", p->lowsp, (char*)p - (char*)p->lowsp);
 #endif
     }
 

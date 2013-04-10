@@ -1,38 +1,94 @@
 
-A0      ADC0    PWM2/1                  adc sens
-A1      ADC1    PWM2/2                  adc sens
-A2      ADC2    PWM2/3                  adc sens
-A3      ADC3    PWM2/4                  adc sens
-A4      ADC4                            adc sens ?
-A5      ADC5                            adc sens ?
-A6      ADC6    PWM3/1                  adc mot
-A7      ADC7    PWM3/2                  adc mot
-A8              PWM1/1                  pwm mot
-A9      usart1  PWM1/2                  serial
-A10     usart1  PWM1/3                  serial
-A11             PWM1/4                  pwm mot
-A12                                     out sens
-A13     JTAG/SW                         button
-A14     JTAG/SW                         button
-A15     JTAG                            out sens
-B0      ADC8    PWM3/3                  beeper
-B1      bluelt  PWM3/4                  blue lt
-B2                                      out mot dir
-B3      JTAG                            out sens
-B4      JTAG                            out sens
-B5                                      out mot dir
-B6      i2c1    PWM4/1                  i2c
-B7      i2c1    PWM4/2                  i2c
-B8      button  PWM4/3                  button
+D11     A0      ADC0    PWM2/1                  adc sens
+D10     A1      ADC1    PWM2/2                  adc sens
+D09     A2      ADC2    PWM2/3                  adc sens
+D08     A3      ADC3    PWM2/4                  adc sens
+D07     A4      ADC4                            adc sens
+D06     A5      ADC5                            adc sens
+D05     A6      ADC6    PWM3/1                  adc mot
+D04     A7      ADC7    PWM3/2                  adc mot
+D27     A8              PWM1/1                  pwm mot
+D26     A9      usart1  PWM1/2                  serial
+D25     A10     usart1  PWM1/3                  serial
+D24     A11             PWM1/4                  pwm mot
+D23     A12                                     out sens
+D22     A13     JTAG/SW                         button
+D21     A14     JTAG/SW                         button
+D20     A15     JTAG                            out sens
+
+D03     B0      ADC8    PWM3/3                  beeper
+D33     B1      bluelt  PWM3/4                  blue lt
+D02     B2                                      out mot dir
+D19     B3      JTAG                            out sens
+D18     B4      JTAG                            out sens
+D17     B5                                      out mot dir
+D16     B6      i2c1    PWM4/1                  i2c
+D15     B7      i2c1    PWM4/2                  i2c
+D32     B8      button  PWM4/3                  button
 (no pin)
-B10     i2c2                            sd/dpy(cs)
-B11     i2c2                            sd/dpy(cd)
-B12     spi2                            sd/dpy
-B13     spi2                            sd/dpy
-B14     spi2                            sd/dpy
-B15     spi2                            sd/dpy
+D01     B10     i2c2                            sd/dpy(cs)
+D00     B11     i2c2                            sd/dpy(cd)
+D31     B12     spi2                            sd/dpy(ss)
+D30     B13     spi2                            sd/dpy
+D29     B14     spi2                            sd/dpy
+D28     B15     spi2                            sd/dpy
 
-C13     OSC-XXX
-C14     OSC-XXX
-C15     OSC-XXX
+D14     C13     OSC-XXX
+D13     C14     OSC-XXX
+D12     C15     OSC-XXX
 
+
+
+Vin
+D00     B11     i2c2                            sd/dpy(cd)
+D01     B10     i2c2                            sd/dpy(cs)
+D02     B2                                      out mot dir + pulldown
+D03     B0      ADC8    PWM3/3                  beeper
+D04     A7      ADC7    PWM3/2                  adc mot - voltage
+D05     A6      ADC6    PWM3/1                  adc mot
+D06     A5      ADC5                            adc sens
+D07     A4      ADC4                            adc sens
+D08     A3      ADC3    PWM2/4                  adc sens
+D09     A2      ADC2    PWM2/3                  adc sens
+D10     A1      ADC1    PWM2/2                  adc sens
+D11     A0      ADC0    PWM2/1                  adc sens
+reset
+D12-14  XXX
+vbat
+Agnd
+Avcc
+
+
+Vcc
+gnd
+D32     B8      button  PWM4/3                  button
+D15     B7      i2c1    PWM4/2                  i2c
+D16     B6      i2c1    PWM4/1                  i2c
+D17     B5                                      out mot dir
+D18     B4      JTAG                            out sens
+D19     B3      JTAG                            out sens
+D20     A15     JTAG                            out sens
+D21     A14     JTAG/SW                         button
+D22     A13     JTAG/SW                         button
+D23     A12                                     out sens
+D24     A11             PWM1/4                  pwm mot
+D25     A10     usart1  PWM1/3                  serial
+D26     A9      usart1  PWM1/2                  serial
+D27     A8              PWM1/1                  pwm mot
+D28     B15     spi2                            sd/dpy
+D29     B14     spi2                            out sens
+D30     B13     spi2                            sd/dpy
+D31     B12     spi2                            sout sens
+
+
+
+================================================================
+v2:
+
+connector:      Vcc, GND
+optics farther from edge (away from fingers)
+buttons better located
+
+================================================================
+
+out = K1*error - K2*preverror + K3*prevout

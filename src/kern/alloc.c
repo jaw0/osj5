@@ -256,7 +256,7 @@ alloc(size)
 #ifdef ALLOC_TRACE
         xprintf("\t=%x (fresh)\n", (u_long)help + OVRHD);
 #endif
-#ifdef USE_PROC
+#if defined(USE_PROC) && !defined(PROC_SMALL)
         if( currproc )
             currproc->memused += size + OVRHD;
 #endif
@@ -277,7 +277,7 @@ found:
     xprintf("\treusing %x (size %d)", (u_long)help + OVRHD,
             *(unsigned *)help);
 #endif
-#ifdef USE_PROC
+#if defined(USE_PROC) && !defined(PROC_SMALL)
     if( currproc )
         currproc->memused += *(unsigned *)help + OVRHD;
 #endif
@@ -329,7 +329,7 @@ free(ptr, size)
 #endif /* DEBUG */
 
     plx = splproc();
-#ifdef USE_PROC
+#if defined(USE_PROC) && !defined(PROC_SMALL)
     if( currproc )
         currproc->memused -= f->size + OVRHD;
 #endif

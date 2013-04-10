@@ -40,6 +40,11 @@
 #  endif
 #endif
 
+#ifndef TIMESLICE
+#  define TIMESLICE	5
+#endif
+
+
 struct ReadyList {
     struct Proc *head;
     struct Proc *tail;
@@ -94,8 +99,10 @@ start_proc(int ssize, void *entry, const char *name){
     proc->name        = name;
     proc->alloc_size  = asize;
     proc->stack_start = stack;
+#ifndef PROC_SMALL
     proc->memused     = asize;
-    proc->timeslice   = 5;	/* QQQ */
+#endif
+    proc->timeslice   = TIMESLICE;
     proc->prio        = 1;
 
 #ifdef CHECKPROC
@@ -154,20 +161,22 @@ init_proc(proc_t p){
     bzero(p, sizeof(struct Proc));
     bzero(waittable, WAITTABLESIZE * sizeof(struct Proc *));
 
-    p->timeslice = 5;
+    p->timeslice = TIMESLICE;
     p->prio      = 1;
-
-    p->timeallotted = p->timeslice;
+    /* estimated size of needed stack, for run-time error checking */
+    p->stack_start = _heap_limit = (char*)p - INIT_STACK;
     p->flags  = PRF_NONBLOCK | PRF_AUTOREAP;
+    p->cwd    = 0;
+    p->name = "init";
+
+#ifndef PROC_SMALL
+    p->timeallotted = p->timeslice;
+#endif
 #ifdef USE_NSTDIO
     p->stdin  = kconsole_port;
     p->stdout = kconsole_port;
     p->stderr = kconsole_port;
 #endif
-    p->cwd    = 0;
-    /* estimated size of needed stack, for run-time error checking */
-    p->stack_start = _heap_limit = (char*)p - INIT_STACK;
-    p->name = "init";
 #ifdef CHECKPROC
     p->magic = PROCMAGIC;
     p->lowsp = (u_long)&p;
@@ -314,7 +323,7 @@ dispose_of_cadaver(proc_t pid){
     splhigh();
 
     for(i=0; i<READYLISTSIZE; i++){
-        struct ReadyList *rl = readylist + i;
+        struct ReadyList *rl = (struct ReadyList*)readylist + i;
 
         if( rl->head == pid ) rl->head = pid->rnext;
         if( rl->tail == pid ) rl->tail = pid->rprev;
@@ -328,12 +337,17 @@ dispose_of_cadaver(proc_t pid){
     splx(plx);
     bzero(pid, sizeof(struct Proc));
 
-    if( pid->alloc_size )
+    if( pid->mommy )
         /* initial process was not alloc()ed */
+#ifdef PROC_SMALL
+        free(pid->stack_start, 0);
+#else
         free(pid->stack_start, pid->alloc_size);
+#endif
 
     return 0;
 }
+
 
 static void
 idleloop(void){
@@ -363,7 +377,7 @@ sysmaint(void){
     u_long lastt = 0, dt;
     utime_t timeout;
 
-    currproc->timeslice = 5;
+    currproc->timeslice = TIMESLICE;
     currproc->prio      = 4;
     currproc->flags     = PRF_AUTOREAP | PRF_IMPORTANT;
 
@@ -409,7 +423,7 @@ sysmaint(void){
             if( p->timeout && (p->timeout < timeout) ) timeout = p->timeout;
             if( p->alarm   && (p->alarm   < timeout) ) timeout = p->alarm;
 
-
+#ifndef PROC_SMALL
             /* statistics */
             if( lastt && dt && p->timeallotted ){
                 if( p->timeallotted != p->p_allotted ){
@@ -430,6 +444,7 @@ sysmaint(void){
                     p->estcpu /= 2;
                 }
             }
+#endif
 
             if( p->state & PRS_DEAD && (!p->mommy || p->mommy==currproc
                                         || p->mommy->flags & PRF_AUTOREAP) ){
@@ -722,7 +737,7 @@ readylist_add(proc_t proc){
     proc->rnext = 0;
 
     if( proc->prio >= READYLISTSIZE ) proc->prio = READYLISTSIZE - 1;
-    struct ReadyList *rl = readylist + proc->prio;
+    struct ReadyList *rl = (struct ReadyList*)readylist + proc->prio;
 
     if( rl->tail ){
         rl->tail->rnext = proc;
@@ -749,7 +764,7 @@ readylist_next(void){
     int plx = splhigh();
 
     for(i=0; i<READYLISTSIZE; i++){
-        struct ReadyList *rl = readylist + i;
+        struct ReadyList *rl = (struct ReadyList*)readylist + i;
         if( ! rl->head ) continue;
 
         next = rl->head;
@@ -800,7 +815,7 @@ _yield_next_proc(void){
     //        get_sp(), get_psp(), get_msp(), get_control());
 
     if( currproc && currproc->state == PRS_RUNNABLE )
-        readylist_add( currproc );
+        readylist_add( (proc_t)currproc );
 
     /* who runs next? */
     nextproc = readylist_next();
@@ -809,12 +824,13 @@ _yield_next_proc(void){
         PANIC("no nextproc!");
     }
 
+#ifndef PROC_SMALL
     /* stats */
     if( currproc ){
         if( timeremain > 0 )
             currproc->timeyielded += timeremain;
     }
-
+#endif
     //kprintf(" ynp curr %x (%s), next %x (%s); curr sp %x, next sp %x start %x\n",
     //   currproc, currproc->name, nextproc, nextproc->name, currproc->sp, nextproc->sp, nextproc->stack_start);
 
@@ -827,7 +843,9 @@ _yield_next_proc(void){
     if( nextproc->sp && nextproc->sp < nextproc->lowsp ) nextproc->lowsp = nextproc->sp;
 #endif
 
+#ifndef PROC_SMALL
     nextproc->timeallotted += nextproc->timeslice;
+#endif
     timeremain = nextproc->timeslice;
 
     return nextproc;

@@ -14,7 +14,8 @@
 #define GFX_ORIENT_180	2
 #define GFX_ORIENT_270	3
 
-#define GFX_FLAG_AUTOFLUSH	1
+#define GFX_FLAG_AUTOFLUSH	1	// flush display every character
+#define GFX_FLAG_AUTOSHIFT	2	// left scroll line
 
 
 #define MAXX3ARG 4
@@ -23,23 +24,23 @@ class Font;
 
 class GFXdpy {
 public:
-    int _height;
-    int _width;
-    int text_flags;
+    short _height;
+    short _width;
+    u_char text_flags;
 
 public:
-    int orientation;
-    int	height;
-    int width;
+    u_char orientation;
+    short height;
+    short width;
 
 private:
-    int cx,cy;
-    int text_attr;
-    int text_scale;
+    short  cx,cy;
+    u_char text_attr;
+    u_char text_scale;
 
-    int  x3_argn;
     char x3_arg[MAXX3ARG];
-    int  x3_mode;
+    char x3_argn;
+    short x3_mode;
 
     const Font *font;
 
@@ -55,6 +56,7 @@ public:
     int  get_pixel(int, int);
     void set_orientation(int);
     void scroll(void);
+    void scroll_horiz(int,int,int);
     void render_glyph(int);
     void putchar(int);
 
