@@ -26,13 +26,76 @@ static i2c_msg imuinit[] = {
     I2C_MSG_C2( LSM303_ADDRESS_ACCEL, 0, LSM303_REGISTER_ACCEL_CTRL_REG1_A, 0x77 ),		// enable, 400Hz (QQQ - data rate?)
     I2C_MSG_C2( LSM303_ADDRESS_ACCEL, 0, LSM303_REGISTER_ACCEL_CTRL_REG4_A, 8 ),		// high-res (12 bit) mode
 
-    I2C_MSG_C2( L3GD20_ADDRESS,       0, L3G_CTRL_REG1, 0x0F ),					// enable. (QQQ - data rate, bandwidth?)
+    I2C_MSG_C2( L3GD20_ADDRESS,       0, L3G_CTRL_REG1, 0xFF ),					// enable. (QQQ - data rate, bandwidth?)
     I2C_MSG_C2( L3GD20_ADDRESS,       0, L3G_CTRL_REG4, 0x20 ),					// full scale = 2000dps
 };
 
+static char gyrbuf[6];
+
+static i2c_msg gyroread[] = {
+    I2C_MSG_C1( L3GD20_ADDRESS,       0,             L3G_OUT_X_L | 0x80 ),
+    I2C_MSG_DL( L3GD20_ADDRESS,       I2C_MSGF_READ, 6, gyrbuf ),
+};
 
 
-void init_bot_hw(void){
+static const char leds[6] = {
+    GPIO_B4 , 	// S L
+    GPIO_B3 ,	// F L
+    GPIO_A15,	// D L
+    GPIO_A12,	// D R
+    GPIO_B14,	// F R
+    GPIO_B12,	// S R
+};
+
+int
+get_sensor(int n){
+    gpio_set( leds[n] );
+    int i; for(i=0; i<50; i++){ asm("nop"); }
+    int v = adc_get(n);
+    gpio_clear( leds[n] );
+    return v;
+}
+
+// only interested in Z rotation
+int
+read_gyro(void){
+
+    i2c_xfer(0, 2, gyroread, 100000);
+    short gz = (gyrbuf[5]<<8) | gyrbuf[4];
+    return gz;
+}
+
+// (L)B2=0, (R)B5=1 => forward
+void
+set_motors(int r, int l){
+
+    if( r < 0 ){
+        r = -r;
+        gpio_clear( GPIO_B5 );
+    }else{
+        gpio_set( GPIO_B5 );
+    }
+
+    if( l < 0 ){
+        l = -l;
+        gpio_set( GPIO_B2 );
+    }else{
+        gpio_clear( GPIO_B2 );
+    }
+
+    if( r > 1023 ) r = 1023;
+    if( l > 1023 ) l = 1023;
+
+    pwm_set( TIMER_1_1, r );	// right
+    pwm_set( TIMER_1_4, l );	// left
+
+}
+
+
+/****************************************************************/
+
+void
+init_bot_hw(void){
 
     /* disable jtag to make more A13-15,B3-4 avail */
     AFIO->MAPR   |= 0x4000000;
