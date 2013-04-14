@@ -30,11 +30,20 @@ static i2c_msg imuinit[] = {
     I2C_MSG_C2( L3GD20_ADDRESS,       0, L3G_CTRL_REG4, 0x20 ),					// full scale = 2000dps
 };
 
+static char magbuf[6];
+static char accbuf[6];
 static char gyrbuf[6];
 
-static i2c_msg gyroread[] = {
+static i2c_msg imuread[] = {
+    I2C_MSG_C1( LSM303_ADDRESS_MAG,   0,             LSM303_REGISTER_MAG_OUT_X_H_M ),
+    I2C_MSG_DL( LSM303_ADDRESS_MAG,   I2C_MSGF_READ, 6, magbuf ),
+
+    I2C_MSG_C1( LSM303_ADDRESS_ACCEL, 0,             LSM303_REGISTER_ACCEL_OUT_X_L_A | 0x80 ),
+    I2C_MSG_DL( LSM303_ADDRESS_ACCEL, I2C_MSGF_READ, 6, accbuf ),
+
     I2C_MSG_C1( L3GD20_ADDRESS,       0,             L3G_OUT_X_L | 0x80 ),
     I2C_MSG_DL( L3GD20_ADDRESS,       I2C_MSGF_READ, 6, gyrbuf ),
+
 };
 
 
@@ -56,14 +65,41 @@ get_sensor(int n){
     return v;
 }
 
+void read_imu(void){
+
+    i2c_xfer(0, 6, imuread, 100000);
+}
+
+
 // only interested in Z rotation
 int
 read_gyro(void){
 
-    i2c_xfer(0, 2, gyroread, 100000);
     short gz = (gyrbuf[5]<<8) | gyrbuf[4];
     return gz;
 }
+
+int
+accel_x(void){
+    short ax = ((accbuf[1]<<8) | accbuf[0]);
+    ax >>= 4;
+    return ax;
+}
+
+int
+accel_y(void){
+    short ay = ((accbuf[3]<<8) | accbuf[2]);
+    ay >>= 4;
+    return ay;
+}
+
+int
+accel_z(void){
+    short az = ((accbuf[5]<<8) | accbuf[4]);
+    az >>= 4;
+    return az;
+}
+
 
 // (L)B2=0, (R)B5=1 => forward
 void
