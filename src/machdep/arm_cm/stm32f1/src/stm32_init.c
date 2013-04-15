@@ -200,6 +200,17 @@ tick_init(void){
     SCB->SHPR[2]  = (IPL_CLOCK << 24) | (IPL_PROC << 16);
 }
 
+utime_t
+get_hrtime(void){
+    long long t;
+
+    irq_disable();
+    t = get_time() + (1000 - SysTick->VAL / (SYSCLOCK / 1000000 / 8));
+    irq_enable();
+    return t;
+}
+
+
 /****************************************************************/
 
 void

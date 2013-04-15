@@ -447,4 +447,8 @@ hardclock(struct intrframe* fr){
     systime_tick();
 }
 
+utime_t
+get_hrtime(void){
+    return get_time();
+}
 
