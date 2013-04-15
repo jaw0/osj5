@@ -113,7 +113,7 @@ extern volatile struct Proc *currproc;
 
 extern void printf(const char *, ...);
 extern void fprintf(FILE*, const char *, ...);
-extern void snprintf(char *, int, const char*, ...);
+extern int  snprintf(char *, int, const char*, ...);
 extern void kprintf(const char *, ...);
 
 #if defined(USE_PROC) && defined(USE_NSTDIO)

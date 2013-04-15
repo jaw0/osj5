@@ -76,6 +76,7 @@ int
 adc_get(int chan){
     ADC_TypeDef *dev = _adc_addr(chan);
 
+    int v = dev->DR;	// clear any previous result
     dev->SQR3 = chan;
     dev->CR2 |= 1;
 

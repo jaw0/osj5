@@ -125,7 +125,7 @@ start_proc(int ssize, void *entry, const char *name){
     if( currproc )
         proc->brother = currproc->booboo;
 
-    int plx = splproc();
+    int plx = splhigh();
 
     if( proc->brother )
         proc->brother->sister = proc;
@@ -291,15 +291,8 @@ dispose_of_cadaver(proc_t pid){
         return -1;
 
     sigunblock(pid);
-    plx = splproc();
 
-    /* remove from proclist ... */
-    if( pid->prev )
-        pid->prev->next = pid->next;
-    if( pid->next )
-        pid->next->prev = pid->prev;
-    if( proclist == pid )
-        proclist = pid->next;
+    plx = splproc();
 
     /* need to orphan any children it had */
     for(p=pid->booboo; p; p=p->brother){
@@ -319,9 +312,17 @@ dispose_of_cadaver(proc_t pid){
             pid->mommy->booboo = pid->brother;
     }
 
-    /* remove from readylist */
     splhigh();
 
+    /* remove from proclist ... */
+    if( pid->prev )
+        pid->prev->next = pid->next;
+    if( pid->next )
+        pid->next->prev = pid->prev;
+    if( proclist == pid )
+        proclist = pid->next;
+
+    /* remove from readylist */
     for(i=0; i<READYLISTSIZE; i++){
         struct ReadyList *rl = (struct ReadyList*)readylist + i;
 
@@ -371,19 +372,14 @@ idleloop(void){
 
 static void
 sysmaint(void){
-    volatile int i;
-    struct Proc *p, *r, *rl;
-    int plx, s;
+    struct Proc *p;
     u_long lastt = 0, dt;
-    utime_t timeout;
 
     currproc->timeslice = TIMESLICE;
     currproc->prio      = 4;
     currproc->flags     = PRF_AUTOREAP | PRF_IMPORTANT;
 
     while(1){
-        // run sooner on first iteration - so ps output is nonzero
-        timeout = lastt ? get_time() + MAINT_TIME : get_time() + PROC_TIME;
         dt      = (int)(get_time() - lastt) / PROC_TIME;
         lastt   = get_time();
 
@@ -396,32 +392,13 @@ sysmaint(void){
                 continue;
 
             if( p->state & PRS_BLOCKED ){
-
                 if( p->flags & PRF_NONBLOCK ){
                     /* force non-blocking processes to be not blocked */
                     /* (they can still be dead) */
                     sigunblock(p);
                 }
-
-                /* timeout */
-                if( p->timeout && p->timeout <= get_time() ){
-                    p->timeout = 0;
-                    sigunblock(p);
-                    if( p->wchan != WCHAN_NEVER )
-                        ksendmsg(p, MSG_TIMEOUT);
-                }
             }
 
-            /* handle alarm clocks */
-            if( p->alarm && p->alarm <= get_time() ){
-                p->alarm = 0;
-                if( p->state & PRS_BLOCKED )
-                    sigunblock(p);
-                ksendmsg(p, MSG_ALARM);
-            }
-
-            if( p->timeout && (p->timeout < timeout) ) timeout = p->timeout;
-            if( p->alarm   && (p->alarm   < timeout) ) timeout = p->alarm;
 
 #ifndef PROC_SMALL
             /* statistics */
@@ -461,8 +438,8 @@ sysmaint(void){
         }
 
         /* sleep until the next timeout */
-        next_timeout = timeout;
-        tsleep( &next_timeout, currproc->prio, "time", 0);
+        // run sooner on first iteration - so ps output is nonzero
+        usleep( lastt ? MAINT_TIME : PROC_TIME );
     }
 }
 
@@ -602,9 +579,6 @@ sigunblock(proc_t proc){
 
 void
 _set_timeout(utime_t timeo){
-
-    if( !next_timeout || (timeo < next_timeout) )
-        wakeup( &next_timeout );
 }
 
 void
@@ -621,6 +595,7 @@ void
 usleep(u_long usec){
     utime_t until;
 
+    if( usec <= 0 ) return;
     PROCOK(currproc);
     if( !currproc || currproc->flags & PRF_NONBLOCK ){
         /* this process cannot block, do special sleep */

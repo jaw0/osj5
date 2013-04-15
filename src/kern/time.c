@@ -11,9 +11,9 @@
 #include <conf.h>
 #include <proc.h>
 #include <time.h>
+#include <msgs.h>
 
 utime_t systime = 0;
-utime_t next_timeout = 0;
 
 void
 systime_tick(void){
@@ -22,8 +22,27 @@ systime_tick(void){
     systime += PROC_TIME;
 
 #ifdef USE_PROC
-    if( next_timeout && systime >= next_timeout )
-        wakeup( &next_timeout );
+    struct Proc *p;
+
+    for(p=proclist; p; p=p->next){
+        /* check timeouts */
+        if( p->state & PRS_BLOCKED ){
+            if( p->timeout && p->timeout <= systime ){
+                p->timeout = 0;
+                sigunblock(p);
+                if( p->wchan != WCHAN_NEVER )
+                    ksendmsg(p, MSG_TIMEOUT);
+            }
+        }
+
+        /* handle alarm clocks */
+        if( p->alarm && p->alarm <= get_time() ){
+            p->alarm = 0;
+            if( p->state & PRS_BLOCKED )
+                sigunblock(p);
+            ksendmsg(p, MSG_ALARM);
+        }
+    }
 
     if( currproc && (--timeremain <= 0) ){
         sched_yield();

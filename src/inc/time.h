@@ -13,10 +13,11 @@
 typedef long long utime_t;
 
 extern utime_t systime;
-extern utime_t next_timeout;
 
 extern void systime_tick(void);
 
 #define get_time()	(systime)
+
+extern utime_t get_hrtime(void);
 
 #endif

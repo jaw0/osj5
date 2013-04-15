@@ -48,7 +48,7 @@
 /* NB: stm32f1 + f4 are compat, but at different addrs */
 #include <stm32.h>
 
-#define VERBOSE
+//#define VERBOSE
 
 #define CR1_PE		1
 #define CR1_START	0x100
