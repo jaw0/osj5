@@ -144,10 +144,27 @@ wait_for_button(void){
 }
 
 int
+wait_for_Rbutton(){
+    while(1){
+        if( gpio_get( GPIO_A14 ) ) return 'L';
+        if( gpio_get( GPIO_B8  ) ) return 'R';
+        yield();
+    }
+}
+
+void
+stop(){
+    set_motors(0,0);
+    curr_song = 0;
+    //printf("STOP\n");
+}
+
+int
 check_env(void){
     int a;
 
     if( check_button() ){
+        stop();
         longjmp(restart, 1);
     }
 
@@ -155,7 +172,8 @@ check_env(void){
 
     if( a < 0 ){
         if( ! acc_z_time ) acc_z_time = get_time();
-        if( get_time() - acc_z_time > 50000 ){
+        if( get_time() - acc_z_time > 100000 ){
+            stop();
             printf("accZ: %d\n", a);
             printf("UP UP and AWAY!\n");
             play(ivolume, "G-2G-2G-2AzG-2G-2G-2A");
@@ -169,13 +187,6 @@ check_env(void){
 
 }
 
-void
-stop(){
-    set_motors(0,0);
-    curr_song = 0;
-    //printf("STOP\n");
-}
-
 emergency(const char *msg){
     stop();
     sleep(1);
@@ -183,6 +194,7 @@ emergency(const char *msg){
 
     while(1){
         play(32, "D+>D->");
+        read_imu();
         check_env();
     }
 }
@@ -377,6 +389,7 @@ turn(int angle, int maxspeed, int tacc, int tdacc){
     utime_t prevt = get_hrtime();
     int goal = angle * 32768 / 2000 * 1000;
     int pos  = 0;
+    int accpos = 0;
     short prevgz = 0;
     int   unsafecnt = 0;
     int speed;
@@ -396,9 +409,14 @@ turn(int angle, int maxspeed, int tacc, int tdacc){
         pos += (gz + prevgz) / 2 * (t0 - prevt) / 1000;
         int err = goal - pos;
 
-        if( taccnt >= tacc )
+        if( taccnt >= tacc ){
             speed = maxspeed;
-        else
+            if( !accpos ){
+                accpos = pos;
+                // it will take about this much to stop
+                goal -= accpos * ACCEL / DACCEL;
+            }
+        }else
             speed = maxspeed * taccnt / tacc;
 
         if( angle > 0 ){
@@ -627,20 +645,20 @@ dance_until_unsafe(void){
 
         switch(dance_moves[i++]){
         case 'a':
-            beep(400, volume, 100000);
             turn( 45, FAST, ACCEL, DACCEL);
+            beep(400, volume, 100000);
             break;
         case 'b':
-            beep(400, volume, 100000);
             turn(-45, FAST, ACCEL, DACCEL);
+            beep(400, volume, 100000);
             break;
         case 'A':
-            beep(440, volume, 100000);
             turn( 90, FAST, ACCEL, DACCEL);
+            beep(440, volume, 100000);
             break;
         case 'B':
-            beep(440, volume, 100000);
             turn(-90, FAST, ACCEL, DACCEL);
+            beep(440, volume, 100000);
             break;
         case ' ':
             usleep(500000);
@@ -659,25 +677,24 @@ dance(){
 
     if( setjmp(restart) ){
         stop();
-        printf("\e[J\e[10mdance mode\n");
+        printf("\e[J\e[15mdance mode\n\e[10m");
         printf("button LR to start\n");
-        printf("LR + turtle - menu\n");
-        wait_for_button();
+        printf("button RR for menu\n");
+        int b = wait_for_Rbutton();
 
-        read_imu();
-        if( accel_z() - accel_off_z < -500 ){
-            // button + upside-down => main menu
+        if( b == 'R' ){
+            // main menu
             play(ivolume, "A3A3D-3");
-            // wait until righted
+            // debounce
             while(1){
-                read_imu();
-                if( accel_z() - accel_off_z > 500 ) break;
+                if( !gpio_get(GPIO_B8) ) break;
                 yield();
             }
+            usleep(10000);
             return 0;
         }
     }else{
-        printf("\e[J\e[10mdance mode\n");
+        printf("\e[J\e[15mdance mode\n\e[10m");
     }
 
     play(ivolume, "A3D-3D+3");
@@ -700,25 +717,24 @@ wander(){
 
     if( setjmp(restart) ){
         stop();
-        printf("\e[J\e[10mexplore mode\n");
+        printf("\e[J\e[15mexplore mode\n\e[10m");
         printf("button LR to start\n");
-        printf("LR + turtle - menu\n");
-        wait_for_button();
+        printf("button RR for menu\n");
+        int b = wait_for_Rbutton();
 
-        read_imu();
-        if( accel_z() - accel_off_z < -500 ){
-            // button + upside-down => main menu
+        if( b == 'R' ){
+            // main menu
             play(ivolume, "A3A3D-3");
-            // wait until righted
+            // debounce
             while(1){
-                read_imu();
-                if( accel_z() - accel_off_z > 500 ) break;
+                if( !gpio_get(GPIO_B8) ) break;
                 yield();
             }
+            usleep(10000);
             return 0;
         }
     }else{
-        printf("\e[J\e[10mexplore mode\n");
+        printf("\e[J\e[15mexplore mode\n\e[10m");
     }
 
     play(ivolume, "A3D-3D+3");
@@ -771,8 +787,6 @@ const struct Menu guisett = {
     }
 };
 
-
-
 const struct Menu guitop = {
     "Main Menu", &guitop, {
         { "explore",  MTYP_FUNC, (void*)wander   },
@@ -792,25 +806,8 @@ botproc(void){
     FILE *f = fopen("dev:oled0", "w");
     STDOUT = f;
 
+    sleep(2);
     menu( &guitop );
-
-#if 0
-    // restart while upside down -> test mode
-    read_imu();
-    if( accel_z() < 0 ){
-        while(1){
-            // diag mode
-            testsensors();
-            testaccel();
-            testgyro();
-        }
-        //
-    }
-
-    wander();
-#endif
-
-
 }
 
 void

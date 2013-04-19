@@ -1,12 +1,16 @@
 /*
-  Play Music
-  I think Andy wrote most of this, circa 1994
+  Copyright (c) 2013
+  Author: Jeff Weisberg <jaw @ tcp4me.com>
+  Created: 2013-Apr-18 23:17 (EDT)
+  Function: play music
 */
 
 #include <proc.h>
 #include <gpio.h>
 #include <pwm.h>
 
+
+/* I think Andy wrote most of this song, circa 1994 */
 
 #define frequency(note,octave) ((u_short)(note>>(octave+22)))
 #define REST    0
@@ -124,23 +128,15 @@ static const Tune chariotsOfFire[] = {
 };
 
 extern int curr_song;
-
-static inline void
-beep(int freq, int vol, int dur){
-    freq_set(TIMER_3_3, freq);
-    pwm_set(TIMER_3_3,  vol);
-    usleep(dur);
-    pwm_set(TIMER_3_3,  0);
-}
+extern int volume;
+extern void beep(int,int,int);
 
 void
 sing_song(void){
     int cn = 0;
 
-    printf("cof: %x\n", chariotsOfFire);
-
     while(1){
-        if( ! curr_song ){
+        if( ! curr_song || !volume ){
             usleep( 100000 );
             continue;
         }
@@ -150,8 +146,10 @@ sing_song(void){
             if( ! curr_song ) break;
             if( ! chariotsOfFire[cn].duration ) break;
 
-            printf("%d: freq %d, dur %d\n", cn, chariotsOfFire[cn].frequency, chariotsOfFire[cn].duration );
-            beep( chariotsOfFire[cn].frequency, 8, chariotsOfFire[cn].duration * 1000 );
+            if( chariotsOfFire[cn].frequency )
+                beep( chariotsOfFire[cn].frequency, volume, chariotsOfFire[cn].duration * 1000 );
+            else
+                usleep( chariotsOfFire[cn].duration * 1000 );
             cn ++;
         }
     }
