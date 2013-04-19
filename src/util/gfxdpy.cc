@@ -70,6 +70,7 @@ static const Font fonts[] = {
 #define GOTESC		0x100
 #define GOTBRACK	0x200
 
+#define FLAGMINUS	1
 
 //****************************************************************
 
@@ -125,6 +126,8 @@ GFXdpy::scroll_horiz(int ya, int yz, int dx){
                 int pix = get_pixel(x+dx, ya);
                 set_pixel(x, ya, pix);
             }
+            for(x=width-dx; x<width; x++)
+                set_pixel(x, ya, 0);
         }
     }else{
         dx = - dx;
@@ -133,6 +136,8 @@ GFXdpy::scroll_horiz(int ya, int yz, int dx){
                 int pix = get_pixel(x-dx, ya);
                 set_pixel(x, ya, pix);
             }
+            for(x=0; x<dx; x++)
+                set_pixel(x, ya, 0);
         }
     }
 }
@@ -238,8 +243,9 @@ GFXdpy::putchar(int ch){
     /* RSN - DEC ReGIS graphics */
     if( x3_mode == GOTESC ){
         if( ch == '[' ){
-            x3_mode = GOTBRACK;
-            x3_argn = 0;
+            x3_mode  = GOTBRACK;
+            x3_argn  = 0;
+            x3_flags = 0;
             bzero( x3_arg, MAXX3ARG );
             return;
         }else{
@@ -256,20 +262,63 @@ GFXdpy::putchar(int ch){
         x3_argn ++;
         if( x3_argn >= MAXX3ARG ) x3_argn = MAXX3ARG - 1;
         goto done;
+    case '-' | GOTBRACK:
+        x3_flags |= FLAGMINUS;
+        goto done;
     case '0' | GOTBRACK: case '1' | GOTBRACK: case '2' | GOTBRACK: case '3' | GOTBRACK:
     case '4' | GOTBRACK: case '5' | GOTBRACK: case '6' | GOTBRACK: case '7' | GOTBRACK:
     case '8' | GOTBRACK: case '9' | GOTBRACK:
         x3_arg[ x3_argn ] *= 10;
-        x3_arg[ x3_argn ] += ch - '0';
+        x3_arg[ x3_argn ] += (ch - '0') * ((x3_flags & FLAGMINUS) ? -1 : 1);
         goto done;
 
-    case 'J' | GOTBRACK:
+    case 'A' | GOTBRACK:	// up
+        if( !x3_arg[0] ) x3_arg[0] = 1;
+        cy -= x3_arg[0] * text_scale * font->height;
+        if( cy < 0 ) cy = 0;
+        break;
+    case 'B' | GOTBRACK:	// down
+        if( !x3_arg[0] ) x3_arg[0] = 1;
+        cy += x3_arg[0] * text_scale * font->height;
+        if( cy > height - text_scale * font->height ) cy = height - text_scale * font->height;
+        break;
+    case 'C' | GOTBRACK:	// right
+        if( !x3_arg[0] ) x3_arg[0] = 1;
+        cx += x3_arg[0] * text_scale * font->width;
+        if( cx > width - text_scale * font->width ) cx = width - text_scale * font->width;
+        break;
+    case 'D' | GOTBRACK:	// left
+        if( !x3_arg[0] ) x3_arg[0] = 1;
+        cx -= x3_arg[0] * text_scale * font->width;
+        if( cx < 0 ) cx = 0;
+        break;
+    case 'E' | GOTBRACK:	// line down
+        if( !x3_arg[0] ) x3_arg[0] = 1;
+        cy += x3_arg[0] * text_scale * font->height;
+        if( cy > height - text_scale * font->height ) cy = height - text_scale * font->height;
+        cx = 0;
+    case 'F' | GOTBRACK:	// line up
+        if( !x3_arg[0] ) x3_arg[0] = 1;
+        cy -= x3_arg[0] * text_scale * font->height;
+        if( cy < 0 ) cy = 0;
+        cx = 0;
+    case 'G' | GOTBRACK:	// set column (0 based, not 1 based); negative -> from right
+        if( x3_arg[0] < 0 )
+            cx = width - x3_arg[0] * font->width  * text_scale;
+        else
+            cx = x3_arg[0] * font->width  * text_scale;
+
+        if( cx < 0 ) cx = 0;
+        if( cx > width - text_scale * font->width ) cx = width - text_scale * font->width;
+        break;
+
+    case 'J' | GOTBRACK:	// clear screen
         // RSN - animated wipes
         clear_screen();
         cx = cy = 0;
         break;
 
-    case 'H' | GOTBRACK:
+    case 'H' | GOTBRACK: 	// move cursor (0 based, not 1 based)
         cx = x3_arg[0] * font->width  * text_scale;
         cy = x3_arg[1] * font->height * text_scale;
         break;
@@ -302,6 +351,20 @@ GFXdpy::putchar(int ch){
         text_scale = x3_arg[0];
         text_flags = x3_arg[1];
         if( text_scale < 1 ) text_scale = 1;
+        break;
+
+    case '<' | GOTBRACK:
+        // scroll left by arg, move cursor to right edge (not standard)
+        if( !x3_arg[0] ) x3_arg[0] = 1;
+        scroll_horiz(cy, cy + text_scale * font->height, x3_arg[0] * text_scale * font->width);
+        cx = width - text_scale * font->width;
+        break;
+
+    case '>' | GOTBRACK:
+        // scroll right by arg, move cursor to left edge (not standard)
+        if( !x3_arg[0] ) x3_arg[0] = 1;
+        scroll_horiz(cy, cy + text_scale * font->height, - x3_arg[0] * text_scale * font->width);
+        cx = 0;
         break;
 
     case '\b':
