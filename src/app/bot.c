@@ -16,10 +16,13 @@
 #include <i2c.h>
 #include "lsm303.h"
 #include "l3g.h"
+#include "menu.h"
 #include <setjmp.h>
 
 #define SLOW 200
 #define FAST 512
+#define ACCEL 100
+#define DACCEL 50
 
 #define K1 0.014082289650914*2
 #define K2 0.0120674041980547*2
@@ -37,6 +40,8 @@
 
 
 extern void set_motors(int, int);
+extern void beep(int,int,int);
+extern void play(int, const char*);
 
 
 // calibration data
@@ -46,6 +51,10 @@ static short sensor_off[6];
 static jmp_buf restart;
 static utime_t acc_z_time = 0;
 int curr_song = 0;
+int quietmode = 0;
+int volume  = 8;	// music
+int ivolume = 8;	// UI
+
 
 static void
 calibrate(){
@@ -93,16 +102,16 @@ calibrate(){
     }
 }
 
-void
-beepboop(){
 
-    freq_set(TIMER_3_3, 600);
-    pwm_set(TIMER_3_3,  2);
-    usleep(250000);
-    freq_set(TIMER_3_3, 400);
-    usleep(250000);
-    pwm_set(TIMER_3_3,  0);
+void *
+set_volume(int v){
+    if( v > 5 ) v = 5;
+    ivolume = volume = 1<<v;
+    if( ivolume < 2 ) ivolume = 2;
+    beep(200, volume, 500000);
+    return (void*)-1;
 }
+
 
 void
 dump_sensors(){
@@ -113,6 +122,16 @@ dump_sensors(){
         printf("%d:%4d%c", i, v, (i%3 == 2) ? '\n' : ' ');
     }
     sleep(5);
+}
+
+int
+check_button(void){
+    if( gpio_get( GPIO_A14 ) ){
+        play(ivolume, "A3D-3");
+        while( gpio_get( GPIO_A14 ) ) yield();
+        return 1;
+    }
+    return 0;
 }
 
 void
@@ -128,33 +147,26 @@ int
 check_env(void){
     int a;
 
-    if( gpio_get( GPIO_A14 ) ){
-        usleep(100000);
+    if( check_button() ){
         longjmp(restart, 1);
     }
 
     a = accel_z() - accel_off_z;
 
-    if( a > 1500 || a < 500 ){
+    if( a < 0 ){
         if( ! acc_z_time ) acc_z_time = get_time();
         if( get_time() - acc_z_time > 50000 ){
             printf("accZ: %d\n", a);
             printf("UP UP and AWAY!\n");
+            play(ivolume, "G-2G-2G-2AzG-2G-2G-2A");
             longjmp(restart, 1);
         }
     }else{
         acc_z_time = 0;
     }
 
-}
+    // RSN - gyro x, y
 
-
-static inline void
-beep(int freq, int vol, int dur){
-    freq_set(TIMER_3_3, freq);
-    pwm_set(TIMER_3_3,  vol);
-    usleep(dur);
-    pwm_set(TIMER_3_3,  0);
 }
 
 void
@@ -170,14 +182,8 @@ emergency(const char *msg){
     printf("\e[J\e[16mUH OH!\n\e[15m%s\n", msg);
 
     while(1){
-        beep(600, 32, 250000);
-        usleep(250000);
-        beep(150, 32, 250000);
-        usleep(250000);
-        if( gpio_get( GPIO_A14 ) ){
-            usleep(250000);
-            break;
-        }
+        play(32, "D+>D->");
+        check_env();
     }
 }
 
@@ -211,7 +217,7 @@ unsafe_bits(){
 
 void
 reverse_until_safe(){
-    utime_t maxtime = get_time() + 1000000;
+    utime_t maxtime = get_time() + 2000000;
     int i;
 
     printf("reverse\n");
@@ -221,9 +227,10 @@ reverse_until_safe(){
         read_imu();
         // until down sensors + front sensors
         if( sensor_is_safe(SENSOR_L_F) && sensor_is_safe(SENSOR_L_D)
+            && (sensor_is_safe(SENSOR_L_S) || sensor_is_safe(SENSOR_L_S))
             && sensor_is_safe(SENSOR_R_D) && sensor_is_safe(SENSOR_R_F) ){
 
-            usleep(100000);
+            usleep(200000);
             stop();
             return;
         }
@@ -235,6 +242,7 @@ reverse_until_safe(){
     // maxtime - uh oh
     emergency("reverse/unsafe");
 }
+
 
 void
 turn_right_until_safe(){
@@ -248,6 +256,7 @@ turn_right_until_safe(){
         read_imu();
         if( sensor_is_safe(SENSOR_L_S) && sensor_is_safe(SENSOR_L_F)
             && sensor_is_safe(SENSOR_R_D) && sensor_is_safe(SENSOR_R_F) ){
+
             usleep(100000);
             stop();
             return;
@@ -273,6 +282,7 @@ turn_left_until_safe(){
         read_imu();
         if( sensor_is_safe(SENSOR_R_S) && sensor_is_safe(SENSOR_R_F)
             && sensor_is_safe(SENSOR_R_D) && sensor_is_safe(SENSOR_R_F) ){
+
             usleep(100000);
             stop();
             return;
@@ -287,13 +297,16 @@ turn_left_until_safe(){
 }
 
 void
-straight_until_unsafe(int speed){
+straight_until_unsafe(int maxspeed, int tacc, int tdacc){
     float preverr=0;
     float prevadj=0;
     int   prevgz=0;
     utime_t prevt;
     int   pos = 0;
     int   unsafecnt = 0;
+    int   stuckcnt = 0;
+    int   taccnt = 0;
+    int   speed;
     int   i;
 
     printf("straight ahead\n");
@@ -311,6 +324,16 @@ straight_until_unsafe(int speed){
         float err = -pos;
         float adj = K1 * err - K2 * preverr + K3 * prevadj;
 
+        if( taccnt >= tacc )
+            speed = maxspeed;
+        else
+            speed = maxspeed * taccnt / tacc;
+
+        if( adj >= maxspeed *3/4 || adj <= -maxspeed*3/4 ){
+            stuckcnt ++;
+        }else{
+            stuckcnt = 0;
+        }
         if( adj > speed )  adj =  speed;
         if( adj < -speed ) adj = -speed;
 
@@ -326,24 +349,38 @@ straight_until_unsafe(int speed){
 
         if( unsafe_bits() ) unsafecnt ++;
         else unsafecnt = 0;
-
         if( unsafecnt > 3 ) return;
 
         check_env();
 
+        // seem to be stuck
+        if( stuckcnt > 1000 ) return;
+
+        taccnt ++;
         int t = t0 + 1000 - get_hrtime();
         usleep( t );
     }
+
+    // stop
+    // RSN - pid
+    for(taccnt=tdacc; taccnt >= 0; taccnt--){
+        speed = maxspeed * taccnt / tdacc;
+        set_motors(speed, speed);
+        usleep(1000);
+    }
+    set_motors(0,0);
 }
 
 void
-turn(int angle){
+turn(int angle, int maxspeed, int tacc, int tdacc){
     utime_t ts = get_time();
     utime_t prevt = get_hrtime();
     int goal = angle * 32768 / 2000 * 1000;
     int pos  = 0;
     short prevgz = 0;
     int   unsafecnt = 0;
+    int speed;
+    int taccnt = 0;
 
     printf("turn %d\n", angle);
     if( angle > 0 ){
@@ -358,6 +395,17 @@ turn(int angle){
         short gz   = read_gyro();
         pos += (gz + prevgz) / 2 * (t0 - prevt) / 1000;
         int err = goal - pos;
+
+        if( taccnt >= tacc )
+            speed = maxspeed;
+        else
+            speed = maxspeed * taccnt / tacc;
+
+        if( angle > 0 ){
+            set_motors(speed, -speed);
+        }else{
+            set_motors(-speed, speed);
+        }
 
         if( err < 1000  && goal > 0 ) break;
         if( err > -1000 && goal < 0 ) break;
@@ -376,24 +424,57 @@ turn(int angle){
 
         prevgz  = gz;
         prevt   = t0;
+        taccnt ++;
     }
 
+    for(taccnt=tdacc; taccnt >= 0; taccnt--){
+        speed = maxspeed * taccnt / tdacc;
+        set_motors(speed, speed);
+        usleep(1000);
+    }
     set_motors(0,0);
 
 }
 
-void
-dance(){
 
-}
+int
+testsensors(){
+    int i;
 
-void
-testaccel(){
-    int ax, ay, az;
-    int maxz = 0, minz=2000;
-    int maxx = 0, maxy = 0;
+    printf("\e[Jsensor test mode\n");
+    sleep(2);
 
     while(1){
+        gpio_clear( GPIO_B1 );
+
+        printf("\e[J    sensors\n");
+
+        for(i=0; i<6; i++){
+            int v = get_sensor(i);
+            printf("%d:%4d%c", i, v, (i%3 == 2) ? '\n' : ' ');
+            printf("\xB");
+        }
+
+        // LR - return
+        if( check_button() ) return 0;
+
+        gpio_set( GPIO_B1 );
+        usleep( 25000 );
+    }
+}
+
+int
+testaccel(){
+    int ax, ay, az;
+    int maxx = 0, minx = 65535;
+    int maxy = 0, miny = 65535;
+    int maxz = 0, minz = 65535;
+
+    printf("\e[Jaccel test mode\n");
+    sleep(2);
+
+    while(1){
+        gpio_clear( GPIO_B1 );
         read_imu();
         ax = accel_x();
         ay = accel_y();
@@ -402,109 +483,343 @@ testaccel(){
         if( ax > maxx ) maxx = ax;
         if( ay > maxy ) maxy = ay;
         if( az > maxz ) maxz = az;
+        if( ax < minz ) minx = ax;
+        if( ay < minz ) miny = ay;
         if( az < minz ) minz = az;
+
+        // RR to reset
         if( gpio_get( GPIO_B8 ) ){
             maxz = minz = az;
             maxx = ax;
             maxy = ay;
         }
 
-        printf("\e[Jx: %4d  %4d\ny: %4d  %4d\nz: %4d  %4d..%4d\n", ax, maxx, ay, maxy, az, minz, maxz);
-        usleep(10000);
+        // LR - return
+        if( check_button() ) return 0;
+
+        printf("\e[J    accel\n");
+        printf("x:%5d %5d %4d\ny:%5d %5d %4d\nz:%5d %5d %4d\n",
+               ax, minx, maxx, ay, miny, maxy, az, minz, maxz);
+
+        gpio_set( GPIO_B1 );
+        usleep(25000);
+    }
+}
+
+int
+testgyro(){
+    int gx, gy, gz;
+    int maxx = 0, minx = 65535;
+    int maxy = 0, miny = 65535;
+    int maxz = 0, minz = 65535;
+
+    printf("\e[Jgyro test mode\n");
+    sleep(2);
+
+    while(1){
+        gpio_clear( GPIO_B1 );
+        read_imu();
+        gx = gyro_x();
+        gy = gyro_y();
+        gz = gyro_z();
+
+        if( gx > maxx ) maxx = gx;
+        if( gy > maxy ) maxy = gy;
+        if( gz > maxz ) maxz = gz;
+        if( gx < minz ) minx = gx;
+        if( gy < minz ) miny = gy;
+        if( gz < minz ) minz = gz;
+
+        // RR - reset
+        if( gpio_get( GPIO_B8 ) ){
+            maxx = minx = gx;
+            maxy = miny = gy;
+            maxz = minz = gz;
+        }
+
+        // LR - return
+        if( check_button() ) return 0;
+
+        printf("\e[J    gyros\n");
+        printf("x:%5d %5d %4d\ny:%5d %5d %4d\nz:%5d %5d %4d\n",
+               gx, minx, maxx, gy, miny, maxy, gz, minz, maxz);
+
+        gpio_set( GPIO_B1 );
+        usleep(25000);
+    }
+}
+
+void
+maneuver_to_safety(void){
+
+    int unsafe = unsafe_bits();
+    printf("unsafe %x\n", unsafe);
+
+    if( (unsafe & (1<<SENSOR_L_D)) && (unsafe & (1<<SENSOR_R_D))){
+        reverse_until_safe();
+
+        if( (unsafe & (1<<SENSOR_L_S)) && ! (unsafe & (1<<SENSOR_R_S)) ){
+            // right side clear, left blocked
+            turn(-90, SLOW, ACCEL, DACCEL);
+        }
+        else if( (unsafe & (1<<SENSOR_R_S)) && ! (unsafe & (1<<SENSOR_L_S)) ){
+            // left side clear, right blocked
+            turn(90, SLOW, ACCEL, DACCEL);
+        }
+        else{
+            turn(rand()%90 + 90 * ((rand()&1) ? -1 : 1), SLOW, ACCEL, DACCEL);	// any 90-270
+        }
+        return;
+    }
+    if( unsafe & (1<<SENSOR_L_D) ){
+        reverse_until_safe();
+        turn(-90, SLOW, ACCEL, DACCEL);
+        return;
+    }
+    if( unsafe & (1<<SENSOR_R_D) ){
+        reverse_until_safe();
+        turn(90, SLOW, ACCEL, DACCEL);
+        return;
+    }
+    if( (unsafe & (1<<SENSOR_L_F)) && (unsafe & (1<<SENSOR_R_F))){
+        reverse_until_safe();
+
+        if( (unsafe & (1<<SENSOR_L_S)) && ! (unsafe & (1<<SENSOR_R_S)) ){
+            turn(-90, SLOW, ACCEL, DACCEL);
+        }
+        else if( (unsafe & (1<<SENSOR_R_S)) && ! (unsafe & (1<<SENSOR_L_S)) ){
+            turn(90, SLOW, ACCEL, DACCEL);
+        }
+        else{
+            turn(rand()%90 + 90 * ((rand()&1) ? -1 : 1), SLOW, ACCEL, DACCEL);	// any 90-270
+        }
+        return;
+    }
+    if( (unsafe & (1<<SENSOR_L_S)) && (unsafe & (1<<SENSOR_R_S)) ){
+        reverse_until_safe();
+        turn(rand()%60 + 120 * ((rand()&1) ? -1 : 1), SLOW, ACCEL, DACCEL);	// any 120-240
+        return;
+    }
+    if( (unsafe & (1<<SENSOR_L_S)) || (unsafe & (1<<SENSOR_L_F))){
+        turn_right_until_safe();
+        turn( - rand() % 90, SLOW, ACCEL, DACCEL );
+        return;
+    }
+    if( (unsafe & (1<<SENSOR_R_S)) || (unsafe & (1<<SENSOR_R_F))){
+        turn_left_until_safe();
+        turn( rand() % 90, SLOW, ACCEL, DACCEL );
+        return;
+    }
+
+    // sensor glitch?
+    reverse_until_safe();
+    turn(180, SLOW, ACCEL, DACCEL);
+}
+
+
+static const char *dance_moves = "abaBA babAB babAB abaBA ";
+
+void
+dance_until_unsafe(void){
+    int i = 0;
+
+    while(1){
+
+        switch(dance_moves[i++]){
+        case 'a':
+            beep(400, volume, 100000);
+            turn( 45, FAST, ACCEL, DACCEL);
+            break;
+        case 'b':
+            beep(400, volume, 100000);
+            turn(-45, FAST, ACCEL, DACCEL);
+            break;
+        case 'A':
+            beep(440, volume, 100000);
+            turn( 90, FAST, ACCEL, DACCEL);
+            break;
+        case 'B':
+            beep(440, volume, 100000);
+            turn(-90, FAST, ACCEL, DACCEL);
+            break;
+        case ' ':
+            usleep(500000);
+            break;
+        default:
+            i = 0;
+        }
+
+        if( unsafe_bits() ) return;
+        check_env();
+    }
+}
+
+int
+dance(){
+
+    if( setjmp(restart) ){
+        stop();
+        printf("\e[J\e[10mdance mode\n");
+        printf("button LR to start\n");
+        printf("LR + turtle - menu\n");
+        wait_for_button();
+
+        read_imu();
+        if( accel_z() - accel_off_z < -500 ){
+            // button + upside-down => main menu
+            play(ivolume, "A3A3D-3");
+            // wait until righted
+            while(1){
+                read_imu();
+                if( accel_z() - accel_off_z > 500 ) break;
+                yield();
+            }
+            return 0;
+        }
+    }else{
+        printf("\e[J\e[10mdance mode\n");
+    }
+
+    play(ivolume, "A3D-3D+3");
+
+    sleep(1);
+    curr_song = 0;
+    calibrate();
+
+    while(1){
+        dance_until_unsafe();
+        stop();
+        beep(150, 8, 120000);
+        maneuver_to_safety();
     }
 }
 
 
-void
+int
 wander(){
-    int unsafe;
-
-    FILE *f = fopen("dev:oled0", "w");
-    STDOUT = f;
-
-    //testaccel();
 
     if( setjmp(restart) ){
         stop();
-        beep(450, 8, 250000);
-        usleep(250000);
-        beep(150, 8, 250000);
-        usleep(250000);
+        printf("\e[J\e[10mexplore mode\n");
+        printf("button LR to start\n");
+        printf("LR + turtle - menu\n");
+        wait_for_button();
 
+        read_imu();
+        if( accel_z() - accel_off_z < -500 ){
+            // button + upside-down => main menu
+            play(ivolume, "A3A3D-3");
+            // wait until righted
+            while(1){
+                read_imu();
+                if( accel_z() - accel_off_z > 500 ) break;
+                yield();
+            }
+            return 0;
+        }
+    }else{
+        printf("\e[J\e[10mexplore mode\n");
     }
-    sleep(2);
+
+    play(ivolume, "A3D-3D+3");
+
+    sleep(1);
+    curr_song = 0;
+    calibrate();
 
 
     while(1){
-        extern const char *ident;
-        curr_song = 0;
-        printf("\e[J\e[16m%s\n\e[10mexplore mode\n", ident);
-        printf("button LR to start\n");
-        wait_for_button();
-        beepboop();
-        calibrate();
-
-        while(1){
-            curr_song = CHARIOTS_OF_FIRE;
-            straight_until_unsafe(FAST);
-            unsafe = unsafe_bits();
-            printf("unsafe %x\n", unsafe);
-            stop();
-            beep(400, 8, 120000);
-
-            if( (unsafe & (1<<SENSOR_L_D)) && (unsafe & (1<<SENSOR_R_D))){
-                reverse_until_safe();
-                turn(rand()%90 + 90 * ((rand()&1) ? -1 : 1));	// any 90-270
-                continue;
-            }
-            if( unsafe & (1<<SENSOR_L_D) ){
-                reverse_until_safe();
-                turn(-90);
-                continue;
-            }
-            if( unsafe & (1<<SENSOR_R_D) ){
-                reverse_until_safe();
-                turn(90);
-                continue;
-            }
-            if( (unsafe & (1<<SENSOR_L_F)) && (unsafe & (1<<SENSOR_R_F))){
-                reverse_until_safe();
-                turn(rand()%90 + 90 * ((rand()&1) ? -1 : 1));	// any 90-270
-                continue;
-            }
-            if( (unsafe & (1<<SENSOR_L_S)) || (unsafe & (1<<SENSOR_L_F))){
-                turn_right_until_safe();
-                continue;
-            }
-            if( (unsafe & (1<<SENSOR_R_S)) || (unsafe & (1<<SENSOR_R_F))){
-                turn_left_until_safe();
-                continue;
-            }
-
-            if( gpio_get( GPIO_A14 ) ){
-                beep(450, 8, 250000);
-                usleep(250000);
-                beep(150, 8, 250000);
-                usleep(250000);
-                break;
-            }
-
-            // sensor glitch?
-            reverse_until_safe();
-            turn(180);
-            continue;
-        }
+        curr_song = CHARIOTS_OF_FIRE;
+        straight_until_unsafe(FAST, ACCEL, DACCEL);
+        stop();
+        beep(150, 8, 120000);
+        maneuver_to_safety();
     }
 }
 
 extern void sing_song(void);
+const struct Menu guitop;
+const struct Menu guisett;
+
+
+const struct Menu guidiag = {
+    "Diag Menu", &guitop, {
+        { "accel",  MTYP_FUNC, (void*)testaccel },
+        { "sensor", MTYP_FUNC, (void*)testsensors },
+        { "gyro",   MTYP_FUNC, (void*)testgyro },
+        {}
+    }
+};
+
+const struct Menu guivolume = {
+    "Volume", &guisett, {
+        { "0", MTYP_FUNC, (void*)set_volume, 0 },
+        { "1", MTYP_FUNC, (void*)set_volume, 1 },
+        { "2", MTYP_FUNC, (void*)set_volume, 2 },
+        { "3", MTYP_FUNC, (void*)set_volume, 3 },
+        { "4", MTYP_FUNC, (void*)set_volume, 4 },
+        { "5", MTYP_FUNC, (void*)set_volume, 5 },
+        {}
+    }
+};
+
+const struct Menu guisett = {
+    "Settings", &guitop, {
+        { "volume", MTYP_MENU, (void*)&guivolume },
+        // RSN speed, accel
+        {}
+    }
+};
+
+
+
+const struct Menu guitop = {
+    "Main Menu", &guitop, {
+        { "explore",  MTYP_FUNC, (void*)wander   },
+        { "dance",    MTYP_FUNC, (void*)dance    },
+        { "diag",     MTYP_MENU, (void*)&guidiag },
+        { "settings", MTYP_MENU, (void*)&guisett },
+        {}
+    }
+};
+
+
+
+
+void
+botproc(void){
+
+    FILE *f = fopen("dev:oled0", "w");
+    STDOUT = f;
+
+    menu( &guitop );
+
+#if 0
+    // restart while upside down -> test mode
+    read_imu();
+    if( accel_z() < 0 ){
+        while(1){
+            // diag mode
+            testsensors();
+            testaccel();
+            testgyro();
+        }
+        //
+    }
+
+    wander();
+#endif
+
+
+}
 
 void
 main(void){
     int i;
 
-    start_proc( 1024, wander,    "wander" );
+    start_proc( 1024, botproc,    "bot" );
     start_proc( 1024, sing_song, "sing" );
+
 }
 
 
