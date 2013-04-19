@@ -71,11 +71,29 @@ void read_imu(void){
 }
 
 
-// only interested in Z rotation
 int
 read_gyro(void){
 
     short gz = (gyrbuf[5]<<8) | gyrbuf[4];
+    return gz;
+}
+
+int
+gyro_z(void){
+
+    short gz = (gyrbuf[5]<<8) | gyrbuf[4];
+    return gz;
+}
+int
+gyro_x(void){
+
+    short gz = (gyrbuf[1]<<8) | gyrbuf[0];
+    return gz;
+}
+int
+gyro_y(void){
+
+    short gz = (gyrbuf[3]<<8) | gyrbuf[2];
     return gz;
 }
 
@@ -127,6 +145,77 @@ set_motors(int r, int l){
 
 }
 
+
+/****************************************************************/
+
+ void
+beep(int freq, int vol, int dur){
+    freq_set(TIMER_3_3, freq);
+    pwm_set(TIMER_3_3,  vol);
+    usleep(dur);
+    pwm_set(TIMER_3_3,  0);
+}
+
+
+// sort-of:
+//   http://en.wikipedia.org/wiki/Music_Macro_Language#Classical_MML_2
+void
+play(int vol, const char *tune){
+    int freq=0, dur=4, octave=0, sharp=0, ratio=8;
+
+    while( *tune ){
+        switch(tolower(*tune)){
+        case '+': octave ++;   break;
+        case '-': octave --;   break;
+        case '>': ratio += 4;  break;	// not standard
+        case '<': ratio /= 2;  break;	// not standard
+        case '#': sharp ++;    break;
+        case '0': dur = 64;    break;
+        case '1': dur = 32;    break;
+        case '2': dur = 16;    break;
+        case '3': dur =  8;    break;
+        case '4': dur =  4;    break;
+        case '5': dur =  2;    break;
+        case '6': dur =  1;    break;
+        case 'c': freq = 262;  break;
+        case 'd': freq = 294;  break;
+        case 'e': freq = 330;  break;
+        case 'f': freq = 349;  break;
+        case 'g': freq = 392;  break;
+        case 'a': freq = 440;  break;
+        case 'b': freq = 494;  break;
+        default:
+            freq = 0;
+        }
+
+        if( !tune[1] || isalpha(tune[1]) ){
+            if( octave > 0 )
+                freq <<= octave;
+            if( octave < 0 )
+                freq >>= -octave;
+            if( ratio < 1 )  ratio = 1;
+            if( ratio > 16 ) ratio = 16;
+
+            if( sharp ) freq += (freq * 3900) / 65536;
+
+            if( freq && vol && dur )
+                beep(freq, vol, 125000 * ratio / dur);
+            else if( dur )
+                usleep( 125000 * ratio / dur );
+
+            if( ratio != 16 )
+                usleep( 125000 * (16 - ratio) / dur );
+
+            dur    = 4;
+            octave = 0;
+            sharp  = 0;
+            freq   = 0;
+            ratio  = 8;
+        }
+
+        tune++;
+    }
+}
 
 /****************************************************************/
 
