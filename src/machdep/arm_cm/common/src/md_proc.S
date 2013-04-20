@@ -44,15 +44,20 @@ ENTRY(PendSV_Handler)
         isb
         str r0, [r1]		@ currproc = nextproc
 
-
         /* do we need to do a yield_bottom? */
         bl _need_yield_bottom
         cbz r0, _cont0$
         /* is it safe to insert the trampoline - check saved epsr */
-        ldr r0, [sp, #16]
+        mrs r0, psp
+        ldr r0, [r0, #64]
         ldr r1, =#0x600fc00
         and r0, r1
-        cbnz r0, _cont0$        @ epsr not 0, not safe. skip
+        cbz r0, _cont1$        @ epsr is 0, ok
+
+        /* epsr not 0, skip */
+        bl _yield_bottom_cancel
+        b _cont0$
+_cont1$:
 
         /*
             insert a trampoline to call yield_bottom in user context
