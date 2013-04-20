@@ -828,7 +828,6 @@ _yield_next_proc(void){
 
 void
 _yield_bottom(void){
-
     /* are there any pending msgs that need to be delivered? */
     if( (currproc->flags & PRF_MSGPEND) ){
         spl0();
@@ -846,3 +845,7 @@ _need_yield_bottom(void){
     return r;
 }
 
+void
+_yield_bottom_cancel(void){
+    currproc->throwing = 0;
+}
