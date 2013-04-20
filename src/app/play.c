@@ -51,9 +51,16 @@ play(int vol, const char *tune){
         case 'z':
                   freq = 0;     break;
 
+        case 's': // synchronize
+            freq = -1;
+            currproc->flags |= PRF_SIGWAKES;
+            tsleep( &play, -1, "play", 5000000 );
+            break;
+
         case 't': // tempo
         case '@':
-            bpm = 0;
+            bpm  = 0;
+            freq = -1;
             while( tune[1] && isdigit(tune[1]) ){
                 bpm *= 10;
                 bpm += tune[1] - '0';
@@ -79,7 +86,7 @@ play(int vol, const char *tune){
             freq = 0;
         }
 
-        if( !tune[1] || isalpha(tune[1]) ){
+        if( (!tune[1] || isalpha(tune[1])) && freq >= 0 ){
             // play the note
             if( octave < 0 ) octave = 0;
             if( octave > 8 ) octave = 8;
