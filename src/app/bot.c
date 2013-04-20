@@ -11,6 +11,7 @@
 #include <math.h>
 #include <stm32f10x.h>
 #include <proc.h>
+#include <msgs.h>
 #include <gpio.h>
 #include <pwm.h>
 #include <i2c.h>
@@ -28,15 +29,14 @@
 #define K2 0.0120674041980547*2
 #define K3 0.959314433470033/5
 
-#define CHARIOTS_OF_FIRE        1
-
-
 #define SENSOR_L_S	0
 #define SENSOR_L_F	1
 #define SENSOR_L_D	2
 #define SENSOR_R_D	3
 #define SENSOR_R_F	4
 #define SENSOR_R_S	5
+
+#define SIGNAL_QUIET	16
 
 
 extern void set_motors(int, int);
@@ -50,11 +50,47 @@ static short sensor_off[6];
 
 static jmp_buf restart;
 static utime_t acc_z_time = 0;
-int curr_song = 0;
-int quietmode = 0;
+static const char *curr_song = 0;
+static proc_t song_proc = 0;
+
 int volume  = 8;	// music
 int ivolume = 8;	// UI
 
+
+#define SONG_MENU	1
+#define SONG_GO		2
+#define SONG_UNSAFE	3
+#define SONG_UPAWAY	4
+#define SONG_CHARIOTS	6
+#define SONG_CUCARACHA	7
+
+static const char const *songs[] = {
+    "[32 c>>7 b>>7] z0",	// ray gun
+    "A3A3D-3",			// menu
+    "A3D-3D+3",			// go
+    "g4e4f4f-3",		// unsafe
+    "G-4G-4G-4AzG-4G-4G-4A",	// upside down
+    "[4 D+>D->]",		// emergency
+
+    "T66 c3 g3~a3~b3~ g e e3 c3 g3~a3~b3~ g g g3 c3 g3~a3~b3~ g e e3 e3 f3~e3~d3~ c1 c c>3~b3~a3~ b3 b4 g4 a3 a4 f4 g3 c>3~b3~a3~ b c>3 c>3~b3~a3~ b3 b4 g4 a3 a4 f4 g3 g4 e4 f3~e3~d3~ c1",	// chariots of fire
+
+    "T160 c< c<3 f<3 f<3 a<3 a<3 | c a< z1 | z3 c c3 d3 c3 b<3 a<3 | b< g< | S"
+    "| c< c<3 e<3 e<3 g<3 g<3 | b< g< z1 | z3 c d3 c3 b<3 a<3 g<3 [2 a< f< z3 ] f< | S"
+    "| f<3>>f<3z3 a<3 z3 c<3 c<3 c<3 | f<3>>f<3z3 a<3 z1 | z3 f<3 f<3 f<3 e<3 e<3 d<3 d<3 | c<1 z3 c<3 c<3 c<3 | S"
+    "| e<3>>e<3z3 g<3 z3 c<3 c<3 c<3 | e<3>>e<3z3 g<3 z1 | z3 c d3 c3 b<3 a<3 g<3 f< z3>>z3z f< S",	// cucaracha
+
+    /*
+    "T160 | z3 c< c<3 f<3 f<3 a<3 a<3 | c a< z1 | z3 c c3 d3 c3 b<3 a<3 | b< g< z1 | S"
+    "| z3 c< c<3 e<3 e<3 g<3 g<3 | b< g< z1 | z3 c d3 c3 b<3 a<3 g<3 [2 a< f< z3 ] f< z3>>z3z3 | | S"
+    "| f<3>>f<3z3 a<3 z3 c<3 c<3 c<3 | f<3>>f<3z3 a<3 z1 | z3 f<3 f<3 f<3 e<3 e<3 d<3 d<3 | c<1 z3 c<3 c<3 c<3 | S"
+    "| e<3>>e<3z3 g<3 z3 c<3 c<3 c<3 | e<3>>e<3z3 g<3 z1 | z3 c d3 c3 b<3 a<3 g<3 [2 f< z3>>z3z3 ] S",	// cucaracha
+    */
+};
+
+
+#define STOP_SONG()	ksendmsg(song_proc, SIGNAL_QUIET)
+#define START_SONG(s)	curr_song = s
+#define SYNC_SONG()	wakeup( &play )
 
 static void
 calibrate(){
@@ -155,7 +191,7 @@ wait_for_Rbutton(){
 void
 stop(){
     set_motors(0,0);
-    curr_song = 0;
+    STOP_SONG();
     //printf("STOP\n");
 }
 
@@ -176,7 +212,7 @@ check_env(void){
             stop();
             printf("accZ: %d\n", a);
             printf("UP UP and AWAY!\n");
-            play(ivolume, "G-4G-4G-4AzG-4G-4G-4A");
+            play(ivolume, songs[SONG_UPAWAY] );
             longjmp(restart, 1);
         }
     }else{
@@ -565,17 +601,6 @@ testgyro(){
     }
 }
 
-static const char const *songs[] = {
-    "[32 c>>7 b>>7] z0",	// ray gun
-    "A3A3D-3",			// menu
-    "A3D-3D+3",			// go
-    "g4e4f4f-3",		// unsafe
-    "G-4G-4G-4AzG-4G-4G-4A",	// upside down
-    "[4 D+>D->]",		// emergency
-
-    "T66 c3 g3~a3~b3~ g e e3 c3 g3~a3~b3~ g g g3 c3 g3~a3~b3~ g e e3 e3 f3~e3~d3~ c1 c c>3~b3~a3~ b3 b4 g4 a3 a4 f4 g3 c>3~b3~a3~ b c>3 c>3~b3~a3~ b3 b4 g4 a3 a4 f4 g3 g4 e4 f3~e3~d3~ c1",	// chariots of fire
-};
-
 int
 testplay(int n){
 
@@ -664,20 +689,20 @@ dance_until_unsafe(void){
 
         switch(dance_moves[i++]){
         case 'a':
+            SYNC_SONG();
             turn( 45, FAST, ACCEL, DACCEL);
-            beep(400, volume, 100000);
             break;
         case 'b':
+            SYNC_SONG();
             turn(-45, FAST, ACCEL, DACCEL);
-            beep(400, volume, 100000);
             break;
         case 'A':
+            SYNC_SONG();
             turn( 90, FAST, ACCEL, DACCEL);
-            beep(440, volume, 100000);
             break;
         case 'B':
+            SYNC_SONG();
             turn(-90, FAST, ACCEL, DACCEL);
-            beep(440, volume, 100000);
             break;
         case ' ':
             usleep(500000);
@@ -703,7 +728,7 @@ dance(){
 
         if( b == 'R' ){
             // main menu
-            play(ivolume, "A3A3D-3");
+            play(ivolume, songs[SONG_MENU]);
             // debounce
             while(1){
                 if( !gpio_get(GPIO_B8) ) break;
@@ -716,16 +741,16 @@ dance(){
         printf("\e[J\e[15mdance mode\n\e[10m");
     }
 
-    play(ivolume, "A3D-3D+3");
-
+    STOP_SONG();
+    play(ivolume, songs[SONG_GO]);
     sleep(1);
-    curr_song = 0;
     calibrate();
 
     while(1){
+        START_SONG( songs[SONG_CUCARACHA] );
         dance_until_unsafe();
         stop();
-        play(8, "g4e4f4f-3");
+        play(8, songs[SONG_UNSAFE]);
         maneuver_to_safety();
     }
 }
@@ -743,7 +768,7 @@ wander(){
 
         if( b == 'R' ){
             // main menu
-            play(ivolume, "A3A3D-3");
+            play(ivolume, songs[SONG_MENU]);
             // debounce
             while(1){
                 if( !gpio_get(GPIO_B8) ) break;
@@ -756,18 +781,16 @@ wander(){
         printf("\e[J\e[15mexplore mode\n\e[10m");
     }
 
-    play(ivolume, "A3D-3D+3");
-
+    STOP_SONG();
+    play(ivolume, songs[SONG_GO]);
     sleep(1);
-    curr_song = 0;
     calibrate();
 
-
     while(1){
-        curr_song = CHARIOTS_OF_FIRE;
+        START_SONG( songs[SONG_CHARIOTS] );
         straight_until_unsafe(FAST, ACCEL, DACCEL);
         stop();
-        play(8, "g4e4f4f-3");
+        play(8, songs[SONG_UNSAFE]);
         maneuver_to_safety();
     }
 }
@@ -785,6 +808,7 @@ const struct Menu guiplay = {
         { "up/down",   MTYP_FUNC, (void*)testplay, 4 },
         { "emergency", MTYP_FUNC, (void*)testplay, 5 },
         { "chariots",  MTYP_FUNC, (void*)testplay, 6 },
+        { "cucaracha", MTYP_FUNC, (void*)testplay, 7 },
         {}
     }
 };
@@ -843,11 +867,48 @@ botproc(void){
 }
 
 void
+sing_song(void){
+    Catchframe cf;
+    int cn = 0;
+
+#if 0
+    if( 0 ){
+    quiet:
+        UNCATCH(cf);
+        curr_song = 0;
+        beep(0,0,0);
+    }
+
+    CATCHL(cf, SIGNAL_QUIET, quiet);
+#else
+
+    CATCHL(cf, SIGNAL_QUIET, quiet);
+    if( 0 ){
+    quiet:
+        curr_song = 0;
+        beep(0,0,0);
+    }
+
+
+#endif
+
+    while(1){
+        if( ! curr_song || ! volume ){
+            usleep( 10000 );
+            continue;
+        }
+
+        play( volume, curr_song );
+    }
+}
+
+
+void
 main(void){
     int i;
 
     start_proc( 1024, botproc,    "bot" );
-    start_proc( 1024, sing_song, "sing" );
+    song_proc = start_proc( 1024, sing_song, "sing" );
 
 }
 
