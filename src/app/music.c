@@ -127,6 +127,9 @@ static const Tune chariotsOfFire[] = {
         TUNE_END
 };
 
+
+
+
 extern int curr_song;
 extern int volume;
 extern void beep(int,int,int);

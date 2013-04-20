@@ -176,7 +176,7 @@ check_env(void){
             stop();
             printf("accZ: %d\n", a);
             printf("UP UP and AWAY!\n");
-            play(ivolume, "G-2G-2G-2AzG-2G-2G-2A");
+            play(ivolume, "G-4G-4G-4AzG-4G-4G-4A");
             longjmp(restart, 1);
         }
     }else{
@@ -392,15 +392,10 @@ turn(int angle, int maxspeed, int tacc, int tdacc){
     int accpos = 0;
     short prevgz = 0;
     int   unsafecnt = 0;
-    int speed;
+    int speed, comp;
     int taccnt = 0;
 
     printf("turn %d\n", angle);
-    if( angle > 0 ){
-        set_motors(SLOW, -SLOW);
-    }else{
-        set_motors(-SLOW, SLOW);
-    }
 
     while(1){
         utime_t t0 = get_hrtime();
@@ -419,10 +414,13 @@ turn(int angle, int maxspeed, int tacc, int tdacc){
         }else
             speed = maxspeed * taccnt / tacc;
 
+        // we are front heavy, apply centrifugal compensation
+        comp = speed / 5;
+
         if( angle > 0 ){
-            set_motors(speed, -speed);
+            set_motors(speed - comp, -speed - comp);
         }else{
-            set_motors(-speed, speed);
+            set_motors(-speed - comp, speed - comp);
         }
 
         if( err < 1000  && goal > 0 ) break;
@@ -567,6 +565,27 @@ testgyro(){
     }
 }
 
+static const char const *songs[] = {
+    "[32 c>>7 b>>7] z0",	// ray gun
+    "A3A3D-3",			// menu
+    "A3D-3D+3",			// go
+    "g4e4f4f-3",		// unsafe
+    "G-4G-4G-4AzG-4G-4G-4A",	// upside down
+    "[4 D+>D->]",		// emergency
+
+    "T66 c3 g3~a3~b3~ g e e3 c3 g3~a3~b3~ g g g3 c3 g3~a3~b3~ g e e3 e3 f3~e3~d3~ c1 c c>3~b3~a3~ b3 b4 g4 a3 a4 f4 g3 c>3~b3~a3~ b c>3 c>3~b3~a3~ b3 b4 g4 a3 a4 f4 g3 g4 e4 f3~e3~d3~ c1",	// chariots of fire
+};
+
+int
+testplay(int n){
+
+    // CoF
+    sleep(1);
+    play(4, songs[n]);
+    return 0;
+}
+
+
 void
 maneuver_to_safety(void){
 
@@ -706,7 +725,7 @@ dance(){
     while(1){
         dance_until_unsafe();
         stop();
-        beep(150, 8, 120000);
+        play(8, "g4e4f4f-3");
         maneuver_to_safety();
     }
 }
@@ -748,21 +767,34 @@ wander(){
         curr_song = CHARIOTS_OF_FIRE;
         straight_until_unsafe(FAST, ACCEL, DACCEL);
         stop();
-        beep(150, 8, 120000);
+        play(8, "g4e4f4f-3");
         maneuver_to_safety();
     }
 }
 
 extern void sing_song(void);
-const struct Menu guitop;
-const struct Menu guisett;
+const struct Menu guitop, guisett, guidiag;
 
+
+const struct Menu guiplay = {
+    "Song", &guidiag, {
+        { "raygun",    MTYP_FUNC, (void*)testplay, 0 },
+        { "menu",      MTYP_FUNC, (void*)testplay, 1 },
+        { "start",     MTYP_FUNC, (void*)testplay, 2 },
+        { "unsafe",    MTYP_FUNC, (void*)testplay, 3 },
+        { "up/down",   MTYP_FUNC, (void*)testplay, 4 },
+        { "emergency", MTYP_FUNC, (void*)testplay, 5 },
+        { "chariots",  MTYP_FUNC, (void*)testplay, 6 },
+        {}
+    }
+};
 
 const struct Menu guidiag = {
     "Diag Menu", &guitop, {
-        { "accel",  MTYP_FUNC, (void*)testaccel },
-        { "sensor", MTYP_FUNC, (void*)testsensors },
-        { "gyro",   MTYP_FUNC, (void*)testgyro },
+        { "accel",   MTYP_FUNC, (void*)testaccel },
+        { "sensor",  MTYP_FUNC, (void*)testsensors },
+        { "gyro",    MTYP_FUNC, (void*)testgyro },
+        { "recital", MTYP_MENU, (void*)&guiplay },
         {}
     }
 };
