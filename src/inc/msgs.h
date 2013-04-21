@@ -77,5 +77,9 @@ struct Msg {
 #define MSG_CCHAR_3		8
 
 
+extern int sendmsg(proc_t, u_long, u_long);
+extern void ksendmsg(proc_t, u_long);
+
+
 #endif /* __msgs_h__ */
 
