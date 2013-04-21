@@ -74,17 +74,13 @@ static const char const *songs[] = {
 
     "T66 c3 g3~a3~b3~ g e e3 c3 g3~a3~b3~ g g g3 c3 g3~a3~b3~ g e e3 e3 f3~e3~d3~ c1 c c>3~b3~a3~ b3 b4 g4 a3 a4 f4 g3 c>3~b3~a3~ b c>3 c>3~b3~a3~ b3 b4 g4 a3 a4 f4 g3 g4 e4 f3~e3~d3~ c1",	// chariots of fire
 
-    "T160 c< c<3 f<3 f<3 a<3 a<3 | c a< z1 | z3 c c3 d3 c3 b<3 a<3 | b< g< | S"
-    "| c< c<3 e<3 e<3 g<3 g<3 | b< g< z1 | z3 c d3 c3 b<3 a<3 g<3 [2 a< f< z3 ] f< | S"
-    "| f<3>>f<3z3 a<3 z3 c<3 c<3 c<3 | f<3>>f<3z3 a<3 z1 | z3 f<3 f<3 f<3 e<3 e<3 d<3 d<3 | c<1 z3 c<3 c<3 c<3 | S"
-    "| e<3>>e<3z3 g<3 z3 c<3 c<3 c<3 | e<3>>e<3z3 g<3 z1 | z3 c d3 c3 b<3 a<3 g<3 f< z3>>z3z f< S",	// cucaracha
+    // la cucaracha
+    "T160 | c c3 f3 f3 a3 a3 S c+ a S c+ c+3 d+3 c+3 b3 a3 S b g S "
+    "| c c3 e3 e3 g3 g3 S b g S c+ d+3 c+3 b3 a3 g3 S [2 a f z3 ] f S "
+    "| f3>>f3z3 a3 z3 c3 c3 c3 S f3>>f3z3 a3 S f3 f3 f3 e3 e3 d3 d3 S c1 z3 c3 c3 c3 S "
+    "| e3>>e3z3 g3 z3 c3 c3 c3 S e3>>e3z3 g3 S c+ d+3 c+3 b3 a3 g3 S [2 f z3>>z3z3 ] S ",
 
-    /*
-    "T160 | z3 c< c<3 f<3 f<3 a<3 a<3 | c a< z1 | z3 c c3 d3 c3 b<3 a<3 | b< g< z1 | S"
-    "| z3 c< c<3 e<3 e<3 g<3 g<3 | b< g< z1 | z3 c d3 c3 b<3 a<3 g<3 [2 a< f< z3 ] f< z3>>z3z3 | | S"
-    "| f<3>>f<3z3 a<3 z3 c<3 c<3 c<3 | f<3>>f<3z3 a<3 z1 | z3 f<3 f<3 f<3 e<3 e<3 d<3 d<3 | c<1 z3 c<3 c<3 c<3 | S"
-    "| e<3>>e<3z3 g<3 z3 c<3 c<3 c<3 | e<3>>e<3z3 g<3 z1 | z3 c d3 c3 b<3 a<3 g<3 [2 f< z3>>z3z3 ] S",	// cucaracha
-    */
+
 };
 
 

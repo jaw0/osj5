@@ -54,7 +54,7 @@ play(int vol, const char *tune){
         case 's': // synchronize
             freq = -1;
             currproc->flags |= PRF_SIGWAKES;
-            tsleep( &play, -1, "play", 5000000 );
+            tsleep( &play, -1, "play", 2000000 );
             break;
 
         case 't': // tempo
@@ -83,7 +83,8 @@ play(int vol, const char *tune){
             break;
 
         default:
-            freq = 0;
+            // ignore
+            freq = -1;
         }
 
         if( (!tune[1] || isalpha(tune[1])) && freq >= 0 ){
