@@ -10,11 +10,13 @@
 
 #include <sys/types.h>
 #include <sys/param.h>
+#include <conf.h>
 #include <nstdio.h>
 #include <arch.h>
 #include <error.h>
 #include <pio.h>
 #include <rtc.h>
+#include <proc.h>
 #include <msgs.h>
 #include <dev.h>
 #include <bootflags.h>
