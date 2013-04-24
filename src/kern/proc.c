@@ -552,6 +552,7 @@ sigunblock(proc_t proc){
     w = _wait_hash( (int) proc->wchan );
     plx = splhigh();
 
+
     /* remove from wait table */
     if( proc->wprev )
         proc->wprev->wnext = proc->wnext;
@@ -703,8 +704,12 @@ readylist_add(proc_t proc){
 
     PROCOK(proc);
     if( proc->rnext || proc->rprev ){
-        kprintf("cannot add to readylist proc %x (%s), (%x,%x) cp %x\n",
-                proc, proc->name, proc->rprev, proc->rnext, currproc);
+        // NB: it is possible for a process to be woken during the yield(),
+        // y_n_p will then attept to re-add to th ready list. check + skip the dupe.
+        // alternatively, we could splhigh for the whole time, but that'd not be fun.
+
+        //kprintf("cannot add to readylist proc %x (%s), (%x,%x) cp %x; from %s (old %s)\n",
+        //        proc, proc->name, proc->rprev, proc->rnext, currproc, dbg, proc->rldbg);
         return;
     }
 
@@ -789,8 +794,10 @@ _yield_next_proc(void){
     //kprintf("ynp sp %x, psp %x, msp %x, control %x\n",
     //        get_sp(), get_psp(), get_msp(), get_control());
 
+    int plx = splhigh();
     if( currproc && currproc->state == PRS_RUNNABLE )
         readylist_add( (proc_t)currproc );
+    splx(plx);
 
     /* who runs next? */
     nextproc = readylist_next();

@@ -1,7 +1,7 @@
 
 kern:           kern/alloc.c kern/fs.c kern/kprintf.c kern/locks.c kern/msgs.c
 kern:           kern/proc_f.c kern/init.c kern/time.c kern/start.c
-kern:           util/printf.c util/getnum.c util/misc.c
+kern:           util/printf.c util/getnum.c util/misc.c util/gmtime.c
 
 proc:           kern/proc.c
 nstdio:         kern/nstdio.c util/getline.c

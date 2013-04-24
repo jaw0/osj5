@@ -21,6 +21,7 @@ struct MenuOption {
 struct Menu {
     const char *title;
     const struct Menu *prev;
+    int *startval;
     struct MenuOption el[];
 };
 

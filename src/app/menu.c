@@ -194,6 +194,8 @@ domenu(const struct Menu *m){
     // display in big font, top line: "title (count)     arrow"
     printf("\e[J\e[16m%s(%d)\e[-1G\x84\n\e[16m", m->title, nopts);
 
+    if( m->startval ) nopt = * m->startval;
+
     while(1){
         // display current choice, bottom line: "choice     arrow"
         printf("\e[0G%s\e[99G%c\xB", m->el[nopt].text,

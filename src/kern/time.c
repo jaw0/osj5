@@ -13,6 +13,7 @@
 #include <time.h>
 #include <msgs.h>
 
+
 utime_t systime = 0;
 
 void
@@ -24,7 +25,7 @@ systime_tick(void){
 #ifdef USE_PROC
     struct Proc *p;
 
-    for(p=proclist; p; p=p->next){
+    for(p=(struct Proc*)proclist; p; p=p->next){
         /* check timeouts */
         if( p->state & PRS_BLOCKED ){
             if( p->timeout && p->timeout <= systime ){
@@ -50,3 +51,4 @@ systime_tick(void){
 #endif
 
 }
+

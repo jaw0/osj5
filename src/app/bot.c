@@ -53,8 +53,11 @@ static utime_t acc_z_time = 0;
 static const char *curr_song = 0;
 static proc_t song_proc = 0;
 
+int volume_setting = 3;
 int volume  = 8;	// music
 int ivolume = 8;	// UI
+
+int prev_maneuver  = 0;
 
 
 #define SONG_MENU	1
@@ -138,6 +141,7 @@ calibrate(){
 void *
 set_volume(int v){
     if( v > 5 ) v = 5;
+    volume_setting = v;
     ivolume = volume = 1<<v;
     if( ivolume < 2 ) ivolume = 2;
     beep(200, volume, 500000);
@@ -204,7 +208,7 @@ check_env(void){
 
     if( a < 0 ){
         if( ! acc_z_time ) acc_z_time = get_time();
-        if( get_time() - acc_z_time > 100000 ){
+        if( get_time() - acc_z_time > 250000 ){
             stop();
             printf("accZ: %d\n", a);
             printf("UP UP and AWAY!\n");
@@ -285,6 +289,28 @@ reverse_until_safe(){
 
     // maxtime - uh oh
     emergency("reverse/unsafe");
+}
+
+void
+reverse_a_bit(){
+    utime_t maxtime = get_time() + 500000;
+    int i;
+
+    printf("reverse\n");
+    set_motors(-SLOW, -SLOW);
+
+    while( get_time() < maxtime ){
+        read_imu();
+
+        if( unsafe_bits() ){
+            stop();
+            return;
+        }
+
+        check_env();
+        usleep(1000);
+    }
+
 }
 
 
@@ -371,7 +397,7 @@ straight_until_unsafe(int maxspeed, int tacc, int tdacc){
         if( taccnt >= tacc )
             speed = maxspeed;
         else
-            speed = maxspeed * taccnt / tacc;
+            speed = (maxspeed * taccnt) / tacc;
 
         if( adj >= maxspeed *3/4 || adj <= -maxspeed*3/4 ){
             stuckcnt ++;
@@ -401,6 +427,7 @@ straight_until_unsafe(int maxspeed, int tacc, int tdacc){
         if( stuckcnt > 1000 ) return;
 
         taccnt ++;
+        if( taccnt > 1000 ) prev_maneuver = 0;
         int t = t0 + 1000 - get_hrtime();
         usleep( t );
     }
@@ -408,7 +435,7 @@ straight_until_unsafe(int maxspeed, int tacc, int tdacc){
     // stop
     // RSN - pid
     for(taccnt=tdacc; taccnt >= 0; taccnt--){
-        speed = maxspeed * taccnt / tdacc;
+        speed = (maxspeed * taccnt) / tdacc;
         set_motors(speed, speed);
         usleep(1000);
     }
@@ -444,7 +471,7 @@ turn(int angle, int maxspeed, int tacc, int tdacc){
                 goal -= accpos * ACCEL / DACCEL;
             }
         }else
-            speed = maxspeed * taccnt / tacc;
+            speed = (maxspeed * taccnt) / tacc;
 
         // we are front heavy, apply centrifugal compensation
         comp = speed / 5;
@@ -476,7 +503,7 @@ turn(int angle, int maxspeed, int tacc, int tdacc){
     }
 
     for(taccnt=tdacc; taccnt >= 0; taccnt--){
-        speed = maxspeed * taccnt / tdacc;
+        speed = (maxspeed * taccnt) / tdacc;
         set_motors(speed, speed);
         usleep(1000);
     }
@@ -531,15 +558,15 @@ testaccel(){
         if( ax > maxx ) maxx = ax;
         if( ay > maxy ) maxy = ay;
         if( az > maxz ) maxz = az;
-        if( ax < minz ) minx = ax;
-        if( ay < minz ) miny = ay;
+        if( ax < minx ) minx = ax;
+        if( ay < miny ) miny = ay;
         if( az < minz ) minz = az;
 
         // RR to reset
         if( gpio_get( GPIO_B8 ) ){
             maxz = minz = az;
-            maxx = ax;
-            maxy = ay;
+            minx = maxx = ax;
+            miny = maxy = ay;
         }
 
         // LR - return
@@ -574,8 +601,8 @@ testgyro(){
         if( gx > maxx ) maxx = gx;
         if( gy > maxy ) maxy = gy;
         if( gz > maxz ) maxz = gz;
-        if( gx < minz ) minx = gx;
-        if( gy < minz ) miny = gy;
+        if( gx < minx ) minx = gx;
+        if( gy < miny ) miny = gy;
         if( gz < minz ) minz = gz;
 
         // RR - reset
@@ -597,10 +624,55 @@ testgyro(){
     }
 }
 
+static short rawdata[1024];
+int
+testacgo(void){
+    int i = 0;
+
+    printf("acc profile\npress LR\n");
+    wait_for_button();
+    while( gpio_get( GPIO_A14 ) ) yield();
+
+    printf("away!\n");
+    play(8, "dca1");
+
+    while( 1 ){
+        utime_t t = get_time();
+        int speed;
+
+        if( i < 100 ){
+            // accel
+            speed = (768 * i) / 100;
+        }else if( i > 900 ){
+            speed = 0;
+        }else if( i > 800 ){
+            // decel
+            speed = (768 * (900 - i)) / 100;
+        }else{
+            speed = 768;
+        }
+
+        set_motors(speed, speed);
+
+        read_imu();
+        rawdata[i++] = - accel_x();
+        if( i >= 1024 ) break;
+        usleep( t + 1000 - get_time() );
+    }
+
+    set_motors(0,0);
+    printf("done\nLR to dump\n");
+    wait_for_button();
+
+    for(i=0; i<1024; i++)
+        fprintf(STDERR, "%d\n", rawdata[i]);
+
+    return 0;
+}
+
 int
 testplay(int n){
 
-    // CoF
     sleep(1);
     play(4, songs[n]);
     return 0;
@@ -612,6 +684,13 @@ maneuver_to_safety(void){
 
     int unsafe = unsafe_bits();
     printf("unsafe %x\n", unsafe);
+
+    if( prev_maneuver ){
+        reverse_until_safe();
+        reverse_a_bit();
+    }
+
+    prev_maneuver = 1;
 
     if( (unsafe & (1<<SENSOR_L_D)) && (unsafe & (1<<SENSOR_R_D))){
         reverse_until_safe();
@@ -680,9 +759,9 @@ static const char *dance_moves = "abaBA babAB babAB abaBA ";
 void
 dance_until_unsafe(void){
     int i = 0;
+    int j;
 
     while(1){
-
         switch(dance_moves[i++]){
         case 'a':
             SYNC_SONG();
@@ -701,7 +780,11 @@ dance_until_unsafe(void){
             turn(-90, FAST, ACCEL, DACCEL);
             break;
         case ' ':
-            usleep(500000);
+            for(i=0; i<50; i++){
+                usleep(10000);
+                read_imu();
+                check_env();
+            }
             break;
         default:
             i = 0;
@@ -709,6 +792,8 @@ dance_until_unsafe(void){
 
         if( unsafe_bits() ) return;
         check_env();
+
+        prev_maneuver = 0;
     }
 }
 
@@ -796,7 +881,7 @@ const struct Menu guitop, guisett, guidiag;
 
 
 const struct Menu guiplay = {
-    "Song", &guidiag, {
+    "Song", &guidiag, 0, {
         { "raygun",    MTYP_FUNC, (void*)testplay, 0 },
         { "menu",      MTYP_FUNC, (void*)testplay, 1 },
         { "start",     MTYP_FUNC, (void*)testplay, 2 },
@@ -810,17 +895,18 @@ const struct Menu guiplay = {
 };
 
 const struct Menu guidiag = {
-    "Diag Menu", &guitop, {
+    "Diag Menu", &guitop, 0, {
         { "accel",   MTYP_FUNC, (void*)testaccel },
         { "sensor",  MTYP_FUNC, (void*)testsensors },
         { "gyro",    MTYP_FUNC, (void*)testgyro },
-        { "recital", MTYP_MENU, (void*)&guiplay },
+        { "music",   MTYP_MENU, (void*)&guiplay },
+        { "accprof", MTYP_FUNC, (void*)testacgo },
         {}
     }
 };
 
 const struct Menu guivolume = {
-    "Volume", &guisett, {
+    "Volume", &guisett, &volume_setting, {
         { "0", MTYP_FUNC, (void*)set_volume, 0 },
         { "1", MTYP_FUNC, (void*)set_volume, 1 },
         { "2", MTYP_FUNC, (void*)set_volume, 2 },
@@ -832,7 +918,7 @@ const struct Menu guivolume = {
 };
 
 const struct Menu guisett = {
-    "Settings", &guitop, {
+    "Settings", &guitop, 0, {
         { "volume", MTYP_MENU, (void*)&guivolume },
         // RSN speed, accel
         {}
@@ -840,7 +926,7 @@ const struct Menu guisett = {
 };
 
 const struct Menu guitop = {
-    "Main Menu", &guitop, {
+    "Main Menu", &guitop, 0, {
         { "explore",  MTYP_FUNC, (void*)wander   },
         { "dance",    MTYP_FUNC, (void*)dance    },
         { "diag",     MTYP_MENU, (void*)&guidiag },
@@ -867,16 +953,6 @@ sing_song(void){
     Catchframe cf;
     int cn = 0;
 
-#if 0
-    if( 0 ){
-    quiet:
-        UNCATCH(cf);
-        curr_song = 0;
-        beep(0,0,0);
-    }
-
-    CATCHL(cf, SIGNAL_QUIET, quiet);
-#else
 
     CATCHL(cf, SIGNAL_QUIET, quiet);
     if( 0 ){
@@ -884,9 +960,6 @@ sing_song(void){
         curr_song = 0;
         beep(0,0,0);
     }
-
-
-#endif
 
     while(1){
         if( ! curr_song || ! volume ){

@@ -131,8 +131,8 @@ DEFUN(ps, "list processes")
 #endif
         printf("stack=0x%08.8x alloced=0x%08.8x exit=0x%08.8x sigmsg=0x%08.8x\n",
                p->stack_start, p->alloc_size, p->exitval, p->sigmsgs);
-        printf("clist=0x%08.8x msghead=0x%08.8x msgtail=0x%08.8x\n",
-               p->clist, p->msghead, p->msgtail);
+        printf("clist=0x%08.8x msghead=0x%08.8x msgtail=0x%08.8x throwing=%x\n",
+               p->clist, p->msghead, p->msgtail, p->throwing);
 #ifdef PROC_SMALL
         printf("next=0x%08.8x prev=0x%08.8x\n",
                p->next, p->prev);

@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <proc.h>
 #include <pwm.h>
+#include <userint.h>
 
 extern void beep(int,int,int);
 
@@ -39,6 +40,7 @@ play(int vol, const char *tune){
         case '5': dur  = 32;    break;
         case '6': dur  = 64;    break;
         case '7': dur  = 128;   break;
+        case '8': dur  = 256;   break;
         case 'c': freq = 4186;  break;
         case 'd': freq = 4699;  break;
         case 'e': freq = 5274;  break;
@@ -84,7 +86,7 @@ play(int vol, const char *tune){
 
         default:
             // ignore
-            freq = -1;
+            break;
         }
 
         if( (!tune[1] || isalpha(tune[1])) && freq >= 0 ){
@@ -117,3 +119,21 @@ play(int vol, const char *tune){
         tune++;
     }
 }
+
+#ifdef USE_CLI
+
+DEFUN(play, "play music")
+{
+    int i;
+    if( argc < 2 ){
+        fprintf(STDERR, "ERROR: play notes...\n");
+        return -1;
+    }
+
+    for(i=1; i<argc; i++){
+        play(4, argv[i]);
+    }
+    return 0;
+}
+
+#endif
