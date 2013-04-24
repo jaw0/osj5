@@ -14,12 +14,14 @@
 #ifndef TESTING
 #include <nstdio.h>
 #endif
-#include <calendar.h>
+#include <time.h>
 
-// use 64bit nums?
-#define PRINTF64
-// floats?
-#define PRINTFFLOAT
+// config:
+//   NOPRINTF64		- do not include 64bit integer support
+//   NOPRINTFFLOAT	- do not include float support
+//   NOPRINTFTIME	- do not include support for timestamps %T
+//   NOPRINTFIP		- do not include support for ip addresses %I
+//   PRINTFFLOATTYPE	- use (float|double) for floating point math
 
 
 /*
@@ -35,6 +37,7 @@
   X	- UPPER case hex
   d,D	- decimal
   o	- octal
+  f     - float
   p	- spin (prec times, delay of width)
   I	- IP addr as dotted quad
   T       - quad as timestamp
@@ -64,7 +67,7 @@ enum {
 #define isdig(x)	(((x)>='0') && ((x)<='9'))
 
 typedef unsigned long long u_quad;
-#ifdef PRINTF64
+#ifndef NOPRINTF64
 typedef u_quad	u_num_t;
 #else
 typedef unsigned long u_num_t;
@@ -79,8 +82,13 @@ int snprintf(char *, int, const char *, ...);
 static int putnum(int (*)(void*, char), void *, u_num_t, int, int, int, int);
 int fncprintf(int (*)(void*, char), void *, const char *, ...);
 
-#ifdef PRINTFFLOAT
-static int putfloat(int (*)(void*, char), void *, float, int, int, int);
+#ifndef NOPRINTFFLOAT
+#  ifdef PRINTFFLOATTYPE
+typedef PRINTFFLOATTYPE float_num_t;
+#  else
+typedef double float_num_t;
+#  endif
+static int putfloat(int (*)(void*, char), void *, float_num_t, int, int, int);
 #endif
 
 
@@ -88,8 +96,8 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
     const char *p = fmt;
     char *s;
     u_num_t val;
-#ifdef PRINTFFLOAT
-    float fval;
+#ifndef NOPRINTFFLOAT
+    float_num_t fval;
 #endif
     int width = 0, prec = 0;
     u_short flags;
@@ -158,62 +166,28 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                 }
 
                 break;
+#ifndef NOPRINTFTIME
             case 'T': {
                 /* %T - timestamp */
                 char buf[32];
-                int hr, min, sec, usec, dy, mon, yr;
-                int i;
+                struct tm tr;
 
                 val = va_arg(ap, u_quad);
-
-                usec = val % 1000000;
-                val /= 1000000;
-                sec  = val % 60;
-                val /= 60;
-                min  = val % 60;
-                val /= 60;
-                hr   = val % 24;
-                val /= 24;
-                /* val is now days */
-
-                dy = val % 365;
-                yr = val / 365;
-
-                dy -= leap_years_since_year_1(yr);
-                yr ++;
-                if( yr > 1752 || (yr == 1752 && dy > 243) )
-                    /* gregorian reformation */
-                    dy += 11;
-                if( dy > (leap_year(yr) ? 366 : 365) ){
-                    dy -= leap_year(yr) ? 366 : 365;
-                    yr ++;
-                }
-                while( dy < 0 ){
-                    yr --;
-                    dy += leap_year(yr) ? 366 : 365;
-                }
-
-                mon = 0;
-                while( dy >= days_in_month(mon, yr) ){
-                    dy -= days_in_month(mon, yr);
-                    mon ++;
-                }
-
-                mon ++;
-                dy ++;
+                gmtime_r(&val, &tr);
 
                 if( flags & B(PF_ALT) )
                     snprintf(buf, sizeof(buf), "%d-%0.2d-%0.2d %d:%0.2d:%0.2d.%0.6d",
-                             yr, mon, dy, hr, min, sec, usec);
+                             tr.tm_year, tr.tm_mon+1, tr.tm_mday, tr.tm_hour, tr.tm_min, tr.tm_sec, tr.tm_usec);
                 else
-                    snprintf(buf, sizeof(buf), "%d-%0.2d-%0.2d %0.2d:%0.2d:%0.2d",
-                             yr, mon, dy, hr, min, sec);
+                    snprintf(buf, sizeof(buf), "%d-%0.2d-%0.2d T%0.2d:%0.2d:%0.2d",
+                             tr.tm_year, tr.tm_mon+1, tr.tm_mday, tr.tm_hour, tr.tm_min, tr.tm_sec);
 
                 fncprintf(ofnc, arg, "%*.*s", width, prec, buf);
                 break;
 
             }
-
+#endif
+#ifndef NOPRINTFIP
             case 'I': {
                 /* %I - IP addy */
                 u_char* addr;
@@ -231,6 +205,7 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                 }
                 break;
             }
+#endif
             case '&':		/* magic zero-width character */
                 break;
             case '%':
@@ -288,7 +263,7 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
 
                 pos += putnum(ofnc, arg, val, base, width, prec, flags);
                 break;
-#ifdef PRINTFFLOAT
+#ifndef NOPRINTFFLOAT
             case 'f': case 'F':
                 flags |= B(PF_FLT_F);
                 goto doflt;
@@ -354,7 +329,7 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
             case '-':
                 flags |= B(PF_LEFT);
                 goto rflag;
-#ifdef PRINTF64
+#ifndef NOPRINTF64
             case 'Q':
             case 'q':
                 flags |= B(PF_QUAD);
@@ -378,7 +353,7 @@ padding(int (*ofnc)(void*, char), void *arg, int n, int ch){
 }
 
 
-#ifdef PRINTF64
+#ifndef NOPRINTF64
 #  define NUMSZMAX 64
 #  define NUMTMAX  0x7FFFFFFFFFFFFFFFULL
 #else
@@ -458,12 +433,10 @@ putnum(int (*ofnc)(void*, char), void *arg, u_num_t val, int base, int width, in
 }
 
 
-#ifdef PRINTFFLOAT
-//    PF_SHOW_PLS,    	/* arg is signed, show + if positive */
-//    PF_LEFT,        	/* left justify, not right */
+#ifndef NOPRINTFFLOAT
 
 static int
-putfloat(int (*ofnc)(void*, char), void *arg, float val, int width, int prec, int flags){
+putfloat(int (*ofnc)(void*, char), void *arg, float_num_t val, int width, int prec, int flags){
     const char *s = 0;
     int slen = 0;
     if( !prec ) prec = 6;
@@ -495,43 +468,69 @@ putfloat(int (*ofnc)(void*, char), void *arg, float val, int width, int prec, in
         return slen + pad;
     }
 
-    /* RSN - %e, %g */
     int sign = 1;
     if( val < 0 ){ sign = -1; val = - val; }
-    int ipart = val;
-    int fpart = (val - ipart) * powf(10, prec);
-    int iwidth  = width - prec - 1;
-    int lwidth  = (flags & B(PF_LEFT)) ? 0 : iwidth;
 
-    int tlen = putnum(ofnc, arg, sign*ipart, 10, lwidth, lwidth, flags);
-    (*ofnc)(arg, '.');
-    tlen ++;
+    // RSN - configurable option: use integer math, float, or double
+    // float pmul = powf(10, prec);
+    int i;
+    int pmul = 1;
+    for(i=0; i<prec; i++) pmul *= 10;
 
-    int flen = putnum(ofnc, arg, fpart, 10, prec, prec, B(PF_ZERO) | B(PF_SIGNED) | (flags&B(PF_SHOW_PLS)) );
-    tlen += flen;
-
-    if( tlen < width ){
-        // right pad
-        padding(ofnc, arg, width - tlen, ' ');
-        tlen = width;
+    if( !(flags & B(PF_FLT_E)) && !(flags & B(PF_FLT_F)) ){
+        /* %g => use %e or %f? */
+        if( val < 0.0001 || val > pmul ) flags |= B(PF_FLT_E);
     }
 
-    return tlen;
+    /* round */
+    val += .5 / pmul;
 
+
+    if( flags & B(PF_FLT_E) ){
+        int exp = floorf(log10f(val));
+        val *= powf(10, -exp);
+        int ipart   = val;
+        int fpart   = (val - ipart) * pmul;
+
+        int tlen = putnum(ofnc, arg, sign*ipart, 10, 1, 1, flags);
+        (*ofnc)(arg, '.');
+        tlen ++;
+        int flen = putnum(ofnc, arg, fpart, 10, prec, prec, B(PF_ZERO) | B(PF_SIGNED) | (flags&B(PF_SHOW_PLS)) );
+        tlen += flen;
+        (*ofnc)(arg, 'e');
+        tlen ++;
+        tlen += putnum(ofnc, arg, exp, 10, 1, 1, B(PF_SIGNED)| (flags&B(PF_SHOW_PLS)) );
+
+        if( tlen < width ){
+            // right pad
+            padding(ofnc, arg, width - tlen, ' ');
+            tlen = width;
+        }
+
+        return tlen;
+    }else{
+        int ipart   = val;
+        int fpart   = (val - ipart) * pmul;
+        int iwidth  = width - prec - 1;
+        int lwidth  = (flags & B(PF_LEFT)) ? 0 : iwidth;
+
+        int tlen = putnum(ofnc, arg, sign*ipart, 10, lwidth, lwidth, flags);
+        (*ofnc)(arg, '.');
+        tlen ++;
+
+        int flen = putnum(ofnc, arg, fpart, 10, prec, prec, B(PF_ZERO) | B(PF_SIGNED) | (flags&B(PF_SHOW_PLS)) );
+        tlen += flen;
+
+        if( tlen < width ){
+            // right pad
+            padding(ofnc, arg, width - tlen, ' ');
+            tlen = width;
+        }
+
+        return tlen;
+    }
 }
 #endif
-
-days_in_month(int m, int y){
-
-        switch(m){
-          case 8: case 3: case 5: case 10:
-                return 30;
-          case 1:
-                return leap_year(y) ? 29 : 28;
-          default:
-                return 31;
-        }
-}
 
 
 /* **************************************************************** */
@@ -633,10 +632,16 @@ void main(void){
     //printf("%.6ld %c %s %02.2x\n", (int)324, (int)0x45, "foobar", (int)32);
 
 
-#ifdef PRINTFFLOAT
+#ifndef NOPRINTFFLOAT
+
     printf("%f, %.2f, %8.2f, %.4f.\n", 12.3456789012345, 12.3456789, 12.3456789, 12.0034567);
     printf("%8.2f.\n", 12.3456789);
     printf("%-8.2f.\n", 12.3456789);
+
+    printf("%f %f %f %f %f\n", .0012345, .12345, 123.45, 12345.6, 12345678.9);
+    printf("%e %e %e %e %e\n", .0012345, .12345, 123.45, 12345.6, 12345678.9);
+
+    printf("%f\n", 123.45);
 
 #endif
 
