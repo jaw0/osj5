@@ -2,7 +2,7 @@
   Copyright (c) 2013
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 2013-Apr-18 20:28 (EDT)
-  Function: menus
+  Function: menus, accelerometer for user input
 */
 
 
