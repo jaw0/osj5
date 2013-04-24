@@ -124,14 +124,21 @@ play(int vol, const char *tune){
 
 DEFUN(play, "play music")
 {
-    int i;
+    int i, vol=4;
+
     if( argc < 2 ){
-        fprintf(STDERR, "ERROR: play notes...\n");
+        fprintf(STDERR, "ERROR: play [-v vol] notes...\n");
         return -1;
     }
 
+    if( argc > 3 && !strcmp(argv[1], "-v") ){
+        vol = atoi( argv[2] );
+        argc -= 2;
+        argv += 2;
+    }
+
     for(i=1; i<argc; i++){
-        play(4, argv[i]);
+        play(vol, argv[i]);
     }
     return 0;
 }
