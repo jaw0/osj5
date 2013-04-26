@@ -21,8 +21,3 @@ panic(const char *m, int l, const char *f){
     splhigh();
     while(1){}	/* XXX */
 }
-
-int
-reboot(){
-}
-
