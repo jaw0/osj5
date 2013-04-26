@@ -784,11 +784,6 @@ fshell(FILE *f, int interactivep){
         if( !interactivep && verbose )
             printf("%s\n", buf);
 
-        /* strip comments */
-        p = strchr(buf, '#');
-        if( p )
-            *p = 0;
-
         argc = 0;
         p = buf;
 
@@ -802,6 +797,11 @@ fshell(FILE *f, int interactivep){
             }
 
             if( ! *p ){
+                break;
+            }
+
+            if( *p=='#' ){
+                *p = 0;
                 break;
             }
 
@@ -819,7 +819,7 @@ fshell(FILE *f, int interactivep){
             }
 
             argv[argc++] = p;
-            while( *p && *p!=' ' && *p!='\t' )
+            while( *p && *p!=' ' && *p!='\t' && *p!='#' )
                 p++;
         }
 
