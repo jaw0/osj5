@@ -23,10 +23,12 @@
 #include <bootflags.h>
 #include <locks.h>
 
+#define DISKSIZE	(16*1024*1024)
 
 int udsk_ioctl(FILE*, int, void*);
 int udsk_bread(FILE*, char*, int, offset_t);
 int udsk_bwrite(FILE*, const char*, int, offset_t);
+int udsk_stat(FILE *, struct stat *);
 
 const struct io_fs udsk_fs = {
     0, /* putc */
@@ -40,7 +42,7 @@ const struct io_fs udsk_fs = {
     udsk_bwrite, /* bwrite */
     0, /* seek */
     0, /* tell */
-    0, /* stat */
+    udsk_stat,
     udsk_ioctl
 };
 
@@ -57,7 +59,7 @@ struct UDSK_Device {
 
 
 
-extern struct Disk_Conf disk_device[];
+extern struct DiskPart_Conf disk_device[];
 extern int n_disk;
 
 int
@@ -74,7 +76,7 @@ udsk_init(struct Device_Conf *dev){
     bootmsg( "%s at unix\n",
 	     dev->name);
 
-    disk_learn( dev, "ud", c, &udsk[c].file, 16*1024*2);
+    dkpart_learn( dev, "ud", c, &udsk[c].file, DISKSIZE / 512 );
     return 0;
 }
 
@@ -94,7 +96,8 @@ udsk_bwrite(FILE* f, const char *buf, int len, offset_t pos){
     return write(hd->fd, buf, len);
 }
 
-int udsk_ioctl(FILE* f, int cmd, void *x){
+int
+udsk_ioctl(FILE* f, int cmd, void *x){
     struct UDSK_Device *hd = (struct UDSK_Device *)(f->d);
     struct Disk_Block_Op *op = (struct Disk_Block_Op *)x;
 
@@ -107,3 +110,16 @@ int udsk_ioctl(FILE* f, int cmd, void *x){
     return -1;
 }
 
+int
+udsk_stat(FILE *f, struct stat *s){
+    struct UDSK_Device *hd = (struct UDSK_Device *)(f->d);
+
+
+
+    s->dev     = 0;
+    s->size    = DISKSIZE;
+    s->blksize = 512;
+    s->flags   = SSF_BLKWRITE | SSF_NOERASE;
+    s->mode    = 0;
+    return 0;
+}

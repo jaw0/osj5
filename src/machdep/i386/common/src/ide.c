@@ -70,7 +70,7 @@ struct HDC_Device {
 
 
 
-extern struct Disk_Conf disk_device[];
+extern struct DiskPart_Conf disk_device[];
 extern int n_disk;
 
 int

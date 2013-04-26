@@ -28,7 +28,7 @@
 #define MBR_PART_STARTSEC_OFF	8
 #define MBR_PART_NUMSEC_OFF	12
 
-extern struct Disk_Conf disk_device[];
+extern struct DiskPart_Conf dkpart_device[];
 
 struct DiskPart {
     char	name[16];
@@ -41,38 +41,38 @@ struct DiskPart {
     FILE 	*fdev;			/* underlying device */
 };
 
-int disk_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, u_int start, u_int len, FILE *cont, const char *fstype);
+int dkpart_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, u_int start, u_int len, FILE *cont, const char *fstype);
 
-int disk_bread(FILE*,char*,int,offset_t);
-int disk_bwrite(FILE*,const char*,int,offset_t);
-int disk_stat(FILE*, struct stat*);
-int disk_ioctl(FILE*, int, void*);
-int disk_flush(FILE*);
+int dkpart_bread(FILE*,char*,int,offset_t);
+int dkpart_bwrite(FILE*,const char*,int,offset_t);
+int dkpart_stat(FILE*, struct stat*);
+int dkpart_ioctl(FILE*, int, void*);
+int dkpart_flush(FILE*);
 
-static const struct io_fs disk_fs = {
+static const struct io_fs dkpart_fs = {
     0, /* putc */
     0, /* getc */
     0, /* close */
     0, /* flush */
     0, /* status */
     0, 0, /* read, write */
-    disk_bread,
-    disk_bwrite,
+    dkpart_bread,
+    dkpart_bwrite,
     0, 0, /* seek, tell */
-    disk_stat,
-    disk_ioctl,
+    dkpart_stat,
+    dkpart_ioctl,
 };
 
 const struct {
     int mbrtype;
     const char *fstype;
 } mbr_types[] = {
-    {   1, "msdosfs" },
-    {   4, "msdosfs" },
-    {   6, "msdosfs" },
-    { 0xB, "msdosfs" },
-    { 0xC, "msdosfs" },
-    { 0xE, "msdosfs" },
+    {   1, "fatfs" },
+    {   4, "fatfs" },
+    {   6, "fatfs" },
+    { 0xB, "fatfs" },
+    { 0xC, "fatfs" },
+    { 0xE, "fatfs" },
 };
 
 static const char *
@@ -110,7 +110,7 @@ mbr_val(unsigned char *buf, int partno, int valoff){
 }
 
 int
-disk_learn(struct Device_Conf *cf, const char *pfx, int dkno, FILE *fdev, offset_t blks){
+dkpart_learn(struct Device_Conf *cf, const char *pfx, int dkno, FILE *fdev, offset_t blks){
     int i;
 
     // read part table
@@ -122,8 +122,8 @@ disk_learn(struct Device_Conf *cf, const char *pfx, int dkno, FILE *fdev, offset
     if( ! is_an_mbr(buf) ){
         // entire disk
         // RSN - determine type from data
-        const char *fstype = "msdosfs";
-        disk_init(cf, pfx, dkno, 0, 0, blks, fdev, fstype);
+        const char *fstype = "fatfs";
+        dkpart_init(cf, pfx, dkno, 0, 0, blks, fdev, fstype);
         free(buf, 512);
         return 0;
     }
@@ -132,7 +132,7 @@ disk_learn(struct Device_Conf *cf, const char *pfx, int dkno, FILE *fdev, offset
     for(i=0; i<4; i++){
         const char *fstype = mbr_fs( buf[MBR_PART_START + i * MBR_PART_LEN + MBR_PART_TYPE_OFF] );
         if( fstype ){
-            disk_init(cf, pfx, dkno, i, mbr_val(buf, i, MBR_PART_STARTSEC_OFF), mbr_val(buf, i, MBR_PART_NUMSEC_OFF), fdev, fstype);
+            dkpart_init(cf, pfx, dkno, i, mbr_val(buf, i, MBR_PART_STARTSEC_OFF), mbr_val(buf, i, MBR_PART_NUMSEC_OFF), fdev, fstype);
         }
         // else ?
     }
@@ -142,7 +142,7 @@ disk_learn(struct Device_Conf *cf, const char *pfx, int dkno, FILE *fdev, offset
 }
 
 int
-disk_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, u_int start, u_int len, FILE *cont, const char *fstype){
+dkpart_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, u_int start, u_int len, FILE *cont, const char *fstype){
     struct DiskPart *dkp = alloc(sizeof(struct DiskPart));
 
     // name this
@@ -155,7 +155,7 @@ disk_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, u_int s
 
     finit( & dkp->file );
     dkp->file.d = (void*)dkp;
-    dkp->file.fs = &disk_fs;
+    dkp->file.fs = &dkpart_fs;
 
     fmount( & dkp->file, dkp->name, 0);
     if( fstype ) fmount( & dkp->file, dkp->name, fstype );
@@ -168,7 +168,7 @@ disk_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, u_int s
 
 
 int
-disk_bread(FILE *f, char *buf, int len, offset_t pos){
+dkpart_bread(FILE *f, char *buf, int len, offset_t pos){
     struct DiskPart *dev;
 
     if(!f) return;
@@ -183,7 +183,7 @@ disk_bread(FILE *f, char *buf, int len, offset_t pos){
 }
 
 int
-disk_bwrite(FILE *f, const char *buf, int len, offset_t pos){
+dkpart_bwrite(FILE *f, const char *buf, int len, offset_t pos){
     struct DiskPart *dev;
 
     if(!f) return;
@@ -200,7 +200,7 @@ disk_bwrite(FILE *f, const char *buf, int len, offset_t pos){
 
 
 int
-disk_stat(FILE *f, struct stat *s){
+dkpart_stat(FILE *f, struct stat *s){
     struct DiskPart *d;
 
     d = f->d;
@@ -214,7 +214,7 @@ disk_stat(FILE *f, struct stat *s){
 }
 
 int
-disk_ioctl(FILE* f, int cmd, void* a){
+dkpart_ioctl(FILE* f, int cmd, void* a){
 
     if( (cmd >> 8) & 0xF != 'm' )
         return -1;
@@ -226,7 +226,7 @@ disk_ioctl(FILE* f, int cmd, void* a){
         break;
 
     default:
-        kprintf( "disk_ioctl: unknown ioctl %d\n", cmd );
+        kprintf( "dkpart_ioctl: unknown ioctl %d\n", cmd );
         return -1;
     }
 }

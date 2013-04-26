@@ -21,6 +21,8 @@
 int sdcard_ioctl(FILE*, int, void*);
 int sdcard_bread(FILE*, char*, int, offset_t);
 int sdcard_bwrite(FILE*, const char*, int, offset_t);
+int sdcard_stat(FILE *, struct stat*);
+
 
 const struct io_fs sdcard_fs = {
     0, /* putc */
@@ -34,7 +36,7 @@ const struct io_fs sdcard_fs = {
     sdcard_bwrite, /* bwrite */
     0, /* seek */
     0, /* tell */
-    0, /* stat */
+    sdcard_stat,
     sdcard_ioctl
 };
 
@@ -50,7 +52,6 @@ struct SDCinfo {
 } sdcinfo[ N_SDCARD ];
 
 
-//extern int spi_sd_init(const struct SPIConf *cf, char *, char *);
 static int initialize_card(struct SDCinfo *);
 
 
@@ -111,6 +112,19 @@ sdcard_init(struct Device_Conf *dev){
             sdtype, info,
             nsect, nsect>>11
         );
+
+    // do we need partitions?
+
+    dkpart_learn( dev, "sd", unit, & ii->file, nsect );
+
+#if 0
+    // or:
+
+    if( fstype ) fmount( & ii->file, ii->name, "fatfs" );
+
+    bootmsg( "sdcard %s unit mounted on %s type %s\n",
+	     ii->name, ii->name, fstype );
+#endif
 
     return & ii->file;
 }
@@ -346,4 +360,17 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
 }
 
 
+int
+sdcard_stat(FILE *f, struct stat *s){
+    struct SDCinfo *ii = f->d;
+
+    s->dev     = 0;
+    s->size    = ii->sectors * 512;
+    s->ctime   = 0;
+    s->blksize = 512;
+    s->mode    = 0;
+    s->flags   = SSF_BLKWRITE | SSF_NOERASE;
+
+    return 0;
+}
 
