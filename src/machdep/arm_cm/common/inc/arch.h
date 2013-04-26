@@ -12,6 +12,6 @@
 #define __os_machdep_arm_cm4_arch_h__
 
 #define XE9(x)			/* QQQ */
-#define ALIGNMENT	4	/* memory alignment */
+#define ALIGNMENT	8	/* memory alignment */
 
 #endif

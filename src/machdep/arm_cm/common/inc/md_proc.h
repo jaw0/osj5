@@ -91,6 +91,8 @@ extern void exit(int);
 static inline u_long *
 _setup_initial_stack(u_long *s, char *start /* NOT USED */, void *entry){
 
+    if( (int)s % 8 ) s --;	// eabi requires 8 byte alignment
+
     // hardware interrupt frame
     *--s = 0x01000000;		// xpsr
     *--s = (u_long)_start_proc;	// pc
