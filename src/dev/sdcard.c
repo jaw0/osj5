@@ -18,6 +18,8 @@
 #include <gpio.h>
 #include <sdcard.h>
 
+#define MAXTRY 3
+
 int sdcard_ioctl(FILE*, int, void*);
 int sdcard_bread(FILE*, char*, int, offset_t);
 int sdcard_bwrite(FILE*, const char*, int, offset_t);
@@ -48,7 +50,10 @@ struct SDCinfo {
     u_char		sdcid[16];
     u_char		sdcsd[16];	// a meshigas of unaligned jibber-jabber
     int			sectors;
-    int			ishc;
+    u_char		ishc;
+    // XXX lock
+    u_char		cmd[6];
+    spi_msg		m[8];
 } sdcinfo[ N_SDCARD ];
 
 
@@ -115,18 +120,19 @@ sdcard_init(struct Device_Conf *dev){
 
     // do we need partitions?
 
-    dkpart_learn( dev, "sd", unit, & ii->file, nsect );
-
 #if 0
+    dkpart_learn( dev, "sd", unit, & ii->file, nsect );
+#else
     // or:
 
-    if( fstype ) fmount( & ii->file, ii->name, "fatfs" );
+    snprintf(info, sizeof(info), "%s:", ii->name);
+    fmount( & ii->file, info, "fatfs" );
 
     bootmsg( "sdcard %s unit mounted on %s type %s\n",
-	     ii->name, ii->name, fstype );
+	     ii->name, info, "fatfs" );
 #endif
 
-    return & ii->file;
+    return (int)& ii->file;
 }
 
 /****************************************************************/
@@ -152,6 +158,11 @@ _wait_token(int c){
     return 1; 	// got it
 }
 
+static int
+_wait_notnull(int c){
+    if( c == 0 ) return 0;
+    return 1; 	// got it
+}
 
 /****************************************************************/
 
@@ -163,7 +174,7 @@ _wait_token(int c){
 #define SDRX1(m)	\
     m.mode  = SPIMO_UNTIL; \
     m.until = _wait_response; \
-    m.dlen  = 4000;
+    m.dlen  = 20000;
 
 #define SDFIN(m)	\
     m.mode = SPIMO_PINSOFF; \
@@ -223,7 +234,7 @@ initialize_card(struct SDCinfo *ii){
 
     // cmd8 - required to enable v2/HC features (>2GB)
     int rcmd8;
-    r = _sd_cmd_r3(ii, m, cmd8, &rcmd8);
+    r = _sd_cmd_r3(ii, m, cmd8, (char*)&rcmd8);
     kprintf("cmd8 %x, %x, %x\n", r, m[1].response, rcmd8);
     if( r != SPI_XFER_OK ) return 0;
 
@@ -255,12 +266,7 @@ initialize_card(struct SDCinfo *ii){
 
     // read CID, CSD
     r = _sd_cmd_r16(ii, m, cmd10, ii->sdcid);
-    kprintf("cid %x %x\n", r, m[1].response);
     r = _sd_cmd_r16(ii, m, cmd9,  ii->sdcsd);
-    kprintf("csd %x %x\n", r, m[1].response);
-
-    hexdump(ii->sdcid, 16);
-    hexdump(ii->sdcsd, 16);
 
     return 1;
 }
@@ -271,7 +277,7 @@ int
 sdcard_ioctl(FILE*f, int s, void*d){}
 
 static inline void
-_sdcard_blk(struct SDCinfo *ii, int pos, u_char *cmd){
+_sdcard_blk(struct SDCinfo *ii, offset_t pos, u_char *cmd){
 
     if( ii->ishc ) pos /= 512;
 
@@ -280,34 +286,46 @@ _sdcard_blk(struct SDCinfo *ii, int pos, u_char *cmd){
     cmd[3] = pos >> 8;
     cmd[4] = pos;
 
+    cmd[5] = 0;		// no crc
 }
 
 int
 sdcard_bread(FILE*f, char*d, int len, offset_t pos){
     struct SDCinfo *ii = f->d;
-    u_char cmd[6];
-    spi_msg m[6];
-    int tot = 0;
+    u_char *cmd = ii->cmd;
+    spi_msg *m  = ii->m;
+    int tot = 0, tries, r;
 
+    bzero(m, sizeof(m));
     cmd[0] = 0x40 | 17;
 
     while(len){
 
-        _sdcard_blk(ii, pos, cmd);
-        SDCMD(m[0], cmd);
-        SDRX1(m[1]);
-        m[2].mode  = SPIMO_UNTIL;
-        m[2].until = _wait_token;
-        m[2].dlen  = 1000;
-        m[3].mode  = SPIMO_READ;
-        m[3].dlen  = 512;
-        m[3].data  = d;
-        m[4].mode  = SPIMO_DELAY;	// skip crc
-        m[4].dlen  = 2;
-        SDFIN(m[5]);
-        m[5].dlen = 16;			// extra delay
+        for(tries=0; tries<MAXTRY; tries++){
 
-        int r = spi_xfer(& ii->spicf, 6, m, 1000000);
+            _sdcard_blk(ii, pos, cmd);
+            SDCMD(m[0], cmd);
+            SDRX1(m[1]);
+            m[2].mode  = SPIMO_UNTIL;
+            m[2].until = _wait_token;
+            m[2].dlen  = 10000;
+            m[3].mode  = SPIMO_READ;
+            m[3].dlen  = 512;
+            m[3].data  = d;
+            m[4].mode  = SPIMO_DELAY;	// skip crc
+            m[4].dlen  = 2;
+            SDFIN(m[5]);
+            m[5].dlen = 100;		// extra delay
+
+            r = spi_xfer(& ii->spicf, 6, m, 1000000);
+
+            if( r == SPI_XFER_OK ) break;
+
+            kprintf("sd read error %qx, %d => %x\n", pos, len, r);
+            hexdump(m, sizeof(ii->m));
+            spi_clear(& ii->spicf );
+        }
+
         if( r != SPI_XFER_OK ) return -1;
 
         len -= 512;
@@ -324,30 +342,46 @@ static const u_short token = 0xFEFF;
 int
 sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
     struct SDCinfo *ii = f->d;
-    u_char cmd[6];
-    spi_msg m[6];
-    int tot = 0;
+    u_char *cmd = ii->cmd;
+    spi_msg *m  = ii->m;
+    int tot = 0, tries, r;
 
+    bzero(m, sizeof(m));
     cmd[0] = 0x40 | 24;
+
+    int plx = splproc();
 
     while(len){
 
-        _sdcard_blk(ii, pos, cmd);
+        for(tries=0; tries<MAXTRY; tries++){
 
-        SDCMD(m[0], cmd);
-        SDRX1(m[1]);
-        m[2].mode  = SPIMO_WRITE;
-        m[2].data  = (char*)&token;	// delay + token
-        m[2].dlen  = 2;
-        m[3].mode  = SPIMO_WRITE;
-        m[3].dlen  = 512;
-        m[3].data  = (char*)d;
-        m[4].mode  = SPIMO_DELAY;	// skip crc
-        m[4].dlen  = 2;
-        SDFIN(m[5]);
-        m[5].dlen = 16;			// extra delay
+            _sdcard_blk(ii, pos, cmd);
+            SDCMD(m[0], cmd);
+            SDRX1(m[1]);
+            m[2].mode  = SPIMO_WRITE;
+            m[2].data  = (char*)&token;	// delay + token
+            m[2].dlen  = 2;
+            m[3].mode  = SPIMO_WRITE;
+            m[3].dlen  = 512;
+            m[3].data  = (char*)d;
+            m[4].mode  = SPIMO_DELAY;	// skip crc
+            m[4].dlen  = 2;
+            SDRX1(m[5]);
+            SDRX1(m[6]);
+            m[6].until = _wait_notnull;
+            SDFIN(m[7]);
+            m[7].dlen = 1000;		// extra delay
 
-        int r = spi_xfer(& ii->spicf, 6, m, 1000000);
+            r = spi_xfer(& ii->spicf, 8, m, 1000000);
+
+            if( m[5].response != 0 ) r = m[5].response;
+            if( r == SPI_XFER_OK ) break;
+
+            kprintf("sd write error %qx, %d => %x, %x\n", pos, len, r, m[5].response);
+            hexdump(m, sizeof(ii->m));
+            spi_clear(& ii->spicf );
+        }
+
         if( r != SPI_XFER_OK ) return -1;
 
         len -= 512;
@@ -356,9 +390,10 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
         tot += 512;
     }
 
+    splx(plx);
+
     return tot;
 }
-
 
 int
 sdcard_stat(FILE *f, struct stat *s){
