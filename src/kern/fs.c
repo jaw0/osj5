@@ -173,6 +173,8 @@ fopen(const char *name, const char *how){
     MountEntry *me;
 
     me = find_mount(name);
+    if( me )
+        name = basenameoffile(name);
 #ifdef USE_PROC
     if( !me )
         me = currproc->cwd;
@@ -244,6 +246,17 @@ chmod(const char *name, int attr){
     ME(me, name);
     if( CHK(me) )
         return (me->fscf->ops)(FSOP_CHMOD, me, basenameoffile(name), attr);
+
+    return -1;
+}
+
+int
+mkdir(const char *name){
+    MountEntry *me;
+
+    ME(me, name);
+    if( CHK(me) )
+        return (me->fscf->ops)(FSOP_MKDIR, me, basenameoffile(name));
 
     return -1;
 }
@@ -343,6 +356,16 @@ DEFALIAS(cd, chdir)
     return i;
 }
 
+DEFUN(mkdir, "make dir")
+{
+    if( argc < 2 ){
+        f_error("mkdir dirname\n");
+        return -1;
+    }
+
+    return mkdir( argv[1] );
+}
+
 
 #ifdef USE_PROC
 DEFUN(pwd, "print current dir")
@@ -361,7 +384,6 @@ DEFUN(chmod, "change file attributes")
 
     return chmod(argv[2], atoi(argv[1]));
 }
-
 
 DEFUN(dir, "list files")
 DEFALIAS(dir, ls)
@@ -415,22 +437,20 @@ DEFALIAS(dir, ll)
     }
 
     me = find_mount(what);
+    if( me )
+        what = basenameoffile(what);
 
-    if( *what && !me || !*what
 #ifdef USE_PROC
-	&& !currproc->cwd
+    if( !me ) me = currproc->cwd;
 #endif
-        ){
+
+    if( !me ){
         fsmsg("no such file or device\n");
         return -1;
     }
-#ifdef USE_PROC
-    if( !me )
-        me = currproc->cwd;
-#endif
 
     if( me->fscf && me->fscf->ops )
-        i = (me->fscf->ops)(FSOP_DIR, me, how);
+        i = (me->fscf->ops)(FSOP_DIR, me, how, what);
     else
         i = -1;
 

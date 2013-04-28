@@ -12,7 +12,7 @@
 
 #define DISK_BLOCK_SIZE 512
 
-struct Disk_Conf {
+struct DiskPart_Conf {
     const char *mntpt;		/* will autoconf if left 0 */
     const char *fstype;		/* type of fs */
     const char *cntrlnm;	/* controller */

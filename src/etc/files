@@ -22,7 +22,8 @@ oled:           dev/oled.cc util/gfxdpy.cc
 sdcard:         dev/sdcard.c
 
 flfs:           fs/flfs.c
-msdosfs:        dev/disk.c fs/msdosfs.c
+fatfs:          fs/fatfs.c
+fatfs:          fs/fatfs/ff.c
 
 ed:             util/ed.c
 cli:            util/cli.c util/debugger.c

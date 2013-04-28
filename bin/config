@@ -69,7 +69,7 @@ my $devs = "const struct Device_Conf all_devices[] = {\n";
 my $nfsys = 0;
 my $fsys = "const struct FSType_Conf filesystems[] = {\n";
 my $ndisk = 0;
-my $diskdev = "const struct Disk_Conf disk_device[] = {\n";
+my $diskdev = "const struct DiskPart_Conf disk_device[] = {\n";
 
 my($root, $start, $name, %devs);
 

@@ -119,6 +119,8 @@ flfs_init(MountEntry *me){
     flfs->fblksize  = FBLOCKSIZE;
     flfs->flags     = s.flags;
     flfs->lastfreeoffset = 0;
+
+    return 0;
 }
 
 int

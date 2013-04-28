@@ -597,7 +597,7 @@ usleep(u_long usec){
     utime_t until;
 
     if( usec <= 0 ) return;
-    PROCOK(currproc);
+
     if( !currproc || currproc->flags & PRF_NONBLOCK ){
         /* this process cannot block, do special sleep */
         until = usec + get_time();
@@ -606,8 +606,8 @@ usleep(u_long usec){
         return;
     }
 
+    PROCOK(currproc);
     tsleep(WCHAN_NEVER, currproc->prio, "time", usec);
-
 }
 
 /*

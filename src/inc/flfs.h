@@ -41,8 +41,6 @@ struct FSFile {
         /* 80 bytes */
 	u_long filelen;		/* length of file */
 	u_long attr;		/* file attributes */
-#define FFA_READONLY	1	/* cannot be deleted */
-#define FFA_HIDDEN	2	/* does not appear in dir listing */
 
 	long long ctime;
 	char name[FLFS_NAMELEN];		/* null terminated */

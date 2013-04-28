@@ -30,7 +30,7 @@ option CHECKPROC		# additional error checking in proc
 
 option GETLINEHIST
 
-srcfile         app/maple_mini_blinky.c
+srcfile         app/sdcard_test.c
 
 option PROJECT_MAIN     main
 
@@ -43,8 +43,7 @@ option RENAMEFILE_ON_CREAT
 option ENOUGHALREADYHEURISTIC	64
 ################################################################
 
-filesys flfs
-# filesys msdosfs
+filesys fatfs
 
 ################################################################
 
@@ -62,14 +61,12 @@ feature pwm
 # device name type xxx port xxx addr xxx irq xxx baud xxx flags xxx init xxx args x,x,x,x
 
 device serial0 	baud 57600
+device console
+
 device i2c0     baud 800000
 device spi0     baud 400000
 device spi1     baud 400000
 
-# QQQ
-#device usb0             addr 0x1234
-#device usbdisk0
-#device usbserial0
 
 ################################################################
 
@@ -83,13 +80,15 @@ device oled1  port 0x80 baud 36000000 flags 0x1 args 0x3, 0x4
 ################################################################
 
 # CS=GPIO_A2, on spi0, board won't go faster than 5MHz
-device sd0      type sdcard port 0 baud 5000000 args 0x2
+#device sd0      type sdcard port 0 baud 5000000 args 0x2
+device sd0      type sdcard port 0 baud 1000000 args 0x2
 
 
 #disk sd0:       type flfs on sd0  unit 0 partition -1
 
 ################################################################
 
-device console
-config  root on ram:
+config  root on sd0:
+#    startup in startup.rc
+
 

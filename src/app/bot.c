@@ -12,6 +12,7 @@
 #include <stm32f10x.h>
 #include <proc.h>
 #include <msgs.h>
+#include <nstdio.h>
 #include <gpio.h>
 #include <pwm.h>
 #include <i2c.h>
@@ -19,6 +20,7 @@
 #include "l3g.h"
 #include "menu.h"
 #include <setjmp.h>
+#include <userint.h>
 
 #define SLOW 200
 #define FAST 512
@@ -678,6 +680,22 @@ testplay(int n){
     return 0;
 }
 
+int
+powerlevel(void){
+    int l = adc_get(7);
+
+    float v = 3.3 * l
+        * 2.05607	// the resistors are not exactly equal
+        / 4096.0;
+
+    float p = (v - 3.2) * 100.0;
+    if( p < 0 )   p = 0;
+    if( p > 100 ) p = 100;
+
+    printf("\e[15m   battery\n %.2fV  %d%%\n", v, (int)p);
+    sleep(3);
+}
+
 
 void
 maneuver_to_safety(void){
@@ -896,6 +914,7 @@ const struct Menu guiplay = {
 
 const struct Menu guidiag = {
     "Diag Menu", &guitop, 0, {
+        { "power",   MTYP_FUNC, (void*)powerlevel },
         { "accel",   MTYP_FUNC, (void*)testaccel },
         { "sensor",  MTYP_FUNC, (void*)testsensors },
         { "gyro",    MTYP_FUNC, (void*)testgyro },
@@ -980,5 +999,4 @@ main(void){
     song_proc = start_proc( 1024, sing_song, "sing" );
 
 }
-
 

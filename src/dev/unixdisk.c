@@ -23,7 +23,7 @@
 #include <bootflags.h>
 #include <locks.h>
 
-#define DISKSIZE	(16*1024*1024)
+#define DISKSIZE	(2*1024*1024*1024LL)
 
 int udsk_ioctl(FILE*, int, void*);
 int udsk_bread(FILE*, char*, int, offset_t);
@@ -69,7 +69,7 @@ udsk_init(struct Device_Conf *dev){
     int c = dev->unit;
     finit( & udsk[c].file );
     udsk[c].no   = c;
-    udsk[c].fd = open("disk_cf_16mb", 2);
+    udsk[c].fd = open("disk_2gb", 2);
     udsk[c].file.d  = (void*)& udsk[c];
     udsk[c].file.fs = & udsk_fs;
 

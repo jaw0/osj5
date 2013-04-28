@@ -86,7 +86,7 @@ int fncprintf(int (*)(void*, char), void *, const char *, ...);
 #  ifdef PRINTFFLOATTYPE
 typedef PRINTFFLOATTYPE float_num_t;
 #  else
-typedef double float_num_t;
+typedef float float_num_t;
 #  endif
 static int putfloat(int (*)(void*, char), void *, float_num_t, int, int, int);
 #endif
@@ -513,7 +513,7 @@ putfloat(int (*ofnc)(void*, char), void *arg, float_num_t val, int width, int pr
         int fpart   = (val - ipart) * pmul;
         int iwidth  = width - prec - 1;
         int lwidth  = (flags & B(PF_LEFT)) ? 0 : iwidth;
-
+        //fprintf(STDERR, ">> %d,%d\n", ipart, fpart);
         int tlen = putnum(ofnc, arg, sign*ipart, 10, lwidth, lwidth, flags);
         (*ofnc)(arg, '.');
         tlen ++;

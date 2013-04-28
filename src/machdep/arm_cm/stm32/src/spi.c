@@ -521,6 +521,31 @@ _irq_spi_handler(int unit){
 
 }
 
+void
+spi_clear(const struct SPIConf * cf){
+    struct SPIInfo *ii = spiinfo + cf->unit;
+    SPI_TypeDef *dev   = ii->addr;
+    int i;
+
+    // enable device, pins
+    int plx = spldisk();
+    _spi_conf_done(cf, ii);
+    usleep(10000);
+    _spi_conf_start(cf, ii);
+
+    dev->CR1 |= CR1_SPE;
+
+    for(i=0; i<16; i++){
+        while( !(dev->SR & SR_TXE) ) {}
+        dev->DR   = 0xFF;
+    }
+
+    // disable device, pins
+    _spi_conf_done(cf, ii);
+    usleep(10000);
+    splx(plx);
+}
+
 
 int
 spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
@@ -536,7 +561,7 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
     cur_crumb = 0;
 
 #ifdef VERBOSE
-    kprintf("spi xfer2 starting, %d msgs\n", nmsg);
+    //kprintf("spi xfer2 starting, %d msgs\n", nmsg);
 #endif
 
     ii->cf        = cf;
@@ -576,8 +601,11 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
 
 
 #ifdef VERBOSE
-    _spi_dump_crumb();
-    kprintf("spi xfer2 done\n");
+    if( (ii->state != SPI_STATE_XFER_DONE) ){
+        kprintf("spi xfer\n");
+        _spi_dump_crumb();
+    }
+    //kprintf("spi xfer2 done\n");
 #endif
 
     int r;

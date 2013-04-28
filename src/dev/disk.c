@@ -130,6 +130,7 @@ dkpart_learn(struct Device_Conf *cf, const char *pfx, int dkno, FILE *fdev, offs
 
     // init all partitions
     for(i=0; i<4; i++){
+
         const char *fstype = mbr_fs( buf[MBR_PART_START + i * MBR_PART_LEN + MBR_PART_TYPE_OFF] );
         if( fstype ){
             dkpart_init(cf, pfx, dkno, i, mbr_val(buf, i, MBR_PART_STARTSEC_OFF), mbr_val(buf, i, MBR_PART_NUMSEC_OFF), fdev, fstype);
@@ -160,6 +161,7 @@ dkpart_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, u_int
     fmount( & dkp->file, dkp->name, 0);
     if( fstype ) fmount( & dkp->file, dkp->name, fstype );
 
+    kprintf("disk start %x\n", start);
     bootmsg( "%s unit %d/%d %d blocks mounted on %s type %s\n",
 	     cf->name, dkno, partno, len, dkp->name, fstype );
 

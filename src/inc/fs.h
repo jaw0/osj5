@@ -27,6 +27,7 @@ struct FSType_Conf {
 #define FSOP_FCHMOD	5
 #define FSOP_FORMAT	6
 #define FSOP_GLOB	7
+#define FSOP_MKDIR	8
 
 /* ls flags */
 #define LSHOW_ALL	1
@@ -34,6 +35,10 @@ struct FSType_Conf {
 #define LSHOW_LONG	4
 #define LSHOW_FSYS	8
 #define LSHOW_DEVS	16
+
+/* file attr */
+#define FFA_READONLY	1	/* cannot be deleted */
+#define FFA_HIDDEN	2	/* does not appear in dir listing */
 
 typedef struct MountEntry {
     char name[16];
