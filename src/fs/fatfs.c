@@ -113,7 +113,7 @@ fatfs_open(MountEntry *me, const char *name, const char *how){
     FILE *f;
     int r;
 
-    kprintf("fatfs open %s\n", name );
+    //kprintf("fatfs open %s\n", name );
     fd = alloc(sizeof(struct FileData));
     fd->ffs = me->fsdat;
 
@@ -454,7 +454,7 @@ disk_read(BYTE dev, BYTE *buf, DWORD sect, BYTE cnt){
 
     //bzero(buf, 512);
     int r = fbread(f->me->fdev, buf, cnt * DISK_BLOCK_SIZE, sect * DISK_BLOCK_SIZE);
-    kprintf("fatfs read %x => %d\n", sect, r);
+    //kprintf("fatfs read %x => %d\n", sect, r);
     //hexdump(buf, 512);
     if( r > 0 ) return RES_OK;
     return RES_ERROR;
@@ -465,7 +465,7 @@ disk_write(BYTE dev, const BYTE *buf, DWORD sect, BYTE cnt){
     struct FatFS *f = & fsinfo[dev];
 
     int r = fbwrite(f->me->fdev, buf, cnt * DISK_BLOCK_SIZE, sect * DISK_BLOCK_SIZE);
-    kprintf("fatfs write %x => %d\n", sect, r);
+    // kprintf("fatfs write %x => %d\n", sect, r);
     if( r > 0 ) return RES_OK;
     return RES_ERROR;
 }
@@ -475,7 +475,7 @@ disk_ioctl(BYTE dev, BYTE cmd, void *param){
     struct FatFS *f = & fsinfo[dev];
     int *p = (int*)param;
 
-    kprintf("fatfs_ioctl %d\n", cmd);
+    // kprintf("fatfs_ioctl %d\n", cmd);
     switch(cmd){
     case CTRL_SYNC:
         return 0;
