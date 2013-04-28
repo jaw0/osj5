@@ -336,8 +336,10 @@ fatfs_read(FILE* f, char* buf, int len){
     struct FileData *fd = f->d;
     int rl;
     int r = f_read( &fd->fil, buf, len, &rl );
-    if( r != FR_OK )
+    if( r != FR_OK ){
+        f->flags |= F_EOF;
         return -1;
+    }
     return rl;
 
 }
@@ -358,9 +360,13 @@ fatfs_getchar(FILE *f){
     int rl;
     char ch;
     int r = f_read( &fd->fil, &ch, 1, &rl );
-    if( r != FR_OK )
+
+    if( (r != FR_OK) || (rl != 1) ){
+        f->flags |= F_EOF;
         return -1;
-    return 1;
+    }
+
+    return ch;
 
 }
 
@@ -465,7 +471,7 @@ disk_write(BYTE dev, const BYTE *buf, DWORD sect, BYTE cnt){
     struct FatFS *f = & fsinfo[dev];
 
     int r = fbwrite(f->me->fdev, buf, cnt * DISK_BLOCK_SIZE, sect * DISK_BLOCK_SIZE);
-    // kprintf("fatfs write %x => %d\n", sect, r);
+    //kprintf("fatfs write %x => %d\n", sect, r);
     if( r > 0 ) return RES_OK;
     return RES_ERROR;
 }
