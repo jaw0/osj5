@@ -270,7 +270,6 @@ DEFALIAS(ed, vi)
     FILE *f;
     struct Buffer file;
     struct Line *l;
-    char buf[256], pbuf[256];
     int delta = 0;
     int i;
 
@@ -286,6 +285,9 @@ DEFALIAS(ed, vi)
         f = fopen(argv[1], "r");
     else
         f = 0;
+
+    char *buf  = alloc(256);
+    char *pbuf = alloc(256);
 
     /* read file in data struct */
     file.firstline = file.lastline = file.currline = 0;
@@ -581,7 +583,7 @@ DEFALIAS(ed, vi)
             if( delta ){
                 printf("\abuffer not saved\n");
             }else{
-            case 'Q':
+        case 'Q':
             QUIT:
                 for(l=file.firstline; l; ){
                     struct Line *ll;
@@ -589,7 +591,9 @@ DEFALIAS(ed, vi)
                     free(l, sizeof(struct Line));
                     l = ll;
                 }
-            return 0;
+                free(buf, 256);
+                free(pbuf, 256);
+                return 0;
             }
             delta = 0;
             break;
