@@ -734,19 +734,20 @@ shell_eval(int argc, char **argv, struct cli_env *env){
     return -1;
 }
 
+#define BUFSIZE 256
 void
 fshell(FILE *f, int interactivep){
     Catchframe cf;
-    struct cli_env env;
-    char buf[256];
     char *argv[16];
     int  argc;
     char *p;
     char qc;
     int i;
 
-    bzero(&env, sizeof(env));
-    strcpy(env.prompt, "prompt% ");
+    struct cli_env *env = (struct cli_env*)alloc(sizeof(struct cli_env));
+    char *buf = (char*)alloc(BUFSIZE);
+    bzero(env, sizeof(env));
+    strcpy(env->prompt, "prompt% ");
 
     /* handle ^C */
     if( !f ){
@@ -766,11 +767,13 @@ fshell(FILE *f, int interactivep){
                 if( i )
                     printf("> ");
                 else
-                    prompt(&env);
-                getline(buf+i, sizeof(buf)-i, 0);
+                    prompt(env);
+                getline(buf+i, BUFSIZE-i, 0);
             }else{
-                if( !fgets(buf+i, sizeof(buf)-i, f) ){
+                if( !fgets(buf+i, BUFSIZE-i, f) ){
                     UNCATCH(cf);
+                    free(buf, BUFSIZE);
+                    free(env, sizeof(struct cli_env));
                     return;
                 }
             }
@@ -827,9 +830,11 @@ fshell(FILE *f, int interactivep){
             continue;
         if( !strcmp("exit", argv[0] )){
             UNCATCH(cf);
+            free(buf, BUFSIZE);
+            free(env, sizeof(struct cli_env));
             return;
         }
-        shell_eval(argc, argv, &env);
+        shell_eval(argc, argv, env);
     }
 }
 

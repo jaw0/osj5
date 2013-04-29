@@ -52,7 +52,8 @@ MEMORY
 }
 
 /* higher address of the user mode stack */
-_estack = 0x20010000;
+/* RSN - move this to CCM */
+_estack = 0x20020000;
 
 
 

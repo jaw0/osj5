@@ -282,7 +282,8 @@ typedef struct
   u32 RESERVED3[30];
   vu32 IABR[2];
   u32 RESERVED4[62];
-  vu32 IPR[11];
+  vu8  IPR[240];     	/* changed to byte-wise, to match F4. --jaw 4/2013 */
+
 } NVIC_TypeDef;
 
 typedef struct

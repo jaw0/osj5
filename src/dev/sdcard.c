@@ -51,7 +51,7 @@ struct SDCinfo {
     u_char		sdcsd[16];	// a meshigas of unaligned jibber-jabber
     int			sectors;
     u_char		ishc;
-    // XXX lock
+    lock_t		lock;
     u_char		cmd[6];
     spi_msg		m[8];
 } sdcinfo[ N_SDCARD ];
@@ -72,6 +72,7 @@ sdcard_init(struct Device_Conf *dev){
     ii->file.fs = & sdcard_fs;
 
     ii->name = dev->name;
+    ii->lock = 0;
     ii->spicf.unit  = dev->port;
     ii->spicf.speed = 400000;
     ii->spicf.nss   = 1;
@@ -289,6 +290,12 @@ _sdcard_blk(struct SDCinfo *ii, offset_t pos, u_char *cmd){
     cmd[5] = 0;		// no crc
 }
 
+static void
+sdcard_clear(struct SDCinfo *ii){
+    spi_clear(& ii->spicf );
+    initialize_card(ii);
+}
+
 int
 sdcard_bread(FILE*f, char*d, int len, offset_t pos){
     struct SDCinfo *ii = f->d;
@@ -296,8 +303,11 @@ sdcard_bread(FILE*f, char*d, int len, offset_t pos){
     spi_msg *m  = ii->m;
     int tot = 0, tries, r;
 
+    sync_lock(& ii->lock, "sdcard");
     bzero(m, sizeof(m));
     cmd[0] = 0x40 | 17;
+
+    int plx = splproc();
 
     while(len){
 
@@ -315,7 +325,7 @@ sdcard_bread(FILE*f, char*d, int len, offset_t pos){
             m[4].mode  = SPIMO_DELAY;	// skip crc
             m[4].dlen  = 2;
             SDFIN(m[5]);
-            m[5].dlen = 100;		// extra delay
+            m[5].dlen = 16;		// extra delay
 
             r = spi_xfer(& ii->spicf, 6, m, 1000000);
 
@@ -323,10 +333,14 @@ sdcard_bread(FILE*f, char*d, int len, offset_t pos){
 
             kprintf("sd read error %qx, %d => %x\n", pos, len, r);
             hexdump(m, sizeof(ii->m));
-            spi_clear(& ii->spicf );
+            sdcard_clear( ii );
         }
 
-        if( r != SPI_XFER_OK ) return -1;
+        if( r != SPI_XFER_OK ){
+            splx(plx);
+            sync_unlock(& ii->lock );
+            return -1;
+        }
 
         len -= 512;
         pos += 512;
@@ -334,6 +348,8 @@ sdcard_bread(FILE*f, char*d, int len, offset_t pos){
         tot += 512;
     }
 
+    splx(plx);
+    sync_unlock(& ii->lock );
     return tot;
 }
 
@@ -346,6 +362,7 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
     spi_msg *m  = ii->m;
     int tot = 0, tries, r;
 
+    sync_lock(& ii->lock, "sdcard");
     bzero(m, sizeof(m));
     cmd[0] = 0x40 | 24;
 
@@ -379,11 +396,14 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
 
             kprintf("sd write error %qx, %d => %x, %x\n", pos, len, r, m[5].response);
             hexdump(m, sizeof(ii->m));
-            spi_clear(& ii->spicf );
+            sdcard_clear( ii );
         }
 
-        if( r != SPI_XFER_OK ) return -1;
-
+        if( r != SPI_XFER_OK ){
+            splx(plx);
+            sync_unlock(& ii->lock );
+            return -1;
+        }
         len -= 512;
         pos += 512;
         d   += 512;
@@ -391,7 +411,7 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
     }
 
     splx(plx);
-
+    sync_unlock(& ii->lock );
     return tot;
 }
 

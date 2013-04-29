@@ -36,12 +36,10 @@ autoconfig(void){
     for(i=0; i<n_devs; i++){
         if( all_devices[i].init )
             f = (FILE*)( (all_devices[i].init)( all_devices + i ));
-#ifdef USE_FILESYS
+
         if( all_devices[i].name && f > 0 )
             /* mount device in dev: */
             devmount( f, all_devices[i].name );
-#endif
-
     }
 }
 

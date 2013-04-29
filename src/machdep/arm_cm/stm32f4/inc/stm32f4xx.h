@@ -654,10 +654,12 @@ typedef struct
   __IO uint32_t PUPDR;    /*!< GPIO port pull-up/pull-down register,  Address offset: 0x0C      */
   __IO uint32_t IDR;      /*!< GPIO port input data register,         Address offset: 0x10      */
   __IO uint32_t ODR;      /*!< GPIO port output data register,        Address offset: 0x14      */
-  __IO uint16_t BSRRL;    /*!< GPIO port bit set/reset low register,  Address offset: 0x18      */
-  __IO uint16_t BSRRH;    /*!< GPIO port bit set/reset high register, Address offset: 0x1A      */
+    /* bsrr(L+H) => bsrr for f103 compat. --jaw 4/2013 */
+  __IO uint32_t BSRR;     /*!< GPIO port bit set/reset register,      Address offset: 0x18      */
   __IO uint32_t LCKR;     /*!< GPIO port configuration lock register, Address offset: 0x1C      */
-  __IO uint32_t AFR[2];   /*!< GPIO alternate function registers,     Address offset: 0x20-0x24 */
+    /* renamed AFR[2] => (L+H) to match documentation. --jaw 4/2013 */
+  __IO uint32_t AFRL;     /*!< GPIO alternate function registers,     Address offset: 0x20-0x24 */
+  __IO uint32_t AFRH;     /*!< GPIO alternate function registers,     Address offset: 0x20-0x24 */
 } GPIO_TypeDef;
 
 /** 

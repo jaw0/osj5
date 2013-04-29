@@ -79,16 +79,14 @@ device oled1  port 0x80 baud 36000000 flags 0x1 args 0x3, 0x4
 
 ################################################################
 
-# CS=GPIO_A2, on spi0, board won't go faster than 5MHz
-#device sd0      type sdcard port 0 baud 5000000 args 0x2
-device sd0      type sdcard port 0 baud 1000000 args 0x2
+# CS=GPIO_A2, on spi0, board won't go fast, get errors
+device sd0      type sdcard port 0 baud 500000 args 0x2
 
 
 #disk sd0:       type flfs on sd0  unit 0 partition -1
 
 ################################################################
 
-config  root on sd0:
-#    startup in startup.rc
+config  root on sd0:  startup in startup.rc
 
 

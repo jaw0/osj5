@@ -13,7 +13,7 @@
 #include <time.h>
 #include <error.h>
 
-#include <stm32f10x.h>
+#include <stm32.h>
 
 
 void

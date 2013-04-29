@@ -312,7 +312,8 @@ typedef struct
        uint32_t RESERVED3[24];
   __IO uint32_t IABR[8];                 /*!< Offset: 0x200 (R/W)  Interrupt Active bit Register           */
        uint32_t RESERVED4[56];
-  __IO uint8_t  IP[240];                 /*!< Offset: 0x300 (R/W)  Interrupt Priority Register (8Bit wide) */
+    /* changed name to match F1. --jaw 4/2013 */
+  __IO uint8_t  IPR[240];                 /*!< Offset: 0x300 (R/W)  Interrupt Priority Register (8Bit wide) */
        uint32_t RESERVED5[644];
   __O  uint32_t STIR;                    /*!< Offset: 0xE00 ( /W)  Software Trigger Interrupt Register     */
 }  NVIC_Type;
@@ -340,7 +341,8 @@ typedef struct
   __IO uint32_t AIRCR;                   /*!< Offset: 0x00C (R/W)  Application Interrupt and Reset Control Register      */
   __IO uint32_t SCR;                     /*!< Offset: 0x010 (R/W)  System Control Register                               */
   __IO uint32_t CCR;                     /*!< Offset: 0x014 (R/W)  Configuration Control Register                        */
-  __IO uint8_t  SHP[12];                 /*!< Offset: 0x018 (R/W)  System Handlers Priority Registers (4-7, 8-11, 12-15) */
+    /* changed to match F1. --jaw 4/2013 */
+  __IO uint32_t SHPR[3];                 /*!< Offset: 0x018 (R/W)  System Handlers Priority Registers (4-7, 8-11, 12-15) */
   __IO uint32_t SHCSR;                   /*!< Offset: 0x024 (R/W)  System Handler Control and State Register             */
   __IO uint32_t CFSR;                    /*!< Offset: 0x028 (R/W)  Configurable Fault Status Register                    */
   __IO uint32_t HFSR;                    /*!< Offset: 0x02C (R/W)  HardFault Status Register                             */
@@ -1139,48 +1141,6 @@ static __INLINE void NVIC_ClearPendingIRQ(IRQn_Type IRQn)
 static __INLINE uint32_t NVIC_GetActive(IRQn_Type IRQn)
 {
   return((uint32_t)((NVIC->IABR[(uint32_t)(IRQn) >> 5] & (1 << ((uint32_t)(IRQn) & 0x1F)))?1:0)); /* Return 1 if active else 0 */
-}
-
-
-/** \brief  Set Interrupt Priority
-
-    This function sets the priority for the specified interrupt. The interrupt
-    number can be positive to specify an external (device specific)
-    interrupt, or negative to specify an internal (core) interrupt.
-
-    Note: The priority cannot be set for every core interrupt.
-
-    \param [in]      IRQn  Number of the interrupt for set priority
-    \param [in]  priority  Priority to set
- */
-static __INLINE void NVIC_SetPriority(IRQn_Type IRQn, uint32_t priority)
-{
-  if(IRQn < 0) {
-    SCB->SHP[((uint32_t)(IRQn) & 0xF)-4] = ((priority << (8 - __NVIC_PRIO_BITS)) & 0xff); } /* set Priority for Cortex-M  System Interrupts */
-  else {
-    NVIC->IP[(uint32_t)(IRQn)] = ((priority << (8 - __NVIC_PRIO_BITS)) & 0xff);    }        /* set Priority for device specific Interrupts  */
-}
-
-
-/** \brief  Get Interrupt Priority
-
-    This function reads the priority for the specified interrupt. The interrupt
-    number can be positive to specify an external (device specific)
-    interrupt, or negative to specify an internal (core) interrupt.
-
-    The returned priority value is automatically aligned to the implemented
-    priority bits of the microcontroller.
-
-    \param [in]   IRQn  Number of the interrupt for get priority
-    \return             Interrupt Priority
- */
-static __INLINE uint32_t NVIC_GetPriority(IRQn_Type IRQn)
-{
-
-  if(IRQn < 0) {
-    return((uint32_t)(SCB->SHP[((uint32_t)(IRQn) & 0xF)-4] >> (8 - __NVIC_PRIO_BITS)));  } /* get priority for Cortex-M  system interrupts */
-  else {
-    return((uint32_t)(NVIC->IP[(uint32_t)(IRQn)]           >> (8 - __NVIC_PRIO_BITS)));  } /* get priority for device specific interrupts  */
 }
 
 

@@ -9,18 +9,14 @@
 */
 
 #include <conf.h>
-#include <stm32f10x.h>
+#include <stm32f4xx.h>
 #include <proc.h>
 #include <alloc.h>
+#include <clock.h>
 
 
-#define HSICLOCK 8000000
-#define APB1MAX  36000000
-#define ADCBMAX  14000000
-#define SYSCLOCK 72000000
-
-#define R_FLASHKB	((unsigned short *)(0x1FFFF7E0))
-#define R_UNIQUE	((unsigned long*)(0x1FFFF7E8))
+#define R_FLASHKB	((unsigned short *)(0x1FFF7A22))
+#define R_UNIQUE	((unsigned long*)(0x1FFF7A10))
 
 
 unsigned long bootflags = 0;
@@ -36,7 +32,7 @@ static void
 delay(int n){
     int i;
     for(i=n*100000; i > 0; i--){
-        asm("nop");	/* This stops it optimising code out */
+        asm("nop");	/* This stops it optimizing code out */
     }
 }
 
@@ -145,26 +141,36 @@ static void
 clock_init(void){
 
     /* enable HSE */
-    RCC->CR |= 0x00010001;
-    while( RCC->CR & 0x00020000 == 0 ){} /* wait for it */
+    RCC->CR |= (1<<16);
+    while( RCC->CR & (1<<17) == 0 ){} /* wait for it */
 
-    FLASH->ACR   |= 2;		/* flash mem wait states */
+    FLASH->ACR |= 5;            /* flash mem wait states */
 
-    RCC->CFGR |= 0x5d8400;	/* 72Mhz, full speed */
+    RCC->PLLCFGR = (1<<22)      // src=hse
+        | 6                     // pllm
+        | (168 << 6)            // plln
+        | (0<<16)               // pllp=2
+        | (7<<24)               // pllq
+        ;
 
-    RCC->CR   |= 0x01000000;	 	 /* enable pll */
-    while( RCC->CR & 0x02000000 == 0 ){} /* wait for it */
+    RCC->CFGR  = (4<<13)        // apb2 = divide by 2
+        | (5<<10)               // apb1 = divide by 4
+        | (0<<4)                // ahb =  no divide
+        | (12<<16)              // rtc = hse / 12
+        ;
+
+    RCC->CR    |= (1<<24);               /* enable pll */
+    while( RCC->CR & (1<<25) == 0 ){} /* wait for it */
 
     /* Set SYSCLK as PLL */
-    RCC->CFGR |= 0x00000002;
-    while( RCC->CFGR & 0x0000000C == 0 ){} /* wait for it */
+    RCC->CFGR |= 0x2;
+    while( RCC->CFGR & 0xC == 0 ){} /* wait for it */
 
 }
 
 /****************************************************************/
 void
 init_ints(void){
-
     SCB->SHPR[1]  = (IPL_PROC  << 24); /* SVC */
 }
 
@@ -181,6 +187,7 @@ init_hw(void){
 }
 
 /****************************************************************/
+
 
 extern char _sdata, _estack;
 void

@@ -22,7 +22,6 @@
 #include <ioctl.h>
 #include <userint.h>
 
-#ifdef USE_FILESYS
 
 #ifndef DEVPREFIX
 #  define DEVPREFIX	"dev:"
@@ -191,6 +190,7 @@ fopen(const char *name, const char *how){
         return me->fdev;
 }
 
+#ifdef USE_FILESYS
 int
 chdir(const char *devname){
     MountEntry *me;
@@ -205,7 +205,6 @@ chdir(const char *devname){
     return -1;
 #endif
 }
-
 
 /*****************************************************************
  *****************************************************************/
@@ -291,99 +290,12 @@ renamefile(const char *oname, const char *nname){
         return (me->fscf->ops)(FSOP_RENAME, me, basenameoffile(oname), nname);
     return -1;
 }
-
+#endif
 
 /*****************************************************************
  *****************************************************************/
 
 #ifdef USE_CLI
-
-DEFUN(format, "format device")
-{
-    if( argc < 2 ){
-        f_error("format drive");
-        return -1;
-    }
-
-    return fs_format(argv[1]);
-}
-
-DEFUN(delete, "delete files")
-DEFALIAS(delete, del)
-DEFALIAS(delete, rm)
-{
-    int st;
-
-    if( argc < 2 ){
-        f_error("delete filename ...");
-        return -1;
-    }
-
-    while(++argv, --argc){
-        st = deletefile( *argv );
-        printf( st ? "could not delete file \"%s\"\n"
-                : "file \"%s\" deleted\n",
-                *argv);
-    }
-
-    return st;
-
-}
-
-DEFUN(rename, "rename files")
-DEFALIAS(rename, ren)
-DEFALIAS(rename, mv)
-{
-    if( argc != 3 ){
-        f_error("rename oldname newname");
-        return -1;
-    }
-
-    return renamefile( argv[1], argv[2] );
-}
-
-DEFUN(cd, "change dir")
-DEFALIAS(cd, chdir)
-{
-    int i;
-
-    if( argc < 2 ){
-        return chdir( MOUNT_ROOT );
-    }
-    i = chdir(argv[1]);
-    if( i )
-        f_error("no such device");
-    return i;
-}
-
-DEFUN(mkdir, "make dir")
-{
-    if( argc < 2 ){
-        f_error("mkdir dirname\n");
-        return -1;
-    }
-
-    return mkdir( argv[1] );
-}
-
-
-#ifdef USE_PROC
-DEFUN(pwd, "print current dir")
-{
-    printf("%s\n", currproc->cwd ? currproc->cwd->name : "cwd not set");
-    return 0;
-}
-#endif
-
-DEFUN(chmod, "change file attributes")
-{
-    if( argc != 3 ){
-        f_error("chmod attr filename");
-        return -1;
-    }
-
-    return chmod(argv[2], atoi(argv[1]));
-}
 
 DEFUN(dir, "list files")
 DEFALIAS(dir, ls)
@@ -436,6 +348,7 @@ DEFALIAS(dir, ll)
         return 0;
     }
 
+#ifdef USE_FILESYS
     me = find_mount(what);
     if( me )
         what = basenameoffile(what);
@@ -457,6 +370,102 @@ DEFALIAS(dir, ll)
     if( i )
         f_error("ls [-adfxl] [me]");
     return i;
+#else
+    f_error("no filesys configured\n");
+    return -1;
+#endif
+}
+
+#ifdef USE_FILESYS
+DEFUN(format, "format device")
+{
+    if( argc < 2 ){
+        f_error("format drive");
+        return -1;
+    }
+
+    return fs_format(argv[1]);
+}
+
+DEFUN(delete, "delete files")
+DEFALIAS(delete, del)
+DEFALIAS(delete, rm)
+{
+    int st;
+
+    if( argc < 2 ){
+        f_error("delete filename ...");
+        return -1;
+    }
+
+    while(++argv, --argc){
+        st = deletefile( *argv );
+        printf( st ? "could not delete file \"%s\"\n"
+                : "file \"%s\" deleted\n",
+                *argv);
+    }
+
+    return st;
+
+}
+
+DEFUN(rename, "rename files")
+DEFALIAS(rename, ren)
+DEFALIAS(rename, mv)
+{
+    if( argc != 3 ){
+        f_error("rename oldname newname");
+        return -1;
+    }
+
+    return renamefile( argv[1], argv[2] );
+}
+
+DEFUN(cd, "change dir")
+DEFALIAS(cd, chdir)
+{
+    int i;
+
+    if( argc < 2 ){
+#ifdef MOUNT_ROOT
+        return chdir( MOUNT_ROOT );
+#else
+        f_error("chdir dir");
+#endif
+    }
+    i = chdir(argv[1]);
+    if( i )
+        f_error("no such device");
+    return i;
+}
+
+DEFUN(mkdir, "make dir")
+{
+    if( argc < 2 ){
+        f_error("mkdir dirname\n");
+        return -1;
+    }
+
+    return mkdir( argv[1] );
+}
+
+
+#ifdef USE_PROC
+DEFUN(pwd, "print current dir")
+{
+    printf("%s\n", currproc->cwd ? currproc->cwd->name : "cwd not set");
+    return 0;
+}
+#endif
+
+DEFUN(chmod, "change file attributes")
+{
+    if( argc != 3 ){
+        f_error("chmod attr filename");
+        return -1;
+    }
+
+    return chmod(argv[2], atoi(argv[1]));
 }
 
 struct GlobArgs {
@@ -532,6 +541,7 @@ DEFUN(glob, "expand wildcards in filenames")
     return -1;
 }
 
-#endif /* USE_CLI */
 #endif /* USE_FILESYS */
+#endif /* USE_CLI */
+
 

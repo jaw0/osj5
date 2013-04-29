@@ -6,6 +6,7 @@
 
 */
 
+#include <conf.h>
 #include <nstdio.h>
 #include <proc.h>
 #include <arch.h>
@@ -15,9 +16,8 @@
 #include <bootflags.h>
 #include <clock.h>
 #include <nvic.h>
-
-/* NB: stm32f1 + f4 are compat, but at different addrs */
-#include <stm32f10x.h>
+#include <gpio.h>
+#include <stm32.h>
 
 #define SR_TXE	0x80
 #define SR_RXNE 0x20
@@ -55,6 +55,7 @@ struct Com {
     u_char head, tail, len;
 
     u_char status;
+    u_char bauddiv;
 #define COMSTAT_THROTTLED	2	/* we have dropped RTS */
 
     int portno;
@@ -76,11 +77,13 @@ serial_init(struct Device_Conf *dev){
     finit( & com[i].file );
     com[i].file.fs = &serial_port_fs;
     com[i].head = com[i].tail = com[i].len = 0;
-    com[i].status = 0;
-    com[i].portno = i;
+    com[i].status  = 0;
+    com[i].portno  = i;
+    com[i].bauddiv = 1;
     com[i].file.d  = (void*)&com[i];
 
     // enable gpio clock, usart clock, configure pins
+#if defined(PLATFORM_STM32F1)
     switch(i){
     case 0:
         addr = USART1;
@@ -93,6 +96,7 @@ serial_init(struct Device_Conf *dev){
         RCC->APB2ENR |= 0x5;
         RCC->APB1ENR |= 0x20000;
         GPIOA->CRL    = 0x4b00;
+        com[i].bauddiv = 2;
         irq           = (int) IRQ_USART2;
         break;
     case 2:
@@ -100,10 +104,46 @@ serial_init(struct Device_Conf *dev){
         RCC->APB2ENR |= 0x9;
         RCC->APB1ENR |= 0x40000;
         GPIOB->CRH    = 0x4b00;
+        com[i].bauddiv = 2;
         irq           = (int) IRQ_USART3;
         break;
     }
-
+#elif defined(PLATFORM_STM32F4)
+    switch(i){
+    case 0:
+        addr = USART1;
+        irq  = (int) IRQ_USART1;
+        gpio_init( GPIO_A8, GPIO_AF(7) | GPIO_PUSH_PULL );
+        gpio_init( GPIO_A9, GPIO_AF(7) | GPIO_PUSH_PULL );
+        RCC->APB2ENR |= 1<<4;
+        com[i].bauddiv = 2;
+        break;
+    case 1:
+        addr = USART2;
+        irq  = (int) IRQ_USART2;
+        gpio_init( GPIO_A2, GPIO_AF(7) | GPIO_PUSH_PULL );
+        gpio_init( GPIO_A3, GPIO_AF(7) | GPIO_PUSH_PULL );
+        RCC->APB1ENR |= 1<<17;
+        com[i].bauddiv = 4;
+        break;
+    case 2:
+        addr = USART3;
+        irq  = (int) IRQ_USART3;
+        gpio_init( GPIO_B10, GPIO_AF(7) | GPIO_PUSH_PULL );
+        gpio_init( GPIO_B11, GPIO_AF(7) | GPIO_PUSH_PULL );
+        RCC->APB1ENR |= 1<<18;
+        com[i].bauddiv = 4;
+        break;
+    case 3:
+        addr = UART4;
+        irq  = (int) IRQ_UART4;
+        gpio_init( GPIO_A0, GPIO_AF(8) | GPIO_PUSH_PULL );
+        gpio_init( GPIO_A1, GPIO_AF(8) | GPIO_PUSH_PULL );
+        RCC->APB1ENR |= 1<<19;
+        com[i].bauddiv = 4;
+        break;
+    }
+#endif
     com[i].addr   = addr;
 
     if( dev->baud )
@@ -117,8 +157,8 @@ serial_init(struct Device_Conf *dev){
     // enable ints
     nvic_enable( irq, IPL_TTY );
 
-    if( !i ){
-        serial0_port = &com[0].file;
+    if( !serial0_port ){
+        serial0_port = &com[i].file;
     }
 
     bootmsg("%s at io 0x%x irq %d %d baud\n", dev->name, addr, irq, b);
@@ -132,8 +172,7 @@ serial_setbaud(int port, int baud){
     int d, i;
     int plx;
 
-    // XXX different clocks for different ports
-    com[port].addr->BRR = sys_clock_freq() / baud;
+    com[port].addr->BRR = sys_clock_freq() / baud / com[port].bauddiv;;
 }
 
 int
@@ -278,10 +317,10 @@ USART1_IRQHandler(void){
 }
 void
 USART2_IRQHandler(void){
-    //serial_irq(1);
+    serial_irq(1);
 }
 void
 USART3_IRQHandler(void){
-    //serial_irq(2);
+    serial_irq(2);
 }
 
