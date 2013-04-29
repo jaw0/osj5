@@ -1,14 +1,19 @@
 
 CONF_PREFIX = arm-none-eabi-
-CONF_FLAGS  = -mthumb -mcpu=cortex-m4 -O2
+CONF_FLAGS  = -mthumb -mcpu=cortex-m3 -march=armv7-m -mno-thumb-interwork -Os
 
-LINK_FLAGS  = -L/usr/local/arm-none-eabi/lib/thumb -L/usr/local/lib/gcc/arm-none-eabi/4.6.2/thumb/ -lgcc
+INCL_FLAGS  = -I../../src/machdep/arm_cm/stm32f4/inc -I../../src/machdep/arm_cm/stm32/inc -I../../src/machdep/arm_cm/common/inc
+
 LINK_SUFFIX = .elf
 
 AS = $(CONF_PREFIX)as $(CONF_FLAGS)
-LD = $(CONF_PREFIX)ld -T $(LINK_SCRIPT) -X
 CC = $(CONF_PREFIX)gcc $(CONF_FLAGS)
+CXX = $(CONF_PREFIX)g++ $(CONF_FLAGS) -fno-rtti -fconserve-space -fno-exceptions -fno-unwind-tables
 OBJCOPY = $(CONF_PREFIX)objcopy
+
+LINK = $(CONF_PREFIX)gcc
+LINK_FLAGS = -Wl,-T$(LINK_SCRIPT)  -nostartfiles
+LIBS = -lm
 
 CFLAGS = -ffreestanding
 

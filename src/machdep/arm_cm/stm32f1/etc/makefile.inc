@@ -2,6 +2,8 @@
 CONF_PREFIX = arm-none-eabi-
 CONF_FLAGS  = -mthumb -mcpu=cortex-m3 -march=armv7-m -mno-thumb-interwork -Os
 
+INCL_FLAGS  = -I../../src/machdep/arm_cm/stm32f1/inc -I../../src/machdep/arm_cm/stm32/inc -I../../src/machdep/arm_cm/common/inc
+
 LINK_SUFFIX = .elf
 
 AS = $(CONF_PREFIX)as $(CONF_FLAGS)
