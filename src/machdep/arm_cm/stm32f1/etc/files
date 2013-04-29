@@ -1,5 +1,5 @@
 
-kern:   machdep/arm_cm/stm32f1/src/startup.S
+kern:   machdep/arm_cm/stm32/src/startup.S
 kern:   machdep/arm_cm/stm32f1/src/stm32_init.c
 
 gpio:   machdep/arm_cm/stm32/src/gpio.c
