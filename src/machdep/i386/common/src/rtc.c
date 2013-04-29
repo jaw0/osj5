@@ -26,7 +26,7 @@
 utime_t boottime = 0;
 
 #ifdef PLATFORM_EMUL
-struct tm {
+struct emul_tm {
     int     tm_sec;         /* seconds after the minute [0-61] */
     int     tm_min;         /* minutes after the hour [0-59] */
     int     tm_hour;        /* hours since midnight [0-23] */
@@ -103,7 +103,7 @@ rtc_get_time(int port, int verbose){
 
 #ifdef PLATFORM_EMUL
     /* fake it by asking unix */
-    struct tm *tm;
+    struct emul_tm *tm;
     struct timeval tv;
 
     gettimeofday(&tv, 0);
