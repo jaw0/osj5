@@ -21,6 +21,7 @@ extern "C" {
 # include <spi.h>
 # include <i2c.h>
 # include <gpio.h>
+# include <error.h>
 # include <gfxdpy.h>
 # include <strings.h>
 };
@@ -127,6 +128,7 @@ oled_init(struct Device_Conf *dev){
     ii->file.d  = (void*)ii;
 
     if( ii->flag_spi ){
+#ifdef N_SPI
         ii->spicf_cmd.unit  = ii->spicf_dpy.unit  = ii->port;
         ii->spicf_cmd.speed = ii->spicf_dpy.speed = ii->speed;
         ii->spicf_cmd.nss   = ii->spicf_dpy.nss   = 2;
@@ -134,9 +136,21 @@ oled_init(struct Device_Conf *dev){
         ii->spicf_cmd.ss[1] = ii->spicf_dpy.ss[1] = dev->arg[1];
         ii->spicf_dpy.ss[1] |= 0x80;
 
+#if defined(PLATFORM_STM32F1)
         gpio_init( dev->arg[0], GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
         gpio_init( dev->arg[1], GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
+#elif defined(PLATFORM_STM32F4)
+        gpio_init( dev->arg[0], GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_25MHZ );
+        gpio_init( dev->arg[1], GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_25MHZ );
+#endif
         gpio_set( dev->arg[0] );
+#else
+        PANIC("spi cot configured");
+#endif
+    }else{
+#ifndef N_I2C
+        PANIC("i2c not configured");
+#endif
     }
 
     // init dev
@@ -165,15 +179,16 @@ _oled_cmds(OLED *ii, const u_char *cmd, int len){
     int i;
 
     if( ii->flag_spi ){
+#ifdef N_SPI
         spi_msg m;
         m.mode = SPIMO_WRITE;
         m.dlen = len;
         m.data = (char*)cmd;
 
         spi_xfer(& ii->spicf_cmd, 1, &m, 100000);
-
+#endif
     }else{
-
+#ifdef N_I2C
         i2c_msg m;
         m.slave = SSD1306_I2C_ADDR;
         m.clen  = 2;
@@ -184,6 +199,7 @@ _oled_cmds(OLED *ii, const u_char *cmd, int len){
             m.cdata[1] = cmd[i];
             i2c_write1(ii->port, &m);
         }
+#endif
     }
 }
 
@@ -192,14 +208,16 @@ void
 OLED::flush(void){
 
     if( flag_spi ){
+#ifdef N_SPI
         spi_msg m;
         m.mode = SPIMO_WRITE;
         m.dlen = sizeof(dpybuf);
         m.data = (char*)dpybuf;
 
         spi_xfer(& spicf_dpy, 1, &m, 100000);
-
+#endif
     }else{
+#ifdef N_I2C
         i2c_msg m;
         m.slave = SSD1306_I2C_ADDR;
         m.clen = 1;
@@ -212,6 +230,7 @@ OLED::flush(void){
         }else{
             i2c_write1(port, &m);
         }
+#endif
     }
 }
 

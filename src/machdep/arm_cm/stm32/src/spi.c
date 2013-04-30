@@ -117,6 +117,7 @@ spi_init(struct Device_Conf *dev){
 
     bzero(ii, sizeof(struct SPIInfo));
 
+#if defined(PLATFORM_STMF1)
     switch(unit){
     case 0:
         // on ahb2, dma1 chan2+3
@@ -156,6 +157,62 @@ spi_init(struct Device_Conf *dev){
     }
 
     RCC->AHBENR |= 1;	// DMA1
+
+#elif defined(PLATFORM_STM32F4)
+    switch(unit){
+    case 0:
+        // on ahb2, dma1 chan2+3
+        // CLK = A5, MISO = A6, MOSI = A7
+        ii->addr      = addr = SPI1;
+        ii->irq       = IRQ_SPI1;
+        ii->rxdma     = DMA_Channel2;
+        ii->txdma     = DMA_Channel3;
+        ii->clock     = APB2CLOCK;
+        dmairq        = IRQ_DMA1_CHANNEL2;
+        dman          = 2;
+        RCC->APB2ENR |= 1<<12;	// spi
+        gpio_init( GPIO_A5, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_OUTPUT_50MHZ );
+        gpio_init( GPIO_A6, GPIO_AF(5) );
+        gpio_init( GPIO_A7, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_OUTPUT_50MHZ );
+        break;
+    case 1:
+        // on ahb1, dma1 chan 4+5
+        // CLK = B13, MISO = B14, MOSI = B15
+        ii->addr      = addr = SPI2;
+        ii->irq       = IRQ_SPI2;
+        ii->rxdma     = DMA_Channel4;
+        ii->txdma     = DMA_Channel5;
+        ii->clock     = APB1CLOCK;
+        dmairq        = IRQ_DMA1_CHANNEL4;
+        dman          = 4;
+        RCC->APB1ENR |= 1<<14;	// spi
+        gpio_init( GPIO_B13, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_OUTPUT_50MHZ );
+        gpio_init( GPIO_B14, GPIO_AF(5) );
+        gpio_init( GPIO_B15, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_OUTPUT_50MHZ );
+        break;
+    case 2:
+        // on ahb1, dma1 chan 4+5
+        // CLK = B3, MISO = B4, MOSI = B5
+        ii->addr      = addr = SPI3;
+        ii->irq       = IRQ_SPI3;
+        ii->rxdma     = DMA_Channel4;
+        ii->txdma     = DMA_Channel5;
+        ii->clock     = APB1CLOCK;
+        dmairq        = IRQ_DMA1_CHANNEL4;
+        dman          = 4;
+        RCC->APB1ENR |= 1<<15;	// spi
+        gpio_init( GPIO_B3, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_OUTPUT_50MHZ );
+        gpio_init( GPIO_B4, GPIO_AF(6) );
+        gpio_init( GPIO_B5, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_OUTPUT_50MHZ );
+        break;
+    default:
+        // ...
+        PANIC("invalid spi device");
+    }
+
+    RCC->AHB1ENR |= 1<<21;	// DMA1
+
+#endif
 
     addr->CR1 |= CR1_SSM | CR1_SSI | CR1_MSTR;
     addr->CR2 &= ~0xE7;

@@ -44,6 +44,7 @@
 #include <clock.h>
 #include <i2c.h>
 #include <gpio.h>
+#include <nvic.h>
 
 /* NB: stm32f1 + f4 are compat, but at different addrs */
 #include <stm32.h>
@@ -124,6 +125,7 @@ i2c_init(struct Device_Conf *dev){
 
     bzero(i2cinfo+i, sizeof(struct I2CInfo));
 
+#if defined(PLATFORM_STM32F1)
     switch(i){
     case 0:
         // CL=B6, DA=B7
@@ -147,12 +149,39 @@ i2c_init(struct Device_Conf *dev){
         gpio_init( GPIO_B11, GPIO_AF_OUTPUT_OD | GPIO_OUTPUT_10MHZ );
 
         break;
-    case 2:
-        // 3rd on F4
     default:
         PANIC("invalid i2c device");
     }
-
+#elif defined(PLATFORM_STM32F4)
+    switch(i){
+    case 0:
+        // CL=B6, DA=B7
+        i2cinfo[i].addr = addr = I2C1;
+        i2cinfo[i].irq  = IRQ_I2C1_EV;
+        RCC->APB1ENR   |= 1<<21;
+        gpio_init( GPIO_B6, GPIO_AF(4) | GPIO_OPEN_DRAIN | GPIO_SPEED_25MHZ );
+        gpio_init( GPIO_B7, GPIO_AF(4) | GPIO_OPEN_DRAIN | GPIO_SPEED_25MHZ );
+        break;
+    case 1:
+        // CL=B10, DA=B11
+        i2cinfo[i].addr = addr = I2C2;
+        i2cinfo[i].irq  = IRQ_I2C2_EV;
+        RCC->APB1ENR   |= 1<<22;
+        gpio_init( GPIO_B10, GPIO_AF(4) | GPIO_OPEN_DRAIN | GPIO_SPEED_25MHZ );
+        gpio_init( GPIO_B11, GPIO_AF(4) | GPIO_OPEN_DRAIN | GPIO_SPEED_25MHZ );
+        break;
+    case 2:
+        // CL=A8, DA=C9
+        i2cinfo[i].addr = addr = I2C3;
+        i2cinfo[i].irq  = IRQ_I2C3_EV;
+        RCC->APB1ENR   |= 1<<23;
+        gpio_init( GPIO_A8, GPIO_AF(4) | GPIO_OPEN_DRAIN | GPIO_SPEED_25MHZ );
+        gpio_init( GPIO_C9, GPIO_AF(4) | GPIO_OPEN_DRAIN | GPIO_SPEED_25MHZ );
+        break;
+    default:
+        PANIC("invalid i2c device");
+    }
+#endif
     int speed = dev->baud;
     if( !speed ) speed = 100000;
     int fastmode = 0;

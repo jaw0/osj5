@@ -73,7 +73,7 @@ extern void nvic_enable(int irq, int prio);
 #define IRQ_DMA2_CHANNEL2       57
 #define IRQ_DMA2_CHANNEL3       58
 #define IRQ_DMA2_CHANNEL4    	59
-#define IRQ_DMA2_Channel5	60
+#define IRQ_DMA2_CHANNEL5    	59
 #define IRQ_ETH			61
 #define IRQ_ETH_WAKE		62
 #define IRQ_CAN2_TX		63
@@ -81,3 +81,18 @@ extern void nvic_enable(int irq, int prio);
 #define IRQ_CAN2_RX1		65
 #define IRQ_CAN2_SCE		66
 #define IRQ_OTG_FS		67
+#define IRQ_DMA2_CHANNEL6       68
+#define IRQ_DMA2_CHANNEL7       69
+#define IRQ_DMA2_CHANNEL78      70
+#define IRQ_USART6              71
+#define IRQ_I2C3_EV             72
+#define IRQ_I2C3_ER             73
+#define IRQ_OTG_HS_EP1_OUT      74
+#define IRQ_OTG_HS_EP1_IN       75
+#define IRQ_OTG_HS_WKUP         76
+#define IRQ_OTG_HS              77
+#define IRQ_DCMI                78
+#define IRQ_CRYP                79
+#define IRQ_HASH_RNG            80
+#define IRQ_FPU                 81
+

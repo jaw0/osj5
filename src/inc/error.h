@@ -7,6 +7,7 @@
 
 #define PANIC(m)            panic(m, __LINE__, __FILE__)
 
+extern void panic(const char *, int, const char *);
 extern void diag(const char *file, const char *func, int line, const char *fmt, ...);
 
 
