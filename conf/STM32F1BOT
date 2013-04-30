@@ -1,0 +1,94 @@
+#
+# $Id: GENERIC,v 1.7 2001/11/15 22:56:37 jaw Exp $
+#
+
+ident	STM32F1BOT
+
+arch    arm_cm
+variant stm32f1
+
+#option  HSECLOCK        8000000         # external xtal
+#option  SYSCLOCK        72000000        # run system at this speed
+
+option  PROC_TIME       1000
+option  KSTACK_SIZE     2048
+
+feature PROC
+feature NSTDIO
+feature ED			# text editor
+feature CLI			# command line interface
+# feature GDB			# use gdb over serial port if booted with -g
+# feature MOTORS
+
+#feature DDB			# debuging features
+#feature DDB_SYMS		# save symbol table
+option KDEBUG                  # kernel debugging
+
+
+option DEVPREFIX	"dev:"	# prefix for naming device files
+option CHECKPROC		# additional error checking in proc
+
+option GETLINEHIST
+
+################################################################
+
+srcfile         app/bot_init.c
+#srcfile         app/music.c
+srcfile         app/play.c
+srcfile         app/menu.c
+srcfile         app/bot.c
+
+option PROJECT_INIT     init_bot_hw
+option PROJECT_MAIN     main
+
+################################################################
+# FLFS options
+    # what should happen when creating a file that already exists?
+    # rename it, delete it, or keep it
+option RENAMEFILE_ON_CREAT
+# option DELETEFILE_ON_CREAT
+option ENOUGHALREADYHEURISTIC	64
+################################################################
+
+filesys flfs
+# filesys msdosfs
+
+################################################################
+
+#flashdev ram:	type flfs @ 0	size 2048	block 64	flags SSF_NOERASE
+
+################################################################
+
+feature gpio
+feature pwm
+feature adc
+
+################################################################
+
+#device flash
+
+# device name type xxx port xxx addr xxx irq xxx baud xxx flags xxx init xxx args x,x,x,x
+
+device serial0 	baud 57600
+device console
+
+device i2c0     baud 400000
+device spi1     baud 400000
+
+# QQQ
+#device usb0             addr 0x1234
+#device usbdisk0
+#device usbserial0
+
+################################################################
+
+# i2c
+#device oled0  port 0 addr 0x3C flags 0x2 baud 800000
+
+# spi0, CS=GPIO_B10, C/D=GPIO_B11
+device oled0  port 0x81 baud 10000000 flags 2 args 0x1A, 0x1B
+
+################################################################
+
+config  root on ram:
+
