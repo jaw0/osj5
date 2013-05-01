@@ -52,18 +52,28 @@ pwm_init(int timer, int freq, int maxval){
 
     int plx = splhigh();
     int t = timer >> 4;
+#ifdef PLATFORM_STM32F1
     RCC->APB2ENR |= 1;	// AFIO
+#endif
 
     switch( t ){
     case 1:
         // timer1
+#ifdef PLATFORM_STM32F1
         RCC->APB2ENR |= 1 << 11;
+#else
+        RCC->APB2ENR |= 1;
+#endif
         clock = APB2CLOCK;
         tim->BDTR  = 0x8000;	// MOE
         break;
     case 8:
         // timer 8
+#ifdef PLATFORM_STM32F1
         RCC->APB2ENR |= 1 << 13;
+#else
+        RCC->APB2ENR |= 2;
+#endif
         clock = APB2CLOCK;
         tim->BDTR  = 0x8000;	// MOE
         break;
@@ -102,7 +112,7 @@ freq_set(int timer, int freq){
     TIM1_TypeDef *tim = _timer_addr(timer);
 
     int maxval = tim->ARR;
-    int clock = ( timer & 0xF0 == 1) ? APB2CLOCK : APB1CLOCK;
+    int clock = ( (timer>>4) & 0xF == 1) ? APB2CLOCK : APB1CLOCK;
 
     _freq_set(timer, clock, maxval, freq);
 }

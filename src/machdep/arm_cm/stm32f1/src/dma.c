@@ -5,6 +5,15 @@
   Function: stm32f1 dma
 */
 
+#include <conf.h>
+#include <stm32.h>
+#include <nvic.h>
+
+#define CCR_MINC	0x80
+#define CCR_DIR		0x10	// 0: periph=>mem, 1: mem=>periph
+#define CCR_TEIE	0x8
+#define CCR_TCIE	0x2
+#define CCR_EN		0x1
 
 
 struct DMAinfo {
@@ -15,8 +24,9 @@ struct DMAinfo {
 
 dma_init(int unit){
 
-    // rcc
-    // nvic
+    RCC->AHBENR |= 1;
+
+    nvic_enable( dmairq,   IPL_DISK );
 
 }
 
@@ -27,17 +37,16 @@ dma_start(int unit, char *pdev, char *addr, int len, u_long flags, void(*finishe
     dmac->CPAR  = (u_long) pdev;
     dmac->CMAR  = (u_long) addr;
     dmac->CNDTR = len ? len : 65535;
-    dmac->CCR  &= ~ (DMACCR_DIR | DMACCR_MINC);
-    dmac->CCR  |= flags | (len ? DMACCR_TEIE | DMACCR_TCIE : 0);
-    dmac->CCR  |= DMACCR_EN;
+    dmac->CCR  &= ~ (CCR_DIR | CCR_MINC);
+    dmac->CCR  |= flags | (len ? CCR_TEIE | CCR_TCIE : 0);
+    dmac->CCR  |= CCR_EN;
 
 }
 
 void
 dma_disable(int unit){
 
-
-    ii->CCR &= ~( DMACCR_EN | DMACCR_TEIE | DMACCR_TCIE );
+    ii->CCR &= ~( CCR_EN | CCR_TEIE | CCR_TCIE );
 }
 
 

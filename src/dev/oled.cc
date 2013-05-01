@@ -128,7 +128,7 @@ oled_init(struct Device_Conf *dev){
     ii->file.d  = (void*)ii;
 
     if( ii->flag_spi ){
-#ifdef N_SPI
+#ifdef USE_SPI
         ii->spicf_cmd.unit  = ii->spicf_dpy.unit  = ii->port;
         ii->spicf_cmd.speed = ii->spicf_dpy.speed = ii->speed;
         ii->spicf_cmd.nss   = ii->spicf_dpy.nss   = 2;
@@ -148,7 +148,7 @@ oled_init(struct Device_Conf *dev){
         PANIC("spi cot configured");
 #endif
     }else{
-#ifndef N_I2C
+#ifndef USE_I2C
         PANIC("i2c not configured");
 #endif
     }
@@ -179,7 +179,7 @@ _oled_cmds(OLED *ii, const u_char *cmd, int len){
     int i;
 
     if( ii->flag_spi ){
-#ifdef N_SPI
+#ifdef USE_SPI
         spi_msg m;
         m.mode = SPIMO_WRITE;
         m.dlen = len;
@@ -188,7 +188,7 @@ _oled_cmds(OLED *ii, const u_char *cmd, int len){
         spi_xfer(& ii->spicf_cmd, 1, &m, 100000);
 #endif
     }else{
-#ifdef N_I2C
+#ifdef USE_I2C
         i2c_msg m;
         m.slave = SSD1306_I2C_ADDR;
         m.clen  = 2;
@@ -208,7 +208,7 @@ void
 OLED::flush(void){
 
     if( flag_spi ){
-#ifdef N_SPI
+#ifdef USE_SPI
         spi_msg m;
         m.mode = SPIMO_WRITE;
         m.dlen = sizeof(dpybuf);
@@ -217,7 +217,7 @@ OLED::flush(void){
         spi_xfer(& spicf_dpy, 1, &m, 100000);
 #endif
     }else{
-#ifdef N_I2C
+#ifdef USE_I2C
         i2c_msg m;
         m.slave = SSD1306_I2C_ADDR;
         m.clen = 1;

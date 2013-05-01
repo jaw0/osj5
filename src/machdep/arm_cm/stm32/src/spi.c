@@ -16,8 +16,9 @@
 #include <spi.h>
 #include <gpio.h>
 #include <stm32.h>
+#include <nvic.h>
 
-//#define VERBOSE
+#define VERBOSE
 
 
 #define CR1_CRCEN	0x2000
@@ -36,11 +37,21 @@
 #define SR_TXE		0x2
 #define SR_RXNE		0x1
 
+// stm32f1
 #define DMACCR_MINC	0x80
-#define DMACCR_DIR	0x10	// 0: periph=>mem, 1: mem=>periph
+#define DMACCR_DIR_M2P	0x10	// 0: periph=>mem, 1: mem=>periph
 #define DMACCR_TEIE	0x8
 #define DMACCR_TCIE	0x2
 #define DMACCR_EN	0x1
+
+// stm32f4
+#define DMASCR_MINC	(1<<10)
+#define DMASCR_DIR_M2P  (1<<6)
+#define DMASCR_PFCTRL	(1<<5)
+#define DMASCR_TEIE	4
+#define DMASCR_TCIE	16
+#define DMASCR_EN	1
+
 
 #define SPI_STATE_DISABLED          0
 #define SPI_STATE_IDLE              1
@@ -82,12 +93,23 @@ _spi_drop_crumb(const char *event, u_long arg0, u_long arg1) {
 #define SPI_CRUMB(event, arg0, arg1)
 #endif
 
+#if defined(PLATFORM_STM32F1)
+typedef DMA_Channel_TypeDef DMAC_T;
+#elif defined(PLATFORM_STM32F4)
+typedef DMA_Stream_TypeDef DMAC_T;
+#endif
+
 
 struct SPIInfo {
     const char		*name;
     SPI_TypeDef 	*addr;
-    DMA_Channel_TypeDef *rxdma, *txdma;
-    int 	  	irq;
+    DMAC_T 		*rxdma, *txdma;
+#ifdef PLATFORM_STM32F4
+    DMA_TypeDef		*dma;
+    u_char		dmachan;
+#endif
+    u_char		dmanrx, dmantx;
+    u_char 	  	irq;
     int			clock;
 
     lock_t		lock;
@@ -113,11 +135,11 @@ spi_init(struct Device_Conf *dev){
     int unit = dev->unit;
     struct SPIInfo *ii = spiinfo + unit;
     SPI_TypeDef *addr;
-    int dmairq, dman;
+    int dmairqrx, dmairqtx, dmanrx, dmantx;
 
     bzero(ii, sizeof(struct SPIInfo));
 
-#if defined(PLATFORM_STMF1)
+#if defined(PLATFORM_STM32F1)
     switch(unit){
     case 0:
         // on ahb2, dma1 chan2+3
@@ -127,8 +149,10 @@ spi_init(struct Device_Conf *dev){
         ii->rxdma     = DMA_Channel2;
         ii->txdma     = DMA_Channel3;
         ii->clock     = APB2CLOCK;
-        dmairq        = IRQ_DMA1_CHANNEL2;
-        dman          = 2;
+        dmairqrx      = IRQ_DMA1_CHANNEL2;
+        dmairqtx      = IRQ_DMA1_CHANNEL3;
+        ii->dmanrx    = 2;
+        ii->dmantx    = 3;
         RCC->APB2ENR |= 1;	// AFI
         RCC->APB2ENR |= 1<<12;	// spi
         gpio_init( GPIO_A5, GPIO_AF_OUTPUT_PP | GPIO_OUTPUT_50MHZ );
@@ -143,8 +167,10 @@ spi_init(struct Device_Conf *dev){
         ii->rxdma     = DMA_Channel4;
         ii->txdma     = DMA_Channel5;
         ii->clock     = APB1CLOCK;
-        dmairq        = IRQ_DMA1_CHANNEL4;
-        dman          = 4;
+        dmairqrx      = IRQ_DMA1_CHANNEL4;
+        dmairqtx      = IRQ_DMA1_CHANNEL5;
+        ii->dmanrx    = 4;
+        ii->dmantx    = 5;
         RCC->APB2ENR |= 1;	// AFI
         RCC->APB1ENR |= 1<<14;	// spi
         gpio_init( GPIO_B13, GPIO_AF_OUTPUT_PP | GPIO_OUTPUT_50MHZ );
@@ -165,53 +191,67 @@ spi_init(struct Device_Conf *dev){
         // CLK = A5, MISO = A6, MOSI = A7
         ii->addr      = addr = SPI1;
         ii->irq       = IRQ_SPI1;
-        ii->rxdma     = DMA_Channel2;
-        ii->txdma     = DMA_Channel3;
+        ii->rxdma     = DMA2_Stream2;
+        ii->txdma     = DMA2_Stream3;
+        ii->dma	      = DMA2;
         ii->clock     = APB2CLOCK;
-        dmairq        = IRQ_DMA1_CHANNEL2;
-        dman          = 2;
+        dmairqrx      = IRQ_DMA2_STREAM2;
+        dmairqtx      = IRQ_DMA2_STREAM3;
+        ii->dmanrx    = 2;
+        ii->dmantx    = 3;
+        ii->dmachan   = 3;
         RCC->APB2ENR |= 1<<12;	// spi
-        gpio_init( GPIO_A5, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_OUTPUT_50MHZ );
+        RCC->AHB1ENR |= 1<<22;	// DMA2
+        gpio_init( GPIO_A5, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         gpio_init( GPIO_A6, GPIO_AF(5) );
-        gpio_init( GPIO_A7, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_OUTPUT_50MHZ );
+        gpio_init( GPIO_A7, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         break;
     case 1:
         // on ahb1, dma1 chan 4+5
         // CLK = B13, MISO = B14, MOSI = B15
         ii->addr      = addr = SPI2;
         ii->irq       = IRQ_SPI2;
-        ii->rxdma     = DMA_Channel4;
-        ii->txdma     = DMA_Channel5;
-        ii->clock     = APB1CLOCK;
-        dmairq        = IRQ_DMA1_CHANNEL4;
-        dman          = 4;
+        ii->rxdma     = DMA1_Stream3;
+        ii->txdma     = DMA1_Stream4;
+        ii->dma	      = DMA1;
+        ii->clock     = APB2CLOCK;
+        dmairqrx      = IRQ_DMA1_STREAM3;
+        dmairqtx      = IRQ_DMA1_STREAM4;
+        ii->dmanrx    = 3;
+        ii->dmantx    = 4;
+        ii->dmachan   = 0;
         RCC->APB1ENR |= 1<<14;	// spi
-        gpio_init( GPIO_B13, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_OUTPUT_50MHZ );
+        RCC->AHB1ENR |= 1<<21;	// DMA1
+        gpio_init( GPIO_B13, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         gpio_init( GPIO_B14, GPIO_AF(5) );
-        gpio_init( GPIO_B15, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_OUTPUT_50MHZ );
+        gpio_init( GPIO_B15, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         break;
     case 2:
         // on ahb1, dma1 chan 4+5
         // CLK = B3, MISO = B4, MOSI = B5
         ii->addr      = addr = SPI3;
         ii->irq       = IRQ_SPI3;
-        ii->rxdma     = DMA_Channel4;
-        ii->txdma     = DMA_Channel5;
-        ii->clock     = APB1CLOCK;
-        dmairq        = IRQ_DMA1_CHANNEL4;
-        dman          = 4;
+        ii->rxdma     = DMA1_Stream2;
+        ii->txdma     = DMA1_Stream5;
+        ii->dma	      = DMA1;
+        ii->clock     = APB2CLOCK;
+        dmairqrx      = IRQ_DMA1_STREAM2;
+        dmairqtx      = IRQ_DMA1_STREAM5;
+        ii->dmanrx    = 2;
+        ii->dmantx    = 5;
+        ii->dmachan   = 0;
         RCC->APB1ENR |= 1<<15;	// spi
-        gpio_init( GPIO_B3, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_OUTPUT_50MHZ );
+        RCC->AHB1ENR |= 1<<21;	// DMA1
+        gpio_init( GPIO_B3, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         gpio_init( GPIO_B4, GPIO_AF(6) );
-        gpio_init( GPIO_B5, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_OUTPUT_50MHZ );
+        gpio_init( GPIO_B5, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         break;
     default:
         // ...
         PANIC("invalid spi device");
     }
-
-    RCC->AHB1ENR |= 1<<21;	// DMA1
-
+#else
+#  error "unknown platform"
 #endif
 
     addr->CR1 |= CR1_SSM | CR1_SSI | CR1_MSTR;
@@ -220,14 +260,14 @@ spi_init(struct Device_Conf *dev){
     int speed = set_speed(ii, dev->baud);
 
     nvic_enable( ii->irq,  IPL_DISK );
-    nvic_enable( dmairq,   IPL_DISK );	// rx
-    nvic_enable( dmairq+1, IPL_DISK );	// tx
+    nvic_enable( dmairqrx, IPL_DISK );
+    nvic_enable( dmairqtx, IPL_DISK );
 
     ii->name  = dev->name;
     ii->state = SPI_STATE_IDLE;
 
     bootmsg("%s at io 0x%x irq %d dma %d+%d speed %dkHz\n",
-            dev->name, ii->addr, ii->irq, dman, dman+1, speed/1000);
+            dev->name, ii->addr, ii->irq, ii->dmanrx, ii->dmantx, speed/1000);
 
     return 0;
 }
@@ -288,6 +328,129 @@ _spi_cspins(const struct SPIConf *cf, int on){
     }
 }
 
+/****************************************************************/
+
+#if defined(PLATFORM_STM32F1)
+
+static inline void
+_disable_irq_dma(struct SPIInfo *ii){
+    SPI_TypeDef *dev = ii->addr;
+
+    dev->CR2 &= ~( CR2_TXEIE | CR2_RXNEIE | CR2_TXDMAEN | CR2_RXDMAEN );
+    ii->rxdma->CCR &= ~(DMACCR_EN | DMACCR_TEIE | DMACCR_TCIE );
+    ii->txdma->CCR &= ~(DMACCR_EN | DMACCR_TEIE | DMACCR_TCIE );
+}
+
+static void
+_dma_conf(DMAC_T *dmac, char *pdev, char *addr, int len, u_long flags){
+
+    dmac->CPAR  = (u_long) pdev;
+    dmac->CMAR  = (u_long) addr;
+    dmac->CNDTR = len ? len : 65535;
+    dmac->CCR  &= ~ (DMACCR_DIR_M2P | DMACCR_MINC);
+    dmac->CCR  |= flags | (len ? DMACCR_TEIE | DMACCR_TCIE : 0);
+    dmac->CCR  |= DMACCR_EN;
+}
+
+
+static void
+_dma_enable_read(struct SPIInfo *ii){
+    SPI_TypeDef *dev = ii->addr;
+
+    SPI_CRUMB("en-dma/r", 0, 0);
+    // rx dma to buffer; tx dummy
+    _dma_conf( ii->rxdma, (char*)& dev->DR, ii->msg->data, ii->msg->dlen, DMACCR_MINC );
+    _dma_conf( ii->txdma, (char*)& dev->DR, &dma_idle_source, 0, DMACCR_DIR_M2P );
+
+    dev->CR2 |= CR2_TXDMAEN | CR2_RXDMAEN;
+}
+
+static void
+_dma_enable_write(struct SPIInfo *ii){
+    SPI_TypeDef *dev = ii->addr;
+
+    SPI_CRUMB("en-dma/w", 0, 0);
+    // tx dma from buffer, rx discard
+    _dma_conf( ii->txdma, (char*)& dev->DR, ii->msg->data, ii->msg->dlen, DMACCR_MINC | DMACCR_DIR_M2P );
+    _dma_conf( ii->rxdma, (char*)& dev->DR, &dma_idle_sink, 0, 0 );
+
+    dev->CR2 |= CR2_TXDMAEN | CR2_RXDMAEN;
+}
+
+/****************************************************************/
+
+#elif defined(PLATFORM_STM32F4)
+
+static inline int
+_dma_isr_clear_irqs(DMA_TypeDef *dma, int dman){
+    int isr;
+    int pos = (dman & 3) * 8 - (dman & 1) * 2;	// not aligned
+
+    if( dman > 3 ){
+        isr = (dma->LISR >> pos) & 0x3F;
+        dma->HIFCR |= (0x3D << pos);
+    }else{
+        isr = (dma->LISR >> pos) & 0x3F;
+        dma->LIFCR |= (0x3D << pos);
+    }
+
+    return isr;
+}
+
+static inline void
+_disable_irq_dma(struct SPIInfo *ii){
+    SPI_TypeDef *dev = ii->addr;
+
+    dev->CR2 &= ~( CR2_TXEIE | CR2_RXNEIE | CR2_TXDMAEN | CR2_RXDMAEN );
+    ii->rxdma->CR &= ~(DMASCR_EN | DMASCR_TEIE | DMASCR_TCIE);
+    ii->txdma->CR &= ~(DMASCR_EN | DMASCR_TEIE | DMASCR_TCIE);
+}
+
+static void
+_dma_conf(DMAC_T *dmac, int chan, char *pdev, char *addr, int len, u_long flags){
+
+    dmac->PAR   = (u_long) pdev;
+    dmac->M0AR  = (u_long) addr;
+    dmac->NDTR  = len ? len : 65535;
+    dmac->CR   &= ~1;	// clear EN first
+    dmac->CR   &= (0xF<<28) | (1<<20);
+    dmac->CR   |= flags | (len ? DMASCR_TEIE | DMASCR_TCIE : 0) | (chan << 25);
+
+    dmac->CR   |= DMASCR_EN;
+
+}
+
+static void
+_dma_enable_read(struct SPIInfo *ii){
+    SPI_TypeDef *dev = ii->addr;
+
+    SPI_CRUMB("en-dma/r", 0, 0);
+    // rx dma to buffer; tx dummy
+    _dma_isr_clear_irqs( ii->dma, ii->dmanrx );
+    _dma_isr_clear_irqs( ii->dma, ii->dmantx );
+    _dma_conf( ii->rxdma, ii->dmachan, (char*)& dev->DR, ii->msg->data, ii->msg->dlen, DMASCR_MINC );
+    _dma_conf( ii->txdma, ii->dmachan, (char*)& dev->DR, &dma_idle_source, 0, DMASCR_DIR_M2P );
+
+    dev->CR2 |= CR2_TXDMAEN | CR2_RXDMAEN;
+}
+
+static void
+_dma_enable_write(struct SPIInfo *ii){
+    SPI_TypeDef *dev = ii->addr;
+
+    SPI_CRUMB("en-dma/w", 0, 0);
+    // tx dma from buffer, rx discard
+    _dma_isr_clear_irqs( ii->dma, ii->dmanrx );
+    _dma_isr_clear_irqs( ii->dma, ii->dmantx );
+    _dma_conf( ii->txdma, ii->dmachan, (char*)& dev->DR, ii->msg->data, ii->msg->dlen, DMASCR_MINC | DMASCR_DIR_M2P );
+    _dma_conf( ii->rxdma, ii->dmachan, (char*)& dev->DR, &dma_idle_sink, 0, 0 );
+
+    dev->CR2 |= CR2_TXDMAEN | CR2_RXDMAEN;
+}
+
+#else
+#  error "unknown platform"
+#endif
 
 /****************************************************************/
 
@@ -297,15 +460,6 @@ _spi_enable_irq(struct SPIInfo *ii){
 
     SPI_CRUMB("irq-en", 0, 0);
     dev->CR2 |= CR2_TXEIE | CR2_RXNEIE;
-}
-
-static inline void
-_disable_irq_dma(struct SPIInfo *ii){
-    SPI_TypeDef *dev = ii->addr;
-
-    dev->CR2 &= ~( CR2_TXEIE | CR2_RXNEIE | CR2_TXDMAEN | CR2_RXDMAEN );
-    ii->rxdma->CCR &= ~(DMACCR_EN | DMACCR_TEIE | DMACCR_TCIE );
-    ii->txdma->CCR &= ~(DMACCR_EN | DMACCR_TEIE | DMACCR_TCIE );
 }
 
 static inline void
@@ -342,43 +496,6 @@ _spi_conf_done(const struct SPIConf *cf, struct SPIInfo *ii){
 }
 
 /****************************************************************/
-
-
-static void
-_dma_conf(DMA_Channel_TypeDef *dmac, char *pdev, char *addr, int len, u_long flags){
-
-    dmac->CPAR  = (u_long) pdev;
-    dmac->CMAR  = (u_long) addr;
-    dmac->CNDTR = len ? len : 65535;
-    dmac->CCR  &= ~ (DMACCR_DIR | DMACCR_MINC);
-    dmac->CCR  |= flags | (len ? DMACCR_TEIE | DMACCR_TCIE : 0);
-    dmac->CCR  |= DMACCR_EN;
-}
-
-
-static void
-_dma_enable_read(struct SPIInfo *ii){
-    SPI_TypeDef *dev = ii->addr;
-
-    SPI_CRUMB("en-dma/r", 0, 0);
-    // rx dma to buffer; tx dummy
-    _dma_conf( ii->rxdma, (char*)& dev->DR, ii->msg->data, ii->msg->dlen, DMACCR_MINC );
-    _dma_conf( ii->txdma, (char*)& dev->DR, &dma_idle_source, 0, DMACCR_DIR );
-
-    dev->CR2 |= CR2_TXDMAEN | CR2_RXDMAEN;
-}
-
-static void
-_dma_enable_write(struct SPIInfo *ii){
-    SPI_TypeDef *dev = ii->addr;
-
-    SPI_CRUMB("en-dma/w", 0, 0);
-    // tx dma from buffer, rx discard
-    _dma_conf( ii->txdma, (char*)& dev->DR, ii->msg->data, ii->msg->dlen, DMACCR_MINC | DMACCR_DIR );
-    _dma_conf( ii->rxdma, (char*)& dev->DR, &dma_idle_sink, 0, 0 );
-
-    dev->CR2 |= CR2_TXDMAEN | CR2_RXDMAEN;
-}
 
 static void
 _msg_abort(struct SPIInfo *ii){
@@ -468,12 +585,12 @@ _msg_next_msg(struct SPIInfo *ii){
 }
 
 
-_irq_spidma_handler(int unit, int dman, DMA_Channel_TypeDef *dmac){
+_irq_spidma_handler(int unit, int dman, DMAC_T *dmac){
     struct SPIInfo *ii = spiinfo + unit;
     SPI_TypeDef *dev   = ii->addr;
     spi_msg *m = ii->msg;
 
-
+#if defined(PLATFORM_STM32F1)
     // get status, clear irq
     int pos = 4 * (dman - 1);
     int isr = (DMA->ISR >> pos) & 0xF;
@@ -481,7 +598,7 @@ _irq_spidma_handler(int unit, int dman, DMA_Channel_TypeDef *dmac){
     SPI_CRUMB("dma-irq", dman, isr);
 
     // clear irq
-    DMA->IFCR &= ~ (0xF<<pos);
+    DMA->IFCR |= (0xF<<pos);
 
     if( isr & 8 ){
         // error - done
@@ -499,6 +616,30 @@ _irq_spidma_handler(int unit, int dman, DMA_Channel_TypeDef *dmac){
             _msg_next_msg(ii);
         }
     }
+#elif defined(PLATFORM_STM32F4)
+
+    int isr = _dma_isr_clear_irqs( ii->dma, dman );
+    SPI_CRUMB("dma-irq", dman, isr);
+
+    if( isr & 8 ){
+        // error - done
+        SPI_CRUMB("dma-err", 0, 0);
+        _disable_irq_dma(ii);
+        _msg_abort(ii);
+        return;
+    }
+
+    if( isr & 0x20 ){
+        // dma complete
+        if( m && ((u_long)m->data == dmac->M0AR) && ! dmac->NDTR ){
+            SPI_CRUMB("dma-done", ii->msg, 0);
+            _disable_irq_dma(ii);
+            _msg_next_msg(ii);
+        }
+    }
+#else
+#  error "unknown platform"
+#endif
 }
 
 _irq_spi_handler(int unit){
@@ -686,10 +827,21 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
 void SPI1_IRQHandler(void){ _irq_spi_handler(0); }
 void SPI2_IRQHandler(void){ _irq_spi_handler(1); }
 // the handlers are named 0-6. everything else uses 1-7
+// (spi-unit, dma-stream, dmac_t)
+#if defined(PLATFORM_STM32F1)
 void DMA1_Stream1_IRQHandler(void){ _irq_spidma_handler(0, 2, DMA_Channel2); }
 void DMA1_Stream2_IRQHandler(void){ _irq_spidma_handler(0, 3, DMA_Channel3); }
 void DMA1_Stream3_IRQHandler(void){ _irq_spidma_handler(1, 4, DMA_Channel4); }
 void DMA1_Stream4_IRQHandler(void){ _irq_spidma_handler(1, 5, DMA_Channel5); }
-
+#elif defined(PLATFORM_STM32F4)
+void DMA1_Stream2_IRQHandler(void){ _irq_spidma_handler(2, 2, DMA1_Stream2); }
+void DMA1_Stream3_IRQHandler(void){ _irq_spidma_handler(1, 3, DMA1_Stream3); }
+void DMA1_Stream4_IRQHandler(void){ _irq_spidma_handler(1, 4, DMA1_Stream4); }
+void DMA1_Stream5_IRQHandler(void){ _irq_spidma_handler(2, 5, DMA1_Stream5); }
+void DMA2_Stream2_IRQHandler(void){ _irq_spidma_handler(0, 2, DMA2_Stream2); }
+void DMA2_Stream3_IRQHandler(void){ _irq_spidma_handler(0, 3, DMA2_Stream3); }
+#else
+#  error "unknown platform"
+#endif
 
 /****************************************************************/
