@@ -37,7 +37,6 @@ feature gpio
 
 ################################################################
 
-#device flash
 
 # device name type xxx port xxx addr xxx irq xxx baud xxx flags xxx init xxx args x,x,x,x
 
@@ -52,9 +51,21 @@ device spi0     baud 400000
 ################################################################
 
 # i2c
-device oled0  port 0 addr 0x3C flags 0x2 baud 800000
+device oled0  type ssd1306 port 0 addr 0x3C flags 0x2 baud 800000
 
 # spi0, CS=GPIO_A3, C/D=GPIO_A4
-device oled1  port 0x80 baud 36000000 flags 0x1 args 0x3, 0x4
+device oled1  type ssd1306 port 0x80 baud 36000000 flags 0x1 args 0x3, 0x4
 
+# spi0, CS=GPIO_A2, C/D=GPIO_A4
+device oled2  type ssd1331 unit 0 port 0x80 baud 36000000 args 0x2, 0x4
+
+
+################################################################
+
+filesys         fatfs
+device sd0      type sdcard port 0 baud 500000 args 0x2
+
+################################################################
+
+config  root on sd0:  startup in startup.rc
 

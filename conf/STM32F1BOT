@@ -86,7 +86,7 @@ device spi1     baud 400000
 #device oled0  port 0 addr 0x3C flags 0x2 baud 800000
 
 # spi0, CS=GPIO_B10, C/D=GPIO_B11
-device oled0  port 0x81 baud 10000000 flags 2 args 0x1A, 0x1B
+device oled0  type ssd1306 port 0x81 baud 10000000 flags 2 args 0x1A, 0x1B
 
 ################################################################
 
