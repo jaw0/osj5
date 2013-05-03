@@ -6,9 +6,6 @@
 
 */
 
-/* XXX - we currently only support 1 device
-   need config features for more */
-
 extern "C" {
 # include <conf.h>
 # include <proc.h>
