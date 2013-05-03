@@ -59,8 +59,9 @@ static const u_char ssd1306_64_init[] = {
 
 static const u_char ssd1306_32_init[] = {
     0xAE, 0xD5, 0x80, 0xA8, 0x1F, 0xD3, 0x00, 0x40, 0x8D, 0x14, 0x20, 0x00, 0xA1,
-    0xC8, 0xDA, 0x02, 0x81, 0x8F, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6, 0xAF,
-    //0x22, 0x00, 0x03
+    0xC8, 0xDA, 0x02, 0x81, 0x8F, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6,
+    0x22, 0x00, 0x03,
+    0xAF
 };
 
 static const u_char ssd1306_origin[] = { 0x00, 0x10, 0x40 };
@@ -83,9 +84,7 @@ public:
     struct SPIConf spicf_dpy;
     struct SPIConf spicf_cmd;
 
-    // the 128x32 needs to be sent 128x64
-    // use a full size buffer, or send twice?
-    u_char dpybuf[ 128 * 64 / 8 ];
+    u_char *dpybuf;
 
     virtual void flush(void);
     virtual void _set_pixel(int, int, int);
@@ -155,6 +154,8 @@ ssd1306_init(struct Device_Conf *dev){
 #endif
     }
 
+    ii->dpybuf = (u_char*)alloc(ii->_width * ii->_height / 8);
+
     // init dev
     if( ii->_height == 64 )
         _ssd1306_cmds( ii, ssd1306_64_init, sizeof(ssd1306_64_init) );
@@ -213,7 +214,7 @@ SSD1306::flush(void){
 #ifdef USE_SPI
         spi_msg m;
         m.mode = SPIMO_WRITE;
-        m.dlen = sizeof(dpybuf);
+        m.dlen = _height * _width / 8;
         m.data = (char*)dpybuf;
 
         spi_xfer(& spicf_dpy, 1, &m, 100000);
@@ -224,7 +225,7 @@ SSD1306::flush(void){
         m.slave = SSD1306_I2C_ADDR;
         m.clen = 1;
         m.cdata[0] = 0x40;
-        m.dlen = sizeof(dpybuf);
+        m.dlen = _height * _width / 8;
         m.data = (char*)dpybuf;
 
         if( currproc ){
@@ -268,7 +269,7 @@ SSD1306::_get_pixel(int px, int py){
 
 void
 SSD1306::clear_screen(void){
-    bzero(dpybuf, sizeof(dpybuf));
+    bzero(dpybuf, _height * _width / 8);
 }
 
 //****************************************************************
@@ -290,6 +291,8 @@ ssd13060_puts(const char *s){
 static void
 _ssd1306_logo(SSD1306 *ii){
     extern const char *ident;
+
+    ii->clear_screen();
 
     if( ii->flag_32high ){
         _ssd1306_puts(ii, "\e[17mOS/J5       \x8F\r\n\e[15m" );
