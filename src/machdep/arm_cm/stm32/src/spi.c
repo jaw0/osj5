@@ -203,7 +203,7 @@ spi_init(struct Device_Conf *dev){
         RCC->APB2ENR |= 1<<12;	// spi
         RCC->AHB1ENR |= 1<<22;	// DMA2
         gpio_init( GPIO_A5, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
-        gpio_init( GPIO_A6, GPIO_AF(5) );
+        gpio_init( GPIO_A6, GPIO_AF(5) | GPIO_PULL_UP );
         gpio_init( GPIO_A7, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         break;
     case 1:
@@ -223,7 +223,7 @@ spi_init(struct Device_Conf *dev){
         RCC->APB1ENR |= 1<<14;	// spi
         RCC->AHB1ENR |= 1<<21;	// DMA1
         gpio_init( GPIO_B13, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
-        gpio_init( GPIO_B14, GPIO_AF(5) );
+        gpio_init( GPIO_B14, GPIO_AF(5) | GPIO_PULL_UP );
         gpio_init( GPIO_B15, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         break;
     case 2:
@@ -243,7 +243,7 @@ spi_init(struct Device_Conf *dev){
         RCC->APB1ENR |= 1<<15;	// spi
         RCC->AHB1ENR |= 1<<21;	// DMA1
         gpio_init( GPIO_B3, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
-        gpio_init( GPIO_B4, GPIO_AF(6) );
+        gpio_init( GPIO_B4, GPIO_AF(6) | GPIO_PULL_UP );
         gpio_init( GPIO_B5, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         break;
     default:
