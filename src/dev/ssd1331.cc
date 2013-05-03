@@ -140,7 +140,7 @@ ssd1331_init(struct Device_Conf *dev){
 
     _ssd1331_logo( ii );
 
-    bootmsg("%s at spi%d size %dx%d\n", dev->name, ii->port, ii->_width, ii->_height);
+    bootmsg("%s at spi%d size %dx%d color\n", dev->name, ii->port, ii->_width, ii->_height);
 
     return (int) &ssd1331info[unit].file;
 }
