@@ -292,7 +292,7 @@ _ssd1306_logo(SSD1306 *ii){
     extern const char *ident;
 
     if( ii->flag_32high ){
-        _ssd1306_puts(ii, "\e[17mOS/J5     \x8F\r\n\e[15m" );
+        _ssd1306_puts(ii, "\e[17mOS/J5       \x8F\r\n\e[15m" );
         _ssd1306_puts(ii, ident);
         _ssd1306_puts(ii, "\r\n\e[0m");
     }else{
