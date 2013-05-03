@@ -78,12 +78,23 @@ sdcard_init(struct Device_Conf *dev){
     ii->spicf.nss   = 1;
     ii->spicf.ss[0] = dev->arg[0];
 
+    // XXX - this doesn't really belong here
+#if defined(PLATFORM_STM32F1)
     gpio_init( dev->arg[0], GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
     gpio_set( dev->arg[0] );
+#elif defined(PLATFORM_STM32F4)
+    gpio_init( dev->arg[0], GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_25MHZ );
+    gpio_set( dev->arg[0] );
+#else
+#  error "unknown platform"
+#endif
 
     int r = initialize_card(ii);
 
     if( !r ) return 0;	/* no card installed */
+
+    //hexdump(ii->sdcid, 16);
+    //hexdump(ii->sdcsd, 16);
 
     ii->spicf.speed = dev->baud ? dev->baud : 25000000;
 
