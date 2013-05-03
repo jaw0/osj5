@@ -32,18 +32,18 @@ extern "C" {
 #define CONF_FLAG_HEIGHT32	0x2
 
 
-int oled_putchar(FILE*, char);
-int oled_getchar(FILE*);
-int oled_noop(FILE*);
-int oled_status(FILE*);
-int oled_flush(FILE*);
+int ssd1306_putchar(FILE*, char);
+int ssd1306_getchar(FILE*);
+int ssd1306_noop(FILE*);
+int ssd1306_status(FILE*);
+int ssd1306_flush(FILE*);
 
-const struct io_fs oled_port_fs = {
-    oled_putchar,
-    oled_getchar,
-    oled_noop,	// close
-    oled_flush,
-    oled_status,
+const struct io_fs ssd1306_port_fs = {
+    ssd1306_putchar,
+    ssd1306_getchar,
+    ssd1306_noop,	// close
+    ssd1306_flush,
+    ssd1306_status,
     0,
     0,
     0,
@@ -52,24 +52,25 @@ const struct io_fs oled_port_fs = {
     0
 };
 
-static const u_char oled64_init[] = {
+static const u_char ssd1306_64_init[] = {
     0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40, 0x8D, 0x14, 0x20, 0x00, 0xA1,
     0xC8, 0xDA, 0x12, 0x81, 0xCF, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6, 0xAF
 };
 
-static const u_char oled32_init[] = {
+static const u_char ssd1306_32_init[] = {
     0xAE, 0xD5, 0x80, 0xA8, 0x1F, 0xD3, 0x00, 0x40, 0x8D, 0x14, 0x20, 0x00, 0xA1,
-    0xC8, 0xDA, 0x02, 0x81, 0x8F, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6, 0xAF
+    0xC8, 0xDA, 0x02, 0x81, 0x8F, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6, 0xAF,
+    //0x22, 0x00, 0x03
 };
 
-static const u_char oled_origin[] = { 0x00, 0x10, 0x40 };
-static const u_char oled_invert[] = { 0xA7 };
-static const u_char oled_normal[] = { 0xA6 };
+static const u_char ssd1306_origin[] = { 0x00, 0x10, 0x40 };
+static const u_char ssd1306_invert[] = { 0xA7 };
+static const u_char ssd1306_normal[] = { 0xA6 };
 
 
 //****************************************************************
 
-class OLED : public GFXdpy {
+class SSD1306 : public GFXdpy {
 public:
     FILE 	file;
     int  	addr;
@@ -90,21 +91,22 @@ public:
     virtual void _set_pixel(int, int, int);
     virtual int  _get_pixel(int, int);
     virtual void clear_screen(void);
+    virtual void set_colors(void);
 
-}  oledinfo[ N_OLED ];
+}  ssd1306info[ N_SSD1306 ];
 
 
 
-static void _oled_cmds(OLED *, const u_char *, int);
-static void _oled_flush(OLED *);
-static void _oled_logo(OLED *);
+static void _ssd1306_cmds(SSD1306 *, const u_char *, int);
+static void _ssd1306_flush(SSD1306 *);
+static void _ssd1306_logo(SSD1306 *);
 
 //****************************************************************
 
 extern "C" int
-oled_init(struct Device_Conf *dev){
+ssd1306_init(struct Device_Conf *dev){
     int unit = dev->unit;
-    OLED *ii = oledinfo + unit;
+    SSD1306 *ii = ssd1306info + unit;
 
     ii->init();
 
@@ -123,8 +125,8 @@ oled_init(struct Device_Conf *dev){
     if( ii->flag_upsdown )
         ii->set_orientation( GFX_ORIENT_180 );
 
-    finit( & oledinfo[unit].file );
-    oledinfo[unit].file.fs = &oled_port_fs;
+    finit( & ssd1306info[unit].file );
+    ssd1306info[unit].file.fs = &ssd1306_port_fs;
     ii->file.d  = (void*)ii;
 
     if( ii->flag_spi ){
@@ -155,11 +157,11 @@ oled_init(struct Device_Conf *dev){
 
     // init dev
     if( ii->_height == 64 )
-        _oled_cmds( ii, oled64_init, sizeof(oled64_init) );
+        _ssd1306_cmds( ii, ssd1306_64_init, sizeof(ssd1306_64_init) );
     else
-        _oled_cmds( ii, oled32_init, sizeof(oled32_init) );
+        _ssd1306_cmds( ii, ssd1306_32_init, sizeof(ssd1306_32_init) );
 
-    _oled_logo( ii );
+    _ssd1306_logo( ii );
 
     if( ii->flag_spi )
         bootmsg("%s at spi%d size %dx%d\n", dev->name, ii->port, ii->_width, ii->_height);
@@ -167,7 +169,7 @@ oled_init(struct Device_Conf *dev){
         bootmsg("%s at i2c%d size %dx%d\n", dev->name, ii->port, ii->_width, ii->_height);
 
 
-    return (int) &oledinfo[unit].file;
+    return (int) &ssd1306info[unit].file;
 }
 
 
@@ -175,7 +177,7 @@ oled_init(struct Device_Conf *dev){
 
 
 static void
-_oled_cmds(OLED *ii, const u_char *cmd, int len){
+_ssd1306_cmds(SSD1306 *ii, const u_char *cmd, int len){
     int i;
 
     if( ii->flag_spi ){
@@ -205,7 +207,7 @@ _oled_cmds(OLED *ii, const u_char *cmd, int len){
 
 // flush display buffer to device
 void
-OLED::flush(void){
+SSD1306::flush(void){
 
     if( flag_spi ){
 #ifdef USE_SPI
@@ -237,7 +239,18 @@ OLED::flush(void){
 //****************************************************************
 
 void
-OLED::_set_pixel(int px, int py, int val){
+SSD1306::set_colors(void){
+    color_bg = 0;
+    color_fg = (text_attr & ATTR_FAINT) ? 0x7f7f7f : 0xffffff;
+}
+
+void
+SSD1306::_set_pixel(int px, int py, int val){
+
+    if( val && !(val & 0x808080) ){
+        // dither
+        if( (px+py)&1 ) val = 0;
+    }
 
     if( val )
         dpybuf[ (py / 8) * _width + px ] |= 1 <<(py & 7);
@@ -247,45 +260,45 @@ OLED::_set_pixel(int px, int py, int val){
 }
 
 int
-OLED::_get_pixel(int px, int py){
+SSD1306::_get_pixel(int px, int py){
 
     int pl = dpybuf[ (py / 8) * _width + px ];
-    return (pl & (1<<(py&7))) ? 1 : 0;
+    return (pl & (1<<(py&7))) ? 0xFFFFFF : 0;
 }
 
 void
-OLED::clear_screen(void){
+SSD1306::clear_screen(void){
     bzero(dpybuf, sizeof(dpybuf));
 }
 
 //****************************************************************
 
 static void
-_oled_puts(OLED *ii, const char *s){
+_ssd1306_puts(SSD1306 *ii, const char *s){
 
     while( *s )
         ii->putchar(*s ++);
 }
 
 extern "C" void
-oled0_puts(const char *s){
-    OLED *ii = oledinfo;
+ssd13060_puts(const char *s){
+    SSD1306 *ii = ssd1306info;
     while( *s )
         ii->putchar(*s ++);
 }
 
 static void
-_oled_logo(OLED *ii){
+_ssd1306_logo(SSD1306 *ii){
     extern const char *ident;
 
     if( ii->flag_32high ){
-        _oled_puts(ii, "\e[17mOS/J5     \x8F\r\n\e[15m" );
-        _oled_puts(ii, ident);
-        _oled_puts(ii, "\r\n\e[0m");
+        _ssd1306_puts(ii, "\e[17mOS/J5     \x8F\r\n\e[15m" );
+        _ssd1306_puts(ii, ident);
+        _ssd1306_puts(ii, "\r\n\e[0m");
     }else{
-        _oled_puts(ii, "\e[16m\e[2sOS/J5\r\n\e[0s" );
-        _oled_puts(ii, ident);
-        _oled_puts(ii, "\r\nstarting...\r\n\e[0m");
+        _ssd1306_puts(ii, "\e[16m\e[2sOS/J5\r\n\e[0s" );
+        _ssd1306_puts(ii, ident);
+        _ssd1306_puts(ii, "\r\nstarting...\r\n\e[0m");
     }
     ii->flush();
 }
@@ -293,8 +306,8 @@ _oled_logo(OLED *ii){
 /*****************************************************************/
 
 int
-oled_putchar(FILE *f, char ch){
-    OLED *ii = (OLED*)f->d;
+ssd1306_putchar(FILE *f, char ch){
+    SSD1306 *ii = (SSD1306*)f->d;
 
     if( ch == 0x0B ){
         ii->flush();
@@ -310,24 +323,24 @@ oled_putchar(FILE *f, char ch){
 }
 
 int
-oled_flush(FILE *f){
-    OLED *ii = (OLED*)f->d;
+ssd1306_flush(FILE *f){
+    SSD1306 *ii = (SSD1306*)f->d;
 
     ii->flush();
 }
 
 int
-oled_getchar(FILE *f){
+ssd1306_getchar(FILE *f){
     return -1;
 }
 
 int
-oled_noop(FILE*f){
+ssd1306_noop(FILE*f){
     return 1;
 }
 
 int
-oled_status(FILE*f){
+ssd1306_status(FILE*f){
     return FST_O;
 }
 

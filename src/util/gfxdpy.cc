@@ -61,12 +61,6 @@ static const Font fonts[] = {
 };
 
 
-
-#define ATTR_REVERSE	1
-#define ATTR_ULINE	2
-#define ATTR_STRIKE	4
-#define ATTR_FAINT	8
-
 #define GOTESC		0x100
 #define GOTBRACK	0x200
 
@@ -79,6 +73,9 @@ GFXdpy::init(void){
     orientation = cx = cy = text_attr = text_flags = x3_argn = x3_mode = 0;
     text_scale = 1;
     font = fonts + 0;
+    text_fg  = 7;
+    text_bg  = 0;
+    set_colors();
 }
 
 void
@@ -127,7 +124,7 @@ GFXdpy::scroll_horiz(int ya, int yz, int dx){
                 set_pixel(x, ya, pix);
             }
             for(x=width-dx; x<width; x++)
-                set_pixel(x, ya, 0);
+                set_pixel(x, ya, color_bg);
         }
     }else{
         dx = - dx;
@@ -137,7 +134,7 @@ GFXdpy::scroll_horiz(int ya, int yz, int dx){
                 set_pixel(x, ya, pix);
             }
             for(x=0; x<dx; x++)
-                set_pixel(x, ya, 0);
+                set_pixel(x, ya, color_bg);
         }
     }
 }
@@ -190,7 +187,7 @@ GFXdpy::get_pixel(int x, int y){
         break;
     }
 
-    if( px >= _width || py >= _height || px < 0 || py < 0 ) return 0;
+    if( px >= _width || py >= _height || px < 0 || py < 0 ) return color_bg;
     return _get_pixel(px, py);
 }
 
@@ -227,10 +224,10 @@ GFXdpy::render_glyph(int ch){
             int pix = gl & (1<<(y/text_scale));
             if( text_attr & ATTR_ULINE  && y == h-1) pix = 1;
             if( text_attr & ATTR_STRIKE && y == h/2) pix = 1;
-            if( text_attr & ATTR_FAINT  && (x+y)&1 ) pix = 0;
             if( text_attr & ATTR_REVERSE ) pix = ! pix;
 
-            set_pixel(x + cx, y + cy, pix);
+            pix = pix ? color_fg : color_bg;
+            set_pixel(x + cx, y + cy, pix );
         }
     }
 }
@@ -325,15 +322,42 @@ GFXdpy::putchar(int ch){
 
     case 'm' | GOTBRACK:
         switch(x3_arg[0]){
-        case 0:	 text_attr  = 0; font = fonts;	break;	// reset
-        case 2:  text_attr |= ATTR_FAINT;	break;
+        case 0:	 // reset
+            text_attr = 0;
+            font      = fonts;
+            text_fg   = 7;
+            text_bg   = 0;
+            set_colors();
+            break;
+        case 1:
+            text_attr |= ATTR_BRIGHT;
+            set_colors();
+            break;
+        case 2:
+            text_attr |= ATTR_FAINT;
+            set_colors();
+            break;
         case 4:  text_attr |= ATTR_ULINE;	break;
         case 7:  text_attr |= ATTR_REVERSE;	break;
         case 9:  text_attr |= ATTR_STRIKE;	break;
-        case 22: text_attr &= ~ATTR_FAINT;	break;
+        case 22:
+            text_attr &= ~(ATTR_FAINT | ATTR_BRIGHT);
+            set_colors();
+            break;
         case 24: text_attr &= ~ATTR_ULINE;	break;
         case 27: text_attr &= ~ATTR_REVERSE;	break;
         case 29: text_attr &= ~ATTR_STRIKE;	break;
+
+        case 30: case 31: case 32: case 33: case 34:
+        case 35: case 36: case 37:
+            text_fg = x3_arg[0] - 30;
+            set_colors();
+            break;
+        case 40: case 41: case 42: case 43: case 44:
+        case 45: case 46: case 47:
+            text_bg = x3_arg[0] - 40;
+            set_colors();
+            break;
 
         case 10: case 11: case 12: case 13: case 14:
         case 15: case 16: case 17: case 18: case 19:
@@ -386,7 +410,7 @@ GFXdpy::putchar(int ch){
         }
 
         render_glyph(ch);
-        cx += text_scale * (font->width + 1);
+        cx += text_scale * font->width;
         break;
     }
 

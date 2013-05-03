@@ -20,23 +20,33 @@
 
 #define MAXX3ARG 4
 
+#define ATTR_REVERSE	1
+#define ATTR_ULINE	2
+#define ATTR_STRIKE	4
+#define ATTR_FAINT	8
+#define ATTR_BRIGHT	16
+
+
 class Font;
 
 class GFXdpy {
 public:
-    short _height;
-    short _width;
-    u_char text_flags;
+    short  _height;
+    short  _width;
+    short  height;
+    short  width;
 
-public:
     u_char orientation;
-    short height;
-    short width;
+    u_char text_flags;
+    u_char text_scale;
+    u_char text_attr;
+
+    u_char text_fg,  text_bg;
+
+    int	   color_fg, color_bg;
 
 private:
     short  cx,cy;
-    u_char text_attr;
-    u_char text_scale;
 
     char x3_arg[MAXX3ARG];
     char x3_argn;
@@ -50,7 +60,7 @@ public:
     virtual void _set_pixel(int, int, int);
     virtual int  _get_pixel(int, int);
     virtual void clear_screen(void);
-
+    virtual void set_colors(void);
 
     void init(void);
     void set_pixel(int, int, int);
