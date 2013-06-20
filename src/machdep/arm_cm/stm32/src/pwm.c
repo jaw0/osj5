@@ -17,13 +17,19 @@
 // NB: the registers for timer1/8 + 2-5 are the same
 // except for btdr vs reserved
 
-static inline TIM1_TypeDef *
+#if defined(PLATFORM_STM32F1)
+typedef TIM1_TypeDef TIM_T;
+#else
+typedef TIM_TypeDef TIM_T;
+#endif
+
+static inline TIM_T *
 _timer_addr(int tim){
     switch(tim >> 4){
-    case 1:	return (TIM1_TypeDef*)TIM1;
-    case 2:	return (TIM1_TypeDef*)TIM2;
-    case 3:	return (TIM1_TypeDef*)TIM3;
-    case 4:	return (TIM1_TypeDef*)TIM4;
+    case 1:	return (TIM_T*)TIM1;
+    case 2:	return (TIM_T*)TIM2;
+    case 3:	return (TIM_T*)TIM3;
+    case 4:	return (TIM_T*)TIM4;
         // ...
     default:
         PANIC("invalid basic timer");
@@ -32,7 +38,7 @@ _timer_addr(int tim){
 
 static void
 _freq_set(int timer, int clock, int maxval, int freq){
-    TIM1_TypeDef *tim = _timer_addr(timer);
+    TIM_T *tim = _timer_addr(timer);
 
     int psc = clock / (maxval + 1) / freq;
     psc --;
@@ -47,7 +53,7 @@ _freq_set(int timer, int clock, int maxval, int freq){
 
 void
 pwm_init(int timer, int freq, int maxval){
-    TIM1_TypeDef *tim = _timer_addr(timer);
+    TIM_T *tim = _timer_addr(timer);
     int clock;
 
     int plx = splhigh();
@@ -96,7 +102,7 @@ pwm_init(int timer, int freq, int maxval){
 
 void
 pwm_set(int timer, int val){
-    TIM1_TypeDef *tim = _timer_addr(timer);
+    TIM_T *tim = _timer_addr(timer);
 
     switch( timer & 0x3 ){
     case 0:	tim->CCR1 = val;	break;
@@ -109,7 +115,7 @@ pwm_set(int timer, int val){
 
 void
 freq_set(int timer, int freq){
-    TIM1_TypeDef *tim = _timer_addr(timer);
+    TIM_T *tim = _timer_addr(timer);
 
     int maxval = tim->ARR;
     int clock = ( (timer>>4) & 0xF == 1) ? APB2CLOCK : APB1CLOCK;
