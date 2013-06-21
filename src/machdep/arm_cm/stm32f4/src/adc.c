@@ -17,8 +17,9 @@
 #include <stm32.h>
 
 
-#define SR_EOC	2
-
+#define SR_EOC		2
+#define CR2_SWSTART	0x40000000
+#define CR2_ADON	1
 
 /* RSN - sequential conversions w/ DMA */
 
@@ -67,8 +68,14 @@ adc_init(int chan, int samp){
         PANIC("invalid ADC");
     }
 
-    dev->CR2 |= 1;	/* enable */
-    dev->CR2 |= 1<<23;	/* enable temp sensor */
+    dev->CR2 |= CR2_ADON;	/* enable */
+
+    ADC->CCR &= 0x00C37F1F;
+
+    ADC->CCR |= (1<<23)	/* temp enable */
+        | (1<<22)	/* vbat enable */
+        | (1<<16)	/* ahb2clock / 4 */
+        ;
 
     chan &= 0x1F;
 
@@ -88,11 +95,12 @@ adc_get(int chan){
 
     int v = dev->DR;	// clear any previous result
     dev->SQR3 = chan;
-    dev->CR2 |= 1;
+    dev->CR2 |= CR2_SWSTART;
 
     while(1){
         // ~ 2usec
         if( dev->SR & SR_EOC ) break;
+        //printf("sr %x\n", dev->SR);
     }
 
     return dev->DR;
