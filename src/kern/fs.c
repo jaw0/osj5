@@ -2,10 +2,7 @@
   Copyright (c) 1998
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 1998
-  Function:
-
-  $Id$
-
+  Function: file system interface
 */
 
 

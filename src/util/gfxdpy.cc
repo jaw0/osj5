@@ -2,7 +2,7 @@
   Copyright (c) 2013
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 2013-Mar-31 10:54 (EDT)
-  Function: 
+  Function: graphic display
 */
 
 extern "C" {
@@ -428,18 +428,3 @@ void set_pixel(int, int, int){}
 int  get_pixel(int, int){ return 0; }
 void clear_screen(void) {}
 
-
-//****************************************************************
-#if 0
-
-half space
-
-bitmap()
-draw_line, draw_rect/filled, draw_circle/filled
-draw_(filled)_shape()
-invert()
-set_rotatation()
-height, width,
-set_cursor(x, y)
-
-#endif

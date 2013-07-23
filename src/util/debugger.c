@@ -3,9 +3,6 @@
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 2001
   Function: debugging commands
- 
-  $Id$
-
 */
 
 

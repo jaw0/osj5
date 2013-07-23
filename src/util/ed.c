@@ -1,11 +1,7 @@
 /*
-  Copyright (c) 2011
+  Copyright (c) 1998
   Author: Jeff Weisberg <jaw @ tcp4me.com>
-  Created: 2011-Dec-05 22:36 (EST)
-  Function: edit
-
-  $Id$
-
+  Function: text editor
 */
 
 

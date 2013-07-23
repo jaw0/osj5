@@ -1,11 +1,8 @@
 /*
   Copyright (c) 1998
   Author: Jeff Weisberg <jaw @ tcp4me.com>
-  Created: 2011-Dec-03 12:04 (EST)
+  Created: 19982011-Dec-03 12:04 (EST)
   Function: process functions
- 
-  $Id$
-
 */
 
 #include <conf.h>
@@ -14,12 +11,6 @@
 #include <userint.h>
 
 #ifdef USE_CLI
-
-DEFUN(tthrow, "test throw")
-{
-    _xthrow();
-}
-
 
 DEFUN(kill, "kill a process")
 {
