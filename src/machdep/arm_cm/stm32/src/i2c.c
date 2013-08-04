@@ -153,30 +153,36 @@ i2c_init(struct Device_Conf *dev){
         PANIC("invalid i2c device");
     }
 #elif defined(PLATFORM_STM32F4)
+
+    int mode = GPIO_AF(4) | GPIO_OPEN_DRAIN | GPIO_SPEED_25MHZ ;
+#  ifdef I2C_PULLUPS
+    mode |= GPIO_PULL_UP;
+#  endif
+
     switch(i){
     case 0:
         // CL=B6, DA=B7
         i2cinfo[i].addr = addr = I2C1;
         i2cinfo[i].irq  = IRQ_I2C1_EV;
         RCC->APB1ENR   |= 1<<21;
-        gpio_init( GPIO_B6, GPIO_AF(4) | GPIO_OPEN_DRAIN | GPIO_SPEED_25MHZ );
-        gpio_init( GPIO_B7, GPIO_AF(4) | GPIO_OPEN_DRAIN | GPIO_SPEED_25MHZ );
+        gpio_init( GPIO_B6, mode );
+        gpio_init( GPIO_B7, mode );
         break;
     case 1:
         // CL=B10, DA=B11
         i2cinfo[i].addr = addr = I2C2;
         i2cinfo[i].irq  = IRQ_I2C2_EV;
         RCC->APB1ENR   |= 1<<22;
-        gpio_init( GPIO_B10, GPIO_AF(4) | GPIO_OPEN_DRAIN | GPIO_SPEED_25MHZ );
-        gpio_init( GPIO_B11, GPIO_AF(4) | GPIO_OPEN_DRAIN | GPIO_SPEED_25MHZ );
+        gpio_init( GPIO_B10, mode );
+        gpio_init( GPIO_B11, mode );
         break;
     case 2:
         // CL=A8, DA=C9
         i2cinfo[i].addr = addr = I2C3;
         i2cinfo[i].irq  = IRQ_I2C3_EV;
         RCC->APB1ENR   |= 1<<23;
-        gpio_init( GPIO_A8, GPIO_AF(4) | GPIO_OPEN_DRAIN | GPIO_SPEED_25MHZ );
-        gpio_init( GPIO_C9, GPIO_AF(4) | GPIO_OPEN_DRAIN | GPIO_SPEED_25MHZ );
+        gpio_init( GPIO_A8, mode );
+        gpio_init( GPIO_C9, mode );
         break;
     default:
         PANIC("invalid i2c device");
