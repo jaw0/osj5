@@ -23,7 +23,9 @@ option CHECKPROC		# additional error checking in proc
 
 option GETLINEHIST
 
-srcfile         app/blinky.c
+################################################################
+
+srcfile         app/blm_test.c
 
 option PROJECT_MAIN     main
 
@@ -33,7 +35,9 @@ option PROJECT_MAIN     main
 
 ################################################################
 
+feature adc
 feature gpio
+feature pwm
 
 ################################################################
 
@@ -42,6 +46,8 @@ feature gpio
 
 device serial2 	baud 57600
 device console
+
+option I2C_PULLUPS
 
 device i2c0     baud 800000
 device spi0     baud 400000
