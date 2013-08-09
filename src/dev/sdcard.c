@@ -241,13 +241,13 @@ initialize_card(struct SDCinfo *ii){
     spi_xfer(& ii->spicf, 1, m, 1000000);
 
     int r = _sd_cmd_r1(ii, m, cmd0);
-    kprintf("cmd0 %x, %x\n", r, m[3].response);
+    //kprintf("cmd0 %x, %x\n", r, m[3].response);
     if( r != SPI_XFER_OK ) return 0;
 
     // cmd8 - required to enable v2/HC features (>2GB)
     int rcmd8;
     r = _sd_cmd_r3(ii, m, cmd8, (char*)&rcmd8);
-    kprintf("cmd8 %x, %x, %x\n", r, m[1].response, rcmd8);
+    //kprintf("cmd8 %x, %x, %x\n", r, m[1].response, rcmd8);
     if( r != SPI_XFER_OK ) return 0;
 
     int isv2 = 0;
@@ -269,7 +269,7 @@ initialize_card(struct SDCinfo *ii){
     int ocr;
     r = _sd_cmd_r3(ii, m, cmd58, (char*)&ocr);
     // NB - ocr is byte swapped
-    kprintf("cmd58 %x %x %x\n", r, m[1].response, ocr);
+    //kprintf("cmd58 %x %x %x\n", r, m[1].response, ocr);
     // OCR - permitted voltages + CCS
     int ishc = 0;
     if( isv2 && (ocr & 0x40) ) ishc = 1;	// HC yay!
