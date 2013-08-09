@@ -45,7 +45,7 @@ console_init(struct Device_Conf *dev){
 
 #ifdef USE_SERIAL
     f = serial0_port;
-    n = "serial0";
+    n = "serial";
 #endif
 
 #ifdef USE_PCTERM
