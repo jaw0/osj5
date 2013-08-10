@@ -31,7 +31,7 @@ my $ident   = $confile;
 my $version = from_file('../src/etc/version');
 my $number  = from_file("$dir/number") || 0;
 $number ++;
-to_file('$dir/number', $number);
+to_file("$dir/number", $number);
 conf_files( '../src/etc/files', 0 );
 
 open( CONFH, "> $dir/conf.h" )        || die "cannot open conf.h: $!\n";
