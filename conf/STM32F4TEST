@@ -7,6 +7,9 @@ ident	STM32F4TEST
 arch    arm_cm
 variant stm32f4
 
+option  SYSCLOCK        168000000
+option  HSECLOCK         12000000
+
 option  PROC_TIME       1000
 option  KSTACK_SIZE     2048
 

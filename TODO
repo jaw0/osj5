@@ -1,21 +1,14 @@
 
 
-
-
-config:
-
-        files           localfilesfile
-
-        option          LOCAL_INIT_HW my_init
-        option          LOCAL_STARTUP my_main
-
-__asm("cpsid i")
-__asm("cpsie i")
-
-
 gfx
         animated clear screen effects
 
-sound
-        MML, RTTTL, ABC
+
+tft: MIO283QT2 - HX8347D
+http://www.mikroe.com/forum/viewtopic.php?f=189&t=46850
+
+
+alt pins
+
+dac
 

@@ -1,4 +1,8 @@
 
+#ifndef __stm32f4_clock_h__
+#define __stm32f4_clock_h__
+
+
 #define HSICLOCK	16000000
 
 #ifndef SYSCLOCK
@@ -21,7 +25,9 @@
 #define PLLVCOMAX      	432000000
 
 
-extern int apb1_clock_freq(), apb2_clock_freq();
+extern int sys_clock_freq(), apb1_clock_freq(), apb2_clock_freq();
 #define APB2CLOCK	apb2_clock_freq()
 #define APB1CLOCK	apb1_clock_freq()
 
+
+#endif /* __stm32f4_clock_h__ */

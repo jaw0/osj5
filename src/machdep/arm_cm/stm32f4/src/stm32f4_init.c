@@ -28,7 +28,7 @@
 unsigned long bootflags = 0;
 void stm32_putchar(int);
 
-int freq_sys=HSICLOCK, freq_apb1=HSICLOCK, freq_apb2=HSICLOCK;
+int freq_sys=HSICLOCK, freq_apb1=HSICLOCK, freq_apb2=HSICLOCK, freq_usb=HSICLOCK;
 
 int sys_clock_freq(void){  return freq_sys;  }
 int apb1_clock_freq(void){ return freq_apb1; }
@@ -114,9 +114,10 @@ clock_init(void){
 #  define PLLQ		((PLLFVCO + USBFREQ/2) / USBFREQ)
 
         freq_sys = PLLFVCO / PLLP;
+        freq_usb = PLLFVCO / PLLQ;
 
         //bootmsg("pll: m %d, n %d, p %d, q %d; vco %d, sys: %d, usb %d\n", PLLM, PLLN, PLLP, PLLQ,
-        //        PLLFVCO, freq_sys, PLLFVCO/PLLQ);
+        //        PLLFVCO, freq_sys, freq_usb);
 
         RCC->PLLCFGR = (PLLSRC << 22)  // src
             | PLLM
@@ -136,22 +137,22 @@ clock_init(void){
     int cfgr =
 #  if (SYSCLOCK <= APB1MAX)
         (0);			// all clocks not divided
-    freq_apb1 = freq_apb2 = freq_sys;
+    	freq_apb1 = freq_apb2 = freq_sys;
 #  elif (SYSCLOCK <= APB2MAX)
-        (0<<4)              	// ahb =  no divide
+        (0<<4)              	// ahb  = no divide
         | (0<<13)      		// apb2 = no divide
         | (4<<10);              // apb1 = divide by 2
         freq_apb2 = freq_sys;
         freq_apb1 = freq_sys / 2;
 #  elif (SYSCLOCK <= AHBMAX)
-        (0<<4)              	// ahb =  no divide
+        (0<<4)              	// ahb  = no divide
         | (4<<13)      		// apb2 = divide by 2
         | (5<<10);              // apb1 = divide by 4
         freq_apb2 = freq_sys / 2;
         freq_apb1 = freq_sys / 4;
 #  else
         // unsupported - overclocking
-        (8<<4)              	// ahb =  divide by 2
+        (8<<4)              	// ahb  = divide by 2
         | (5<<13)      		// apb2 = divide by 4
         | (6<<10);              // apb1 = divide by 8
         freq_apb2 = freq_sys / 4;
