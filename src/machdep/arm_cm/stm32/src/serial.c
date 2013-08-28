@@ -22,6 +22,8 @@
 #define SR_TXE	0x80
 #define SR_RXNE 0x20
 
+#define CFFLAGS_ALTPINS	3	// 2 bits of flags - alt set of pins
+
 #ifndef SERIAL_QUEUE_SIZE
 #  define SERIAL_QUEUE_SIZE     16	/* input queue size */
 #endif
@@ -74,6 +76,8 @@ serial_init(struct Device_Conf *dev){
     int irq;
     int b;
 
+    int altpins = dev->flags & CFFLAGS_ALTPINS;
+
     finit( & com[i].file );
     com[i].file.fs = &serial_port_fs;
     com[i].head = com[i].tail = com[i].len = 0;
@@ -113,35 +117,62 @@ serial_init(struct Device_Conf *dev){
     case 0:
         addr = USART1;
         irq  = (int) IRQ_USART1;
-        gpio_init( GPIO_A8, GPIO_AF(7) | GPIO_PUSH_PULL );
-        gpio_init( GPIO_A9, GPIO_AF(7) | GPIO_PUSH_PULL );
+        if( altpins ){
+            gpio_init( GPIO_B6, GPIO_AF(7) | GPIO_PUSH_PULL );
+            gpio_init( GPIO_B7, GPIO_AF(7) | GPIO_PUSH_PULL );
+        }else{
+            gpio_init( GPIO_A9, GPIO_AF(7) | GPIO_PUSH_PULL );
+            gpio_init( GPIO_A10, GPIO_AF(7) | GPIO_PUSH_PULL );
+        }
         RCC->APB2ENR |= 1<<4;
         com[i].bauddiv = 2;
         break;
     case 1:
         addr = USART2;
         irq  = (int) IRQ_USART2;
-        gpio_init( GPIO_A2, GPIO_AF(7) | GPIO_PUSH_PULL );
-        gpio_init( GPIO_A3, GPIO_AF(7) | GPIO_PUSH_PULL );
+        if( altpins ){
+            gpio_init( GPIO_D5, GPIO_AF(7) | GPIO_PUSH_PULL );
+            gpio_init( GPIO_D6, GPIO_AF(7) | GPIO_PUSH_PULL );
+        }else{
+            gpio_init( GPIO_A2, GPIO_AF(7) | GPIO_PUSH_PULL );
+            gpio_init( GPIO_A3, GPIO_AF(7) | GPIO_PUSH_PULL );
+        }
         RCC->APB1ENR |= 1<<17;
         com[i].bauddiv = 4;
         break;
     case 2:
         addr = USART3;
         irq  = (int) IRQ_USART3;
-        gpio_init( GPIO_B10, GPIO_AF(7) | GPIO_PUSH_PULL );
-        gpio_init( GPIO_B11, GPIO_AF(7) | GPIO_PUSH_PULL );
+
+        if( altpins ){
+            gpio_init( GPIO_C10, GPIO_AF(7) | GPIO_PUSH_PULL );
+            gpio_init( GPIO_C11, GPIO_AF(7) | GPIO_PUSH_PULL );
+        }else{
+            gpio_init( GPIO_B10, GPIO_AF(7) | GPIO_PUSH_PULL );
+            gpio_init( GPIO_B11, GPIO_AF(7) | GPIO_PUSH_PULL );
+        }
+        // alt: d8, d9
         RCC->APB1ENR |= 1<<18;
         com[i].bauddiv = 4;
         break;
     case 3:
         addr = UART4;
         irq  = (int) IRQ_UART4;
-        gpio_init( GPIO_A0, GPIO_AF(8) | GPIO_PUSH_PULL );
-        gpio_init( GPIO_A1, GPIO_AF(8) | GPIO_PUSH_PULL );
+        if( altpins ){
+            gpio_init( GPIO_C10, GPIO_AF(8) | GPIO_PUSH_PULL );
+            gpio_init( GPIO_C11, GPIO_AF(8) | GPIO_PUSH_PULL );
+        }else{
+            gpio_init( GPIO_A0, GPIO_AF(8) | GPIO_PUSH_PULL );
+            gpio_init( GPIO_A1, GPIO_AF(8) | GPIO_PUSH_PULL );
+        }
         RCC->APB1ENR |= 1<<19;
         com[i].bauddiv = 4;
         break;
+
+        // case 4:
+        // c12, d2
+        // case 5:
+        // c6,c7; g14, g9
     }
 #endif
     com[i].addr   = addr;
