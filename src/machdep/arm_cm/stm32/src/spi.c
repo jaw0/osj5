@@ -72,6 +72,7 @@ static char dma_idle_sink;
 #ifdef VERBOSE
 struct crumb {
     const char *event;
+    int when;
     int arg0;
     int arg1;
 };
@@ -81,12 +82,12 @@ static struct crumb crumbs[NR_CRUMBS];
 
 static inline void
 _spi_drop_crumb(const char *event, u_long arg0, u_long arg1) {
-    //if (cur_crumb < NR_CRUMBS) {
-        struct crumb *crumb = &crumbs[cur_crumb++ % NR_CRUMBS];
-        crumb->event = event;
-        crumb->arg0 = arg0;
-        crumb->arg1 = arg1;
-        //}
+    struct crumb *crumb = &crumbs[cur_crumb % NR_CRUMBS];
+    crumb->event = event;
+    crumb->when  = cur_crumb ? get_time() - crumbs[0].when : 0;
+    crumb->arg0  = arg0;
+    crumb->arg1  = arg1;
+    cur_crumb++;
 }
 #define SPI_CRUMB(event, arg0, arg1) _spi_drop_crumb(event, (u_long)arg0, (u_long)arg1)
 #else
@@ -207,7 +208,7 @@ spi_init(struct Device_Conf *dev){
         gpio_init( GPIO_A7, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         break;
     case 1:
-        // on ahb1, dma1 chan 4+5
+        // on ahb1, dma1 chan 3+4
         // CLK = B13, MISO = B14, MOSI = B15
         ii->addr      = addr = SPI2;
         ii->irq       = IRQ_SPI2;
@@ -227,7 +228,7 @@ spi_init(struct Device_Conf *dev){
         gpio_init( GPIO_B15, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         break;
     case 2:
-        // on ahb1, dma1 chan 4+5
+        // on ahb1, dma1 chan 2+5
         // CLK = B3, MISO = B4, MOSI = B5
         ii->addr      = addr = SPI3;
         ii->irq       = IRQ_SPI3;
@@ -301,7 +302,7 @@ _spi_dump_crumb(void){
     int st = (cur_crumb > NR_CRUMBS) ? cur_crumb - NR_CRUMBS : 0;
     for(i=st; i<cur_crumb; i++){
         int n = i % NR_CRUMBS;
-        kprintf("[spi] %s\t%x %x\n", crumbs[n].event, crumbs[n].arg0, crumbs[n].arg1);
+        kprintf("[spi] %d\t%s\t%x %x\n", crumbs[n].when, crumbs[n].event, crumbs[n].arg0, crumbs[n].arg1);
     }
 #endif
 }
@@ -387,7 +388,7 @@ _dma_isr_clear_irqs(DMA_TypeDef *dma, int dman){
     int pos = (dman & 3) * 8 - (dman & 1) * 2;	// not aligned
 
     if( dman > 3 ){
-        isr = (dma->LISR >> pos) & 0x3F;
+        isr = (dma->HISR >> pos) & 0x3F;
         dma->HIFCR |= (0x3D << pos);
     }else{
         isr = (dma->LISR >> pos) & 0x3F;
@@ -770,7 +771,7 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
     // enable device, pins
     int plx = spldisk();
     _spi_conf_start(cf, ii);
-    SPI_CRUMB("spi-on", 0, 0);
+    SPI_CRUMB("spi-on", cf->unit, 0);
     dev->CR1 |= CR1_SPE;       // go!
     _msg_start(ii);
     splx(plx);
