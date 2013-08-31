@@ -20,6 +20,7 @@ console:        dev/console.c
 udsk:           dev/unixdisk.c dev/disk.c
 ssd1306:        dev/ssd1306.cc util/gfxdpy.cc
 ssd1331:        dev/ssd1331.cc util/gfxdpy.cc
+st7565:         dev/st7565.cc util/gfxdpy.cc
 sdcard:         dev/sdcard.c
 
 flfs:           fs/flfs.c
