@@ -40,5 +40,6 @@ struct tm {
 
 extern struct tm *gmtime_r(const utime_t *, struct tm *);
 extern utime_t timegm(struct tm *);
+extern utime_t timeiso(const char *);
 
 #endif

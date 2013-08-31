@@ -138,3 +138,36 @@ timegm(struct tm *ti){
     return mid;
 }
 
+static int
+parse_num(const char **src, int maxlen){
+    int num = 0;
+
+    /* skip non-numeric */
+    while( **src && !isdigit(**src) ) (*src)++;
+
+    /* parse digits */
+    while( **src && isdigit(**src) && maxlen ){
+        num *= 10;
+        num += **src - '0';
+        maxlen --;
+        (*src)++;
+    }
+
+    return num;
+}
+
+utime_t
+timeiso(const char *iso){
+    struct tm t;
+
+    bzero(&t, sizeof(t));
+
+    t.tm_year = parse_num(&iso, 4);
+    t.tm_mon  = parse_num(&iso, 2);
+    t.tm_mday = parse_num(&iso, 2);
+    t.tm_hour = parse_num(&iso, 2);
+    t.tm_min  = parse_num(&iso, 2);
+    t.tm_sec  = parse_num(&iso, 2);
+
+    return timegm(&t);
+}

@@ -267,6 +267,8 @@ DEFUN(set, "set a var")
             *(u_long*)(vars[i].addr + off) = v;
             break;
         case TYPE_TIME:
+            *(u_quad*)(vars[i].addr + off) = timeiso( argv[2] );
+            break;
         case TYPE_UQ: {
             quad val;
             val = strtoq(argv[2], 0, 0);
