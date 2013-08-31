@@ -79,6 +79,8 @@ adc_init(int chan, int samp){
 
     chan &= 0x1F;
 
+    samp = 0;	// 3 cycles
+
     if( chan < 10 ){
         dev->SMPR1 &= ~ (7<< (3 * chan));
         dev->SMPR1 |= (samp & 0x7) << (3 * chan);
