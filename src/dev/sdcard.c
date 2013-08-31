@@ -397,6 +397,7 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
             SDRX1(m[5]);
             SDRX1(m[6]);
             m[6].until = _wait_notnull;
+            m[6].dlen  = 300000;
             SDFIN(m[7]);
             m[7].dlen = 1000;		// extra delay
 
