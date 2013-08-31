@@ -340,10 +340,19 @@ DEFUN(cli, "start a subshell")
 
 DEFUN(echo, "echo")
 {
+    int nl=1;
+
+    if( argc > 1 && argv[1][0] == '-' && argv[1][1] == 'n' ){
+        nl = 0;
+        argc --;
+        argv ++;
+    }
+
     while( --argc){
         printf("%s ", *++argv);
     }
-    printf("\n");
+
+    if( nl ) printf("\n");
     return 0;
 }
 
