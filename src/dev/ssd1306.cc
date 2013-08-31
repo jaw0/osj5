@@ -29,26 +29,6 @@ extern "C" {
 #define CONF_FLAG_HEIGHT32	0x2
 
 
-int ssd1306_putchar(FILE*, char);
-int ssd1306_getchar(FILE*);
-int ssd1306_noop(FILE*);
-int ssd1306_status(FILE*);
-int ssd1306_flush(FILE*);
-
-const struct io_fs ssd1306_port_fs = {
-    ssd1306_putchar,
-    ssd1306_getchar,
-    ssd1306_noop,	// close
-    ssd1306_flush,
-    ssd1306_status,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0
-};
-
 static const u_char ssd1306_64_init[] = {
     0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40, 0x8D, 0x14, 0x20, 0x00, 0xA1,
     0xC8, 0xDA, 0x12, 0x81, 0xCF, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6, 0xAF
@@ -70,7 +50,6 @@ static const u_char ssd1306_normal[] = { 0xA6 };
 
 class SSD1306 : public GFXdpy {
 public:
-    FILE 	file;
     int  	addr;
     int  	port;
     int		speed;
@@ -120,10 +99,6 @@ ssd1306_init(struct Device_Conf *dev){
     if( ! ii->addr ) ii->addr = SSD1306_I2C_ADDR;
     if( ii->flag_upsdown )
         ii->set_orientation( GFX_ORIENT_180 );
-
-    finit( & ssd1306info[unit].file );
-    ssd1306info[unit].file.fs = &ssd1306_port_fs;
-    ii->file.d  = (void*)ii;
 
     if( ii->flag_spi ){
 #ifdef USE_SPI
@@ -304,44 +279,3 @@ _ssd1306_logo(SSD1306 *ii){
 }
 
 /*****************************************************************/
-
-int
-ssd1306_putchar(FILE *f, char ch){
-    SSD1306 *ii = (SSD1306*)f->d;
-
-    if( ch == 0x0B ){
-        ii->flush();
-        return 1;
-    }
-
-    ii->putchar(ch);
-
-    if( (ii->text_flags & GFX_FLAG_AUTOFLUSH) || (ch == '\n') )
-        ii->flush();
-
-    return 1;
-}
-
-int
-ssd1306_flush(FILE *f){
-    SSD1306 *ii = (SSD1306*)f->d;
-
-    ii->flush();
-}
-
-int
-ssd1306_getchar(FILE *f){
-    return -1;
-}
-
-int
-ssd1306_noop(FILE*f){
-    return 1;
-}
-
-int
-ssd1306_status(FILE*f){
-    return FST_O;
-}
-
-/****************************************************************/

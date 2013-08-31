@@ -33,6 +33,26 @@ extern "C" {
 #include <font/ucs_9x15.h>
 #include <font/ucs_10x20.h>
 
+int gfxdpy_putchar(FILE*, char);
+int gfxdpy_getchar(FILE*);
+int gfxdpy_noop(FILE*);
+int gfxdpy_status(FILE*);
+int gfxdpy_flush(FILE*);
+
+const struct io_fs gfxdpy_port_fs = {
+    gfxdpy_putchar,
+    gfxdpy_getchar,
+    gfxdpy_noop,	// close
+    gfxdpy_flush,
+    gfxdpy_status,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0, // ioctl
+};
+
 static const Font fonts[] = {
     // default font:
     { font_ucs_5x8_height, font_ucs_5x8_width, font_ucs_5x8_start, font_ucs_5x8_last,
@@ -76,6 +96,10 @@ GFXdpy::init(void){
     text_fg  = 7;
     text_bg  = 0;
     set_colors();
+
+    finit( & file );
+    file.fs = &gfxdpy_port_fs;
+    file.d  = (void*)this;
 }
 
 void
@@ -422,6 +446,48 @@ done:
 }
 
 
+/****************************************************************/
+
+int
+gfxdpy_putchar(FILE *f, char ch){
+    GFXdpy *ii = (GFXdpy*)f->d;
+
+    if( ch == 0x0B ){
+        ii->flush();
+        return 1;
+    }
+
+    ii->putchar(ch);
+
+    if( (ii->text_flags & GFX_FLAG_AUTOFLUSH) || (ch == '\n') )
+        ii->flush();
+
+    return 1;
+}
+
+int
+gfxdpy_flush(FILE *f){
+    GFXdpy *ii = (GFXdpy*)f->d;
+
+    ii->flush();
+}
+
+int
+gfxdpy_getchar(FILE *f){
+    return -1;
+}
+
+int
+gfxdpy_noop(FILE*f){
+    return 1;
+}
+
+int
+gfxdpy_status(FILE*f){
+    return FST_O;
+}
+
+/****************************************************************/
 
 void flush(void){}
 void set_pixel(int, int, int){}

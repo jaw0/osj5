@@ -31,6 +31,7 @@ class Font;
 
 class GFXdpy {
 public:
+    FILE 	file;
     short  _height;
     short  _width;
     short  height;

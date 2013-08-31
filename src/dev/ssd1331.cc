@@ -27,26 +27,6 @@ extern "C" {
 #define CONF_FLAG_HEIGHT32	0x2
 
 
-int ssd1331_putchar(FILE*, char);
-int ssd1331_getchar(FILE*);
-int ssd1331_noop(FILE*);
-int ssd1331_status(FILE*);
-int ssd1331_flush(FILE*);
-
-const struct io_fs ssd1331_port_fs = {
-    ssd1331_putchar,
-    ssd1331_getchar,
-    ssd1331_noop,	// close
-    ssd1331_flush,
-    ssd1331_status,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0
-};
-
 static const u_char ssd1331_dpy_init[] = {
     0xAE, 0xA0, 0x72/*0x76?*/, 0xA1, 0x0, 0xA2, 0, 0xA4, 0xA8, 0x3f, 0xAD, 0x8E,
     0xB0, 0x0B, 0xB1, 0x31, 0xB3, 0xF0, 0x8A, 0x64, 0x8B, 0x78, 0x8C, 0x64, 0xBB,
@@ -63,7 +43,6 @@ static const u_char ssd1331_normal[] = { 0xA4 };
 
 class SSD1331 : public GFXdpy {
 public:
-    FILE 	file;
     int  	port;
     int		speed;
     bool	flag_upsdown;
@@ -106,10 +85,6 @@ ssd1331_init(struct Device_Conf *dev){
 
     if( ii->flag_upsdown )
         ii->set_orientation( GFX_ORIENT_180 );
-
-    finit( & ssd1331info[unit].file );
-    ssd1331info[unit].file.fs = &ssd1331_port_fs;
-    ii->file.d  = (void*)ii;
 
 #ifdef USE_SPI
     ii->spicf_cmd.unit  = ii->spicf_dpy.unit  = ii->port;
@@ -263,25 +238,12 @@ _ssd1331_logo(SSD1331 *ii){
     extern const char *ident;
     int i;
 
-#if 0
-    _ssd1331_puts(ii, "\e[11m");
-
-    ii->text_attr = ATTR_REVERSE;
-    for(i=0; i<24; i++){
-        ii->color_fg = color_palette[i];
-        _ssd1331_puts(ii, " ");
-    }
-    _ssd1331_puts(ii, "\r\n");
-    ii->text_attr = 0;
-    ii->set_colors();
-#else
     int x, y;
     for(y=0; y<64; y++)
         for(x=0; x<24; x++){
             ii->dpybuf[ y * 96 + x + 72 ] = color_palette[ (x/8) * 8 + y/8 ];
         }
 
-#endif
     _ssd1331_puts(ii, "\e[17mOS/J5\r\n\e[15m" );
     _ssd1331_puts(ii, ident);
     _ssd1331_puts(ii, "\r\nstarting...\r\n\e[0m");
@@ -291,43 +253,3 @@ _ssd1331_logo(SSD1331 *ii){
 
 /*****************************************************************/
 
-int
-ssd1331_putchar(FILE *f, char ch){
-    SSD1331 *ii = (SSD1331*)f->d;
-
-    if( ch == 0x0B ){
-        ii->flush();
-        return 1;
-    }
-
-    ii->putchar(ch);
-
-    if( (ii->text_flags & GFX_FLAG_AUTOFLUSH) || (ch == '\n') )
-        ii->flush();
-
-    return 1;
-}
-
-int
-ssd1331_flush(FILE *f){
-    SSD1331 *ii = (SSD1331*)f->d;
-
-    ii->flush();
-}
-
-int
-ssd1331_getchar(FILE *f){
-    return -1;
-}
-
-int
-ssd1331_noop(FILE*f){
-    return 1;
-}
-
-int
-ssd1331_status(FILE*f){
-    return FST_O;
-}
-
-/****************************************************************/

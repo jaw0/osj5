@@ -30,27 +30,6 @@ extern "C" {
 #define CMD_SET_COLUMN_HI  	0x10
 #define CMD_SET_COLUMN_LO  	0x00
 
-int st7565_putchar(FILE*, char);
-int st7565_getchar(FILE*);
-int st7565_noop(FILE*);
-int st7565_status(FILE*);
-int st7565_flush(FILE*);
-
-const struct io_fs st7565_port_fs = {
-    st7565_putchar,
-    st7565_getchar,
-    st7565_noop,	// close
-    st7565_flush,
-    st7565_status,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    //st7565_ioctl
-};
 
 static const u_char st7565_init_dat[] = {
     0xA0, 0xAE, 0xC0, 0xA2, 0x2F, 0x21, 0x81, 0x3F,
@@ -61,7 +40,6 @@ static const u_char st7565_init_dat[] = {
 
 class ST7565 : public GFXdpy {
 public:
-    FILE 	file;
     int  	port;
     int		speed;
     bool	flag_32high;
@@ -106,10 +84,6 @@ st7565_init(struct Device_Conf *dev){
 
     if( ii->flag_upsdown )
         ii->set_orientation( GFX_ORIENT_180 );
-
-    finit( & st7565info[unit].file );
-    st7565info[unit].file.fs = &st7565_port_fs;
-    ii->file.d  = (void*)ii;
 
     ii->spicf_cmd.unit  = ii->spicf_dpy.unit  = ii->port;
     ii->spicf_cmd.speed = ii->spicf_dpy.speed = ii->speed;
@@ -247,44 +221,3 @@ _st7565_logo(ST7565 *ii){
 }
 
 /*****************************************************************/
-
-int
-st7565_putchar(FILE *f, char ch){
-    ST7565 *ii = (ST7565*)f->d;
-
-    if( ch == 0x0B ){
-        ii->flush();
-        return 1;
-    }
-
-    ii->putchar(ch);
-
-    if( (ii->text_flags & GFX_FLAG_AUTOFLUSH) || (ch == '\n') )
-        ii->flush();
-
-    return 1;
-}
-
-int
-st7565_flush(FILE *f){
-    ST7565 *ii = (ST7565*)f->d;
-
-    ii->flush();
-}
-
-int
-st7565_getchar(FILE *f){
-    return -1;
-}
-
-int
-st7565_noop(FILE*f){
-    return 1;
-}
-
-int
-st7565_status(FILE*f){
-    return FST_O;
-}
-
-/****************************************************************/
