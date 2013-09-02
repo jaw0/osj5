@@ -17,9 +17,11 @@ extern void beep(int freq, int vol, int duration);
 //   http://en.wikipedia.org/wiki/Music_Macro_Language#Classical_MML_2
 void
 play(int vol, const char *tune){
-    short freq=0, bpm=120, dur=4;
-    int8_t octave=4, sharp=0, ratio=8, barct=0, dots=0;
+    short freq=0, bpm=120, dur=4, pdur=4;
+    int8_t octave=4, poctave=4, sharp=0, ratio=8, barct=0, dots=0;
     const char *bar=0;
+
+    // note: [A-GZ][+-#_~.<>][0-8]
 
     while( *tune ){
         switch(tolower(*tune)){
@@ -59,7 +61,29 @@ play(int vol, const char *tune){
             tsleep( &play, -1, "play", 2000000 );
             break;
 
-        case 't': // tempo
+        case 'o': // change base octave - stays in effect until another O: O5
+            poctave = 0;
+            freq = -1;
+            while( tune[1] && isdigit(tune[1]) ){
+                poctave *= 10;
+                poctave += tune[1] - '0';
+                tune ++;
+            }
+            octave = poctave;
+            break;
+
+        case 'l': // change default note duration: L32
+            pdur = 0;
+            freq = -1;
+            while( tune[1] && isdigit(tune[1]) ){
+                pdur *= 10;
+                pdur += tune[1] - '0';
+                tune ++;
+            }
+            dur = pdur;
+            break;
+
+        case 't': // tempo: T120
         case '@':
             bpm  = 0;
             freq = -1;
@@ -115,8 +139,8 @@ play(int vol, const char *tune){
             if( ratio != 16 )
                 usleep( tb * (16 - ratio) / db );
 
-            dur    = 4;
-            octave = 4;
+            dur    = pdur;
+            octave = poctave;
             sharp  = 0;
             freq   = 0;
             ratio  = 8;
@@ -151,3 +175,4 @@ DEFUN(play, "play music")
 }
 
 #endif
+
