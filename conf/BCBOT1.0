@@ -1,0 +1,84 @@
+#
+# $Id: GENERIC,v 1.7 2001/11/15 22:56:37 jaw Exp $
+#
+
+ident	BCBOT1.0
+option  BCBOT1_0
+
+arch    arm_cm
+variant stm32f4
+
+option  SYSCLOCK        168000000
+option  HSECLOCK         12000000
+
+option  PROC_TIME       1000
+option  KSTACK_SIZE     2048
+
+feature proc
+feature nstdio
+feature ed			# text editor
+feature cli			# command line interface
+feature play                    # music
+
+
+option DEVPREFIX	"dev:"	# prefix for naming device files
+option CHECKPROC		# additional error checking in proc
+
+option GETLINEHIST
+
+################################################################
+
+srcfile         app/bcbot1/menu.c
+srcfile         app/bcbot1/lib.c
+srcfile         app/bcbot1/test2.c
+
+option PROJECT_MAIN     main
+
+################################################################
+
+feature adc
+feature gpio
+feature pwm
+device  rng
+
+################################################################
+
+
+# device name type xxx port xxx addr xxx irq xxx baud xxx flags xxx init xxx args x,x,x,x
+
+# serial2+alt => exp conn
+# flags => alt pins
+# device serial2 	baud 57600 flags 1
+
+device serial0  baud 57600
+device console
+
+option I2C_PULLUPS
+
+device i2c1     baud 900000
+device spi1     baud 400000
+
+################################################################
+
+# port=0x81 => spi1
+# args => CS=C7 , C/D=B12
+# flags=2 => 128x32
+
+device oled0  type ssd1306 unit 0 port 0x81 baud 36000000 flags 0x2 args 0x27, 0x1C
+
+
+################################################################
+# args => CS=C7 , C/D=B12
+# backlight => C8
+#device lcd0 type st7565 unit 0 port 0x81 baud 100000 flags 0x3 args 0x27, 0x1C
+
+################################################################
+
+filesys         fatfs
+# 0x26 => CS=io_C6
+device sd0      type sdcard port 1 baud 5000000 args 0x26
+
+################################################################
+
+config  root on sd0:  startup in startup.rc
+
