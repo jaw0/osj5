@@ -15,10 +15,12 @@ extern void beep(int freq, int vol, int duration);
 
 // sort-of:
 //   http://en.wikipedia.org/wiki/Music_Macro_Language#Classical_MML_2
+//   http://www.ousob.com/ng/qbasic/ng24dc8.php
+
 void
 play(int vol, const char *tune){
     short freq=0, bpm=120, dur=4, pdur=4;
-    int8_t octave=4, poctave=4, sharp=0, ratio=8, barct=0, dots=0;
+    int8_t octave=4, poctave=4, sharp=0, ratio=8, pratio=8, barct=0, dots=0;
     const char *bar=0;
 
     // note: [A-GZ][+-#_~.<>][0-8]
@@ -94,6 +96,22 @@ play(int vol, const char *tune){
             }
             break;
 
+        case 'm':
+            tune++;
+            switch(tolower(*tune)){
+            case 'n':		// MN - music normal
+                pratio = 8; break;
+            case 's':		// MS - music staccato
+                pratio = 4; break;
+            case 'l':		// ML - music legato
+                pratio = 12; break;
+            default:
+                break;
+            }
+            ratio = pratio;
+            freq = -1;
+            break;
+
         case '[':	// repeat [count ... ]
             barct = 0;
             while( tune[1] && isdigit(tune[1]) ){
@@ -141,9 +159,9 @@ play(int vol, const char *tune){
 
             dur    = pdur;
             octave = poctave;
+            ratio  = pratio;
             sharp  = 0;
             freq   = 0;
-            ratio  = 8;
             dots   = 0;
         }
 
