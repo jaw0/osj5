@@ -18,5 +18,6 @@
 #define IOC_RDBLK	_IOC('d', 'r')		/* read block */
 #define IOC_WRBLK	_IOC('d', 'w')		/* write block */
 
+#define IOC_GFXDPY	_IOC('g', 'g')		/* get graphics object */
 
 #endif /* __ioctl_h__ */

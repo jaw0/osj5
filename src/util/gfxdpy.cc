@@ -38,6 +38,7 @@ int gfxdpy_getchar(FILE*);
 int gfxdpy_noop(FILE*);
 int gfxdpy_status(FILE*);
 int gfxdpy_flush(FILE*);
+int gfxdpy_ioctl(FILE*, int, void*);
 
 const struct io_fs gfxdpy_port_fs = {
     gfxdpy_putchar,
@@ -50,7 +51,9 @@ const struct io_fs gfxdpy_port_fs = {
     0,
     0,
     0,
-    0, // ioctl
+    0,
+    0,
+    gfxdpy_ioctl,
 };
 
 static const Font fonts[] = {
@@ -486,6 +489,24 @@ int
 gfxdpy_status(FILE*f){
     return FST_O;
 }
+
+
+int
+gfxdpy_ioctl(FILE* f, int cmd, void* a){
+
+    if( (cmd >> 8) & 0xF != 'g' )
+        return -1;
+
+    switch( cmd & 0xF ){
+    case 'g':		/* get */
+        return (int) f->d;
+        break;
+
+    default:
+        return -1;
+    }
+}
+
 
 /****************************************************************/
 
