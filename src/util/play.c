@@ -101,7 +101,7 @@ play(int vol, const char *tune){
                 barct += tune[1] - '0';
                 tune ++;
             }
-            bar = tune + 1;
+            bar = tune;
             break;
         case ']':
             if( bar && --barct > 0 )
