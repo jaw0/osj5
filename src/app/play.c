@@ -19,7 +19,7 @@ extern void beep(int,int,int);
 void
 play(int vol, const char *tune){
     short freq=0, bpm=120, dur=4;
-    int8_t octave=4, sharp=0, ratio=8, barct=0;
+    int8_t octave=4, sharp=0, ratio=8, barct=0, dots=0;
     const char *bar=0;
 
     while( *tune ){
@@ -32,6 +32,7 @@ play(int vol, const char *tune){
         case '#': sharp = 1;    break;
         case '_': sharp = -1;   break;
         case '~': dur *=  3;    break;	// triplet
+        case '.': dots ++;      break;
         case '0': dur  =  1;    break;
         case '1': dur  =  2;    break;
         case '2': dur  =  4;    break;
@@ -101,19 +102,26 @@ play(int vol, const char *tune){
 
             if( sharp ) freq += ((long)freq * 3900L * sharp) / 65536;
 
+            int tb   = 125000 * 120;
+            short db = dur * bpm;
+
+            if( dots ){
+                tb = (tb * ((2<<dots) - 1)) >> dots;
+            }
             if( freq && vol )
-                beep(freq, vol, 125000L * 120 * ratio / dur / bpm );
+                beep(freq, vol, tb * ratio / db );
             else
-                usleep( 125000L * 120 * ratio / dur / bpm );
+                usleep( tb * ratio / db );
 
             if( ratio != 16 )
-                usleep( 125000L * 120 * (16 - ratio) / dur / bpm );
+                usleep( tb * (16 - ratio) / db );
 
             dur    = 4;
             octave = 4;
             sharp  = 0;
             freq   = 0;
             ratio  = 8;
+            dots   = 0;
         }
 
         tune++;
