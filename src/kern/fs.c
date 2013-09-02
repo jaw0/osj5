@@ -299,7 +299,7 @@ DEFALIAS(dir, ls)
 DEFALIAS(dir, ll)
 {
     int how=0, i;
-    char *what;
+    const char *what;
     MountEntry *me;
 
     if( !strcmp(argv[0], "ll") )
