@@ -29,4 +29,6 @@ fatfs:          fs/fatfs/ff.c
 
 ed:             util/ed.c
 cli:            util/cli.c util/debugger.c
+play:           util/play.c
+
 

@@ -9,7 +9,6 @@
 #include <math.h>
 #include <stdint.h>
 #include <proc.h>
-#include <pwm.h>
 #include <userint.h>
 
 extern void beep(int freq, int vol, int duration);
