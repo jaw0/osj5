@@ -12,7 +12,7 @@
 #include <pwm.h>
 #include <userint.h>
 
-extern void beep(int,int,int);
+extern void beep(int freq, int vol, int duration);
 
 // sort-of:
 //   http://en.wikipedia.org/wiki/Music_Macro_Language#Classical_MML_2
