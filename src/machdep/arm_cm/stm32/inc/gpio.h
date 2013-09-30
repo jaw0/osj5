@@ -124,7 +124,7 @@
 #  define GPIO_SPEED_2MHZ	0
 #  define GPIO_SPEED_25MHZ	(1<<3)
 #  define GPIO_SPEED_50MHZ	(2<<3)
-#  define GPIO_SPEED_10MHZ	(3<<3)
+#  define GPIO_SPEED_100MHZ	(3<<3)
 
 #  define GPIO_PULL_UP		(1<<5)
 #  define GPIO_PULL_DN		(2<<5)
