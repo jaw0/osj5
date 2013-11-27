@@ -10,4 +10,5 @@ i2c:    machdep/arm_cm/stm32/src/i2c.c
 spi:    machdep/arm_cm/stm32/src/spi.c
 adc:    machdep/arm_cm/stm32f4/src/adc.c
 rng:    machdep/arm_cm/stm32f4/src/rng.c
+ccm:    machdep/arm_cm/stm32f4/src/ccm.c
 

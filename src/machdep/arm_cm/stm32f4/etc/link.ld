@@ -42,18 +42,21 @@ Linker subscript for STM32F10x definitions with 512K Flash and 64K RAM */
 
 MEMORY
 {
-  RAM (xrw) : ORIGIN = 0x20000000, LENGTH = 128K
+  RAM (xrw)  : ORIGIN = 0x20000000, LENGTH = 128K
   FLASH (rx) : ORIGIN = 0x08000000, LENGTH = 1024K
   FLASHB1 (rx) : ORIGIN = 0x00000000, LENGTH = 0
   EXTMEMB0 (rx) : ORIGIN = 0x00000000, LENGTH = 0
   EXTMEMB1 (rx) : ORIGIN = 0x00000000, LENGTH = 0
   EXTMEMB2 (rx) : ORIGIN = 0x00000000, LENGTH = 0
   EXTMEMB3 (rx) : ORIGIN = 0x00000000, LENGTH = 0
+  CCM(rw) : ORIGIN = 0x10000000, LENGTH = 64K
 }
 
 /* higher address of the user mode stack */
-/* RSN - move this to CCM */
 _estack = 0x20020000;
+
+/* core coupled memory */
+_ccmem = 0x10000000;
 
 
 
