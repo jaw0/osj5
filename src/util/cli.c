@@ -531,6 +531,49 @@ DEFUN(cat, "cat files")
     return 0;
 }
 
+DEFUN(more, "page through files")
+{
+    int i, c, n=0;
+    FILE *f;
+
+    if( argc < 2 ){
+        return 0;
+    }
+
+    while(++argv, --argc){
+        f = fopen( *argv, "r" );
+        if( f ){
+            while( (c=fgetc(f)) != -1 ){
+                fputc(c, STDOUT);
+                if( c == '\n' ){
+                    n++;
+                    if( n == 23 ){
+                        fputs("--More--", STDOUT);
+                        while(1){
+                            c = getchar();
+                            switch(c){
+                            case ' ':  n = 0;	break;
+                            case '\n': n--;		break;
+                            case 'q':  goto done;
+                            default:
+                                fputc('\a', STDOUT);
+                                continue;
+                            }
+                            break;
+                        }
+                        fputs("\r        \b\b\b\b\b\b\b\b", STDOUT);
+                    }
+                }
+            }
+        done:
+            fclose(f);
+        }else{
+            fprintf(STDERR, "could not open file \"%s\"\n", *argv);
+        }
+    }
+    return 0;
+}
+
 DEFUN(copy, "copy files")
 DEFALIAS(copy, cp)
 {
