@@ -433,7 +433,7 @@ get_fattime(void){
 
     if( t.tm_year < 2000 ) t.tm_year = 2000;
     ft |= (t.tm_year - 1980) << 25;
-    ft |= (t.tm_mon + 1) << 21;
+    ft |= t.tm_mon  << 21;
     ft |= t.tm_mday << 16;
     ft |= t.tm_hour << 11;
     ft |= t.tm_min  << 5;
