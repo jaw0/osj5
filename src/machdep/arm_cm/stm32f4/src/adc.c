@@ -14,6 +14,7 @@
 #include <clock.h>
 #include <proc.h>
 #include <gpio.h>
+#include <adc.h>
 #include <stm32.h>
 
 
@@ -71,15 +72,20 @@ adc_init(int chan, int samp){
     dev->CR2 |= CR2_ADON;	/* enable */
 
     ADC->CCR &= 0x00C37F1F;
-
-    ADC->CCR |= (1<<23)	/* temp enable */
-        | (1<<22)	/* vbat enable */
-        | (1<<16)	/* ahb2clock / 4 */
-        ;
+    ADC->CCR |= (1<<16);	/* ahb2clock / 4 */
 
     chan &= 0x1F;
 
-    samp = 0;	// 3 cycles
+    if( samp > 7 ) samp = 7;
+    // bizarre relationship
+    // 0 => 3
+    // 1 => 15
+    // 2 => 28
+    // 3 => 56
+    // 4 => 84
+    // 5 => 112
+    // 6 => 144
+    // 7 => 480
 
     if( chan < 10 ){
         dev->SMPR1 &= ~ (7<< (3 * chan));
@@ -91,12 +97,20 @@ adc_init(int chan, int samp){
     }
 }
 
+/* init channel on ADC1+2 */
+void
+adc_init2(int chan, int samp){
+    adc_init(chan, samp);
+    adc_init(chan + ADC_2_0, samp);
+}
+
 int
 adc_get(int chan){
     ADC_TypeDef *dev = _adc_addr(chan);
 
     int v = dev->DR;	// clear any previous result
-    dev->SQR3 = chan;
+    dev->SQR3 = chan & 0x1F;
+
     dev->CR2 |= CR2_SWSTART;
 
     while(1){
@@ -106,4 +120,28 @@ adc_get(int chan){
     }
 
     return dev->DR;
+}
+
+// dual simultaneous ADC
+int
+adc_get2(int chan1, int chan2){
+
+    int v = ADC1->DR;	// clear any previous result
+    v = ADC2->DR;
+
+    ADC1->SQR3 = chan1 & 0x1F;
+    ADC2->SQR3 = chan2 & 0x1F;
+
+    ADC->CCR  |= 6;	// simultaneous regular mode
+    ADC1->CR2 |= CR2_SWSTART;
+
+    while(1){
+        // ~ 2usec
+        if( (ADC1->SR & SR_EOC) && (ADC2->SR & SR_EOC) ) break;
+    }
+
+    ADC->CCR &= ~0xF;	// disable simultaneous mode
+
+    // NB: CDR is only available using DMA
+    return (ADC1->DR & 0xFFFF) | (ADC2->DR << 16);
 }
