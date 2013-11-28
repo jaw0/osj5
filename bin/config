@@ -25,6 +25,7 @@ die "cannot create build directory\n" unless -d $dir;
 my %fileconf;
 my %usefiles;
 my @appfiles;
+my @appdirs;
 my($arch, $variant);
 
 my $ident   = $confile;
@@ -92,6 +93,9 @@ while( <> ){
     elsif( $cmd eq 'files' ){
         # config file
         conf_files( $f[1], 4 );
+    }
+    elsif( $cmd eq 'srcdir' ){
+        push @appdirs, $f[1];
     }
     elsif( $cmd eq 'srcfile' ){
         # app src code
@@ -285,13 +289,38 @@ if( -f "../src/machdep/$arch/$variant/etc/makefile.inc" ){
 my @objs;
 my @srcs;
 
-for my $file (use_files(), @appfiles){
-    my($base) = $file =~ m|.*/([^/]+)\.(\S+)$|;
+for my $file (use_files()){
+    my($base) = $file =~ m|([^/]+)\.(\S+)$|;
 
     print CONFD "$base.o: ../../src/$file\n";
     push @objs, "$base.o";
     push @srcs, "../../src/$file";
 }
+
+for my $file (@appfiles){
+    my($base) = $file =~ m|([^/]+)\.(\S+)$|;
+
+    my $dir = '';
+    if( $file !~ m|^/| ){
+        # search specified dirs
+        for my $d (@appdirs, '../../src'){
+            if( -f "$d/$file" ){
+
+                $dir = $d;
+                $dir .= '/' unless $dir =~ m|/$|;
+                last;
+            }
+        }
+
+        # no such file? assume the makefile will create it...
+        $dir ||= '';
+    }
+
+    print CONFD "$base.o: $dir$file\n";
+    push @objs, "$base.o";
+    push @srcs, "$dir$file";
+}
+
 
 print CONFM "\nOBJS = conf.o @objs\n\n";
 print CONFM "\nSRCS = @srcs\n\n";
