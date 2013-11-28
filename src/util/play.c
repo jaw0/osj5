@@ -12,6 +12,7 @@
 #include <userint.h>
 
 extern void beep(int freq, int vol, int duration);
+extern int  volume;
 
 // sort-of:
 //   http://en.wikipedia.org/wiki/Music_Macro_Language#Classical_MML_2
@@ -173,7 +174,7 @@ play(int vol, const char *tune){
 
 DEFUN(play, "play music")
 {
-    int i, vol=4;
+    int i, vol=(volume ? volume : 16);
 
     if( argc < 2 ){
         fprintf(STDERR, "ERROR: play [-v vol] notes...\n");
