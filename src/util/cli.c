@@ -11,6 +11,7 @@
 #include <proc.h>
 #include <get.h>
 #include <fs.h>
+#include <cli.h>
 #include <misc.h>
 #include <msgs.h>
 #include <bootflags.h>
@@ -72,60 +73,55 @@ static const struct {
 };
 
 
-#undef DEFUN
-#undef DEFALIAS
-#include <userint.h>
-
-
 static const struct {
     const char *name;
     const char *help;
     const void *addr;
     u_char type;
-#define TYPE_STR16      1
-#define TYPE_STR32      2
-#define TYPE_UC         3
-#define TYPE_US         4
-#define TYPE_UL         5
-#define TYPE_UQ         6
-#define TYPE_IP         7
-#define TYPE_TIME	8
-#define TYPE_ULX        9
-#define TYPE_ENV	0x80
-#define TYPE_PROC	0x40
-#define TYPE_RO		0x20
 
-
-#define IN_ENV(a, b)	(void*)offsetof(struct cli_env, a), TYPE_ENV | b
-#define IN_PROC(a, b)	(void*)offsetof(struct Proc, a), TYPE_PROC | b
+#define IN_ENV(a, b)	(void*)offsetof(struct cli_env, a), UV_TYPE_ENV | b
+#define IN_PROC(a, b)	(void*)offsetof(struct Proc, a), UV_TYPE_PROC | b
 
 } vars[] = {
-    { "prompt",  "the prompt",               IN_ENV(prompt, TYPE_STR32) },
-    { "time",    "temporal displacement",    &systime,      TYPE_TIME },
-    { "itime",   "temporal displacement",    &systime,      TYPE_UQ },
+    { "prompt",  "the prompt",               IN_ENV(prompt, UV_TYPE_STR32) },
+    { "time",    "temporal displacement",    &systime,      UV_TYPE_TIME },
+    { "itime",   "temporal displacement",    &systime,      UV_TYPE_UQ },
 #ifdef N_RTC
-    { "boottime","the time we booted",       &boottime,  TYPE_TIME },
+    { "boottime","the time we booted",       &boottime,  UV_TYPE_TIME },
 #endif
-    { "verbose", "echo commands in scripts", &verbose,   TYPE_UL },
+    { "verbose", "echo commands in scripts", &verbose,   UV_TYPE_UL },
 #ifndef PLATFORM_EMUL
 #ifdef PLATFORM_I386
-    { "kpa",     0,                          &k_paddr,   TYPE_UL },
-    { "mem0",    0,                          &bootmem0,  TYPE_UL },
-    { "mem1",    0,                          &bootmem1,  TYPE_UL },
+    { "kpa",     0,                          &k_paddr,   UV_TYPE_UL },
+    { "mem0",    0,                          &bootmem0,  UV_TYPE_UL },
+    { "mem1",    0,                          &bootmem1,  UV_TYPE_UL },
 #endif
 #endif
-    { "bootflags","bootflags",               &bootflags, TYPE_UL },
+    { "bootflags","bootflags",               &bootflags, UV_TYPE_UL },
 
-    { "a", 	     0,                          IN_ENV(a, TYPE_STR32) },
-    { "b", 	     0,                          IN_ENV(b, TYPE_STR32) },
-    { "c", 	     0,                          IN_ENV(c, TYPE_STR32) },
-    { "d", 	     0,                          IN_ENV(d, TYPE_STR32) },
+    { "a", 	     0,                          IN_ENV(a, UV_TYPE_STR32) },
+    { "b", 	     0,                          IN_ENV(b, UV_TYPE_STR32) },
+    { "c", 	     0,                          IN_ENV(c, UV_TYPE_STR32) },
+    { "d", 	     0,                          IN_ENV(d, UV_TYPE_STR32) },
 
-    { "tsl",     "process timeslice",        IN_PROC(timeslice, TYPE_UC) },
-    { "currproc",0,                          &currproc,  TYPE_ULX | TYPE_RO },
+    { "tsl",     "process timeslice",        IN_PROC(timeslice, UV_TYPE_UC) },
+    { "currproc",0,                          &currproc,  UV_TYPE_ULX | UV_TYPE_RO },
+
+
+#define DEFVAR(proto, name, init, type, docstr)	\
+    { QUOTIFY(name),	docstr,		     &name, type },
+
+#include "defvar.list"
 
     {0,0,0,0}
 };
+
+/****************************************************************/
+
+#undef DEFUN
+#undef DEFALIAS
+#undef DEFVAR
+#include <userint.h>
 
 
 void
@@ -154,35 +150,35 @@ interp_var(struct cli_env *env, const char *var, char *buf, int buflen){
     for(i=0; vars[i].name; i++)
         if( !strcmp(vars[i].name, var)) break;
     if( vars[i].name ){
-        if( vars[i].type & TYPE_ENV )
+        if( vars[i].type & UV_TYPE_ENV )
             off = (int)env;
-        if( vars[i].type & TYPE_PROC )
+        if( vars[i].type & UV_TYPE_PROC )
             off = (int)currproc;
 
         switch( vars[i].type & 0xF ){
-        case TYPE_STR16:
-        case TYPE_STR32:
+        case UV_TYPE_STR16:
+        case UV_TYPE_STR32:
             snprintf(buf, buflen, "%s", vars[i].addr + off);
             break;
-        case TYPE_UC:
+        case UV_TYPE_UC:
             snprintf(buf, buflen, "%u", *(u_char*)(vars[i].addr + off));
             break;
-        case TYPE_US:
+        case UV_TYPE_US:
             snprintf(buf, buflen, "%u", *(u_short*)(vars[i].addr + off));
             break;
-        case TYPE_ULX:
+        case UV_TYPE_ULX:
             snprintf(buf, buflen, "0x%x", *(u_long*)(vars[i].addr + off));
             break;
-        case TYPE_UL:
+        case UV_TYPE_UL:
             snprintf(buf, buflen, "%u", *(u_long*)(vars[i].addr + off));
             break;
-        case TYPE_UQ:
+        case UV_TYPE_UQ:
             snprintf(buf, buflen, "%Qu", *(u_quad*)(vars[i].addr + off));
             break;
-        case TYPE_IP:
+        case UV_TYPE_IP:
             snprintf(buf, buflen, "%I", *(u_long*)(vars[i].addr + off));
             break;
-        case TYPE_TIME:
+        case UV_TYPE_TIME:
             snprintf(buf, buflen, "%#T", *(u_quad*)(vars[i].addr + off));
             break;
         default:
@@ -239,44 +235,44 @@ DEFUN(set, "set a var")
     for(i=0; vars[i].name; i++)
         if( !strcmp(vars[i].name, var)) break;
     if( vars[i].name ){
-        if( vars[i].type & TYPE_ENV )
+        if( vars[i].type & UV_TYPE_ENV )
             off = (int)env;
-        if( vars[i].type & TYPE_PROC )
+        if( vars[i].type & UV_TYPE_PROC )
             off = (int)currproc;
-        if( vars[i].type & TYPE_RO ){
+        if( vars[i].type & UV_TYPE_RO ){
             fprintf(STDERR, "%s: read-only\n", var);
             return -1;
         }
         switch( vars[i].type & 0xF ){
-        case TYPE_STR16:
-        case TYPE_STR32:
-            n = (vars[i].type==TYPE_STR16)? 16 : 32;
+        case UV_TYPE_STR16:
+        case UV_TYPE_STR32:
+            n = (vars[i].type==UV_TYPE_STR16)? 16 : 32;
             strncpy( (char*)(vars[i].addr + off), argv[2], n);
             ((char*)(vars[i].addr + off))[n-1] = 0;
             break;
-        case TYPE_UC:
+        case UV_TYPE_UC:
             v = atoi( argv[2] );
             *(u_char*)(vars[i].addr + off) = v;
             break;
-        case TYPE_US:
+        case UV_TYPE_US:
             v = atoi( argv[2] );
             *(u_short*)(vars[i].addr + off) = v;
             break;
-        case TYPE_UL:
+        case UV_TYPE_UL:
             v = atoi( argv[2] );
             *(u_long*)(vars[i].addr + off) = v;
             break;
-        case TYPE_TIME:
+        case UV_TYPE_TIME:
             *(u_quad*)(vars[i].addr + off) = timeiso( argv[2] );
             break;
-        case TYPE_UQ: {
+        case UV_TYPE_UQ: {
             quad val;
             val = strtoq(argv[2], 0, 0);
             *(u_quad*)(vars[i].addr + off) = val;
             break;
         }
 #if 0
-        case TYPE_IP:
+        case UV_TYPE_IP:
             v = inet_aton( argv[2] );
             *(u_long*)(vars[i].addr + off) = v;
             break;

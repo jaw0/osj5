@@ -1,7 +1,7 @@
 
 .include "makefile.conf"
 
-CLEANFILES += $(OBJS) osj5$(LINK_SUFFIX) assym.h mkassym defun.list defun.list.tmp defproto.h
+CLEANFILES += $(OBJS) osj5$(LINK_SUFFIX) assym.h mkassym defun.list defun.list.tmp defvar.list defvar.list.tmp defproto.h
 
 CPPFLAGS += -I. -I../../src/inc $(INCL_FLAGS)
 
@@ -34,10 +34,22 @@ defun.list.tmp: $(SRCS)
 defun.list: defun.list.tmp
 	../../bin/if-changed cp defun.list.tmp defun.list
 
-defproto.h: defun.list
+defproto.h: defun.list defvar.list
 	$(CPP) $(CPPFLAGS) -C -P ../../src/etc/defproto.gen | sed -e 's/^$$//' -e 's/  */ /g' > defproto.h
 
-cli.o: defun.list defproto.h
+defvar.list.tmp: $(SRCS)
+	@exec > defvar.list.tmp;\
+	for f in $(SRCS); do \
+	        echo ""; \
+	        echo "/* $$f */"  ; \
+	        sed -n -f ../../src/etc/mdefvar.sed $$f ; \
+	done
+
+defvar.list: defvar.list.tmp
+	../../bin/if-changed cp defvar.list.tmp defvar.list
+
+
+cli.o: defun.list defvar.list defproto.h
 
 
 ################################################################

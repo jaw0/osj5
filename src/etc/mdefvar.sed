@@ -1,6 +1,5 @@
-/^DEFUN.*)$/p
-/^DEFUN.*[^)]$/,/)$/p
-/^DEFALIAS.*)$/p
+/^DEFVAR.*)$/p
+/^DEFVAR.*[^)]$/,/)$/p
 /^#[ 	]*if/p
 /^#[ 	]*else/p
 /^#[ 	]*elif/p
