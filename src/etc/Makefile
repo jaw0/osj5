@@ -32,7 +32,7 @@ defun.list.tmp: $(SRCS)
 	done
 
 defun.list: defun.list.tmp
-	../../bin/if-changed cp defun.list.tmp defun.list
+	@../../bin/if-changed cp defun.list.tmp defun.list
 
 defproto.h: defun.list defvar.list
 	$(CPP) $(CPPFLAGS) -C -P ../../src/etc/defproto.gen | sed -e 's/^$$//' -e 's/  */ /g' > defproto.h
@@ -46,7 +46,7 @@ defvar.list.tmp: $(SRCS)
 	done
 
 defvar.list: defvar.list.tmp
-	../../bin/if-changed cp defvar.list.tmp defvar.list
+	@../../bin/if-changed cp defvar.list.tmp defvar.list
 
 
 cli.o: defun.list defvar.list defproto.h
