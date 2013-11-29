@@ -23,6 +23,15 @@ start(void){
 #endif
 
 #ifdef USE_CLI
+# if defined(USE_FILESYS) & defined(MOUNT_ROOT) & defined(STARTUPFILE)
+    FILE *f;
+    f = fopen( MOUNT_ROOT STARTUPFILE, "r" );
+    if( f ){
+        fshell(f, 0);
+        fclose(f);
+    }
+# endif
+
     extern void shell(void);
     shell();
 #endif

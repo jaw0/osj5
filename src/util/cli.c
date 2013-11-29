@@ -886,9 +886,9 @@ fshell(FILE *f, int interactivep){
 
 void
 shell(void){
+#if defined(USE_FILESYS) & defined(MOUNT_ROOT)
     FILE *f;
-#if defined(USE_FILESYS) & defined(MOUNT_ROOT) & defined(STARTUPFILE)
-    f = fopen( MOUNT_ROOT STARTUPFILE, "r" );
+    f = fopen( MOUNT_ROOT "shell.rc", "r" );
     if( f ){
         fshell(f, 0);
         fclose(f);
