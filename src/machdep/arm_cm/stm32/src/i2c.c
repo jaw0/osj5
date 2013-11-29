@@ -49,7 +49,8 @@
 /* NB: stm32f1 + f4 are compat, but at different addrs */
 #include <stm32.h>
 
-//#define VERBOSE
+// define in config file:
+//#define I2C_VERBOSE
 
 #define CR1_PE		1
 #define CR1_START	0x100
@@ -78,7 +79,7 @@
 
 static u_long cur_crumb = 0;
 
-#ifdef VERBOSE
+#ifdef I2C_VERBOSE
 struct crumb {
     const char *event;
     int arg0;
@@ -221,7 +222,7 @@ static void
 _i2c_dump_crumb(void){
     int i;
 
-#ifdef VERBOSE
+#ifdef I2C_VERBOSE
     for(i=0; i<cur_crumb; i++){
         kprintf("[i2c] %s\t%x %x\n", crumbs[i].event, crumbs[i].arg0, crumbs[i].arg1);
     }
@@ -331,7 +332,7 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
 
 
     /* wait for device */
-#ifdef VERBOSE
+#ifdef I2C_VERBOSE
     kprintf("i2c xfer waiting, state %d\n", ii->state);
 #endif
 
@@ -343,7 +344,7 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
     ii->num_msg   = nmsg;
     ii->state     = I2C_STATE_BUSY;
 
-#ifdef VERBOSE
+#ifdef I2C_VERBOSE
     kprintf("i2c xfer starting, %d msgs\n", nmsg);
 #endif
 
@@ -366,7 +367,7 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
         }
     }
 
-#ifdef VERBOSE
+#ifdef I2C_VERBOSE
     _i2c_dump_crumb();
     kprintf("i2c xfer done %d\n\n", ii->state);
 #endif
