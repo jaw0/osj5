@@ -103,7 +103,7 @@ start_proc(int ssize, void *entry, const char *name){
     proc->memused     = asize;
 #endif
     proc->timeslice   = TIMESLICE;
-    proc->prio        = 1;
+    proc->prio        = READYLISTSIZE/2;
 
 #ifdef CHECKPROC
     proc->magic = PROCMAGIC;
@@ -162,7 +162,7 @@ init_proc(proc_t p){
     bzero(waittable, WAITTABLESIZE * sizeof(struct Proc *));
 
     p->timeslice = TIMESLICE;
-    p->prio      = 1;
+    p->prio      = READYLISTSIZE/2;
     /* estimated size of needed stack, for run-time error checking */
     p->stack_start = _heap_limit = (char*)p - INIT_STACK;
     p->flags  = PRF_NONBLOCK | PRF_AUTOREAP;
@@ -356,6 +356,7 @@ idleloop(void){
     currproc->timeslice = 255;
     currproc->flags = PRF_IMPORTANT;
     currproc->state = PRS_BLOCKED;
+    currproc->prio  = READYLISTSIZE - 1;
     yield();
 
     while(1){
@@ -376,7 +377,7 @@ sysmaint(void){
     u_long lastt = 0, dt;
 
     currproc->timeslice = TIMESLICE;
-    currproc->prio      = 4;
+    currproc->prio      = (READYLISTSIZE*3)/4;
     currproc->flags     = PRF_AUTOREAP | PRF_IMPORTANT;
 
     while(1){
