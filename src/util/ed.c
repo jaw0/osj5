@@ -16,6 +16,8 @@
 #error "editor requires feature CLI"
 #endif
 
+#define BUFSIZ	256
+
 struct Line {
     char line[256];
     struct Line *next, *prev;
@@ -282,8 +284,8 @@ DEFALIAS(ed, vi)
     else
         f = 0;
 
-    char *buf  = alloc(256);
-    char *pbuf = alloc(256);
+    char *buf  = alloc(BUFSIZ);
+    char *pbuf = alloc(BUFSIZ);
 
     /* read file in data struct */
     file.firstline = file.lastline = file.currline = 0;
@@ -323,7 +325,7 @@ DEFALIAS(ed, vi)
 
         /* get command */
         printf("ed: ");
-        getline2(buf, sizeof(buf), 0, 0);
+        getline2(buf, BUFSIZ, 0, 0);
         /* \n -> repeat previous */
         if( !*buf ){
             strcpy(buf, pbuf);
@@ -492,7 +494,7 @@ DEFALIAS(ed, vi)
                 struct Line *ll;
 
                 ll = l->next;
-                snprintf(buf, sizeof(buf), "%s%s", adr1->line, l->line);
+                snprintf(buf, BUFSIZ, "%s%s", adr1->line, l->line);
                 strncpy(adr1->line, buf, sizeof(adr1->line));
                 DELETE_LINE(l);
                 if( l == adr2 ) break;
@@ -587,8 +589,8 @@ DEFALIAS(ed, vi)
                     free(l, sizeof(struct Line));
                     l = ll;
                 }
-                free(buf, 256);
-                free(pbuf, 256);
+                free(buf,  BUFSIZ);
+                free(pbuf, BUFSIZ);
                 return 0;
             }
             delta = 0;
