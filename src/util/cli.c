@@ -884,17 +884,23 @@ fshell(FILE *f, int interactivep){
     }
 }
 
+#if defined(USE_FILESYS)
 void
-shell(void){
-#if defined(USE_FILESYS) & defined(MOUNT_ROOT)
+run_script(const char* file){
     FILE *f;
-    f = fopen( MOUNT_ROOT "shell.rc", "r" );
+    f = fopen(file, "r" );
     if( f ){
         fshell(f, 0);
         fclose(f);
     }
+}
+#endif
+
+void
+shell(void){
+#if defined(USE_FILESYS) & defined(MOUNT_ROOT)
+    run_script(MOUNT_ROOT "shell.rc");
 #endif
     fshell(0, 1);
 }
-
 

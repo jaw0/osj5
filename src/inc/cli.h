@@ -28,6 +28,6 @@ struct cli_env {
 #define UV_TYPE_PROC	0x40
 #define UV_TYPE_RO	0x20
 
-
+extern run_script(const char*);
 
 #endif /* __cli_h__ */
