@@ -114,8 +114,8 @@ DEFUN(ps, "list processes")
     }else{
         proc_ps(p);
 
-        printf("magic=%9.9d sp=0x%08.8x state=0x%02.2x flags=0x%02.2x wchan=0x%08.8x\n",
-               p->magic, p->sp, p->state, p->flags, p->wchan);
+        printf("sp=0x%08.8x state=0x%02.2x flags=0x%02.2x wchan=0x%08.8x\n",
+               p->sp, p->state, p->flags, p->wchan);
 #ifdef USE_NSTDIO
         printf("stdin=0x%08.8x stdout=0x%08.8x stderr=0x%08.8x cwd=0x%08.8x\n",
                p->stdin, p->stdout, p->stderr, p->cwd);
