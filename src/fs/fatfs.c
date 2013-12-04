@@ -19,6 +19,7 @@
 #include <locks.h>
 #include <ioctl.h>
 #include <userint.h>
+#include <time.h>
 
 #include "fatfs/ff.h"
 #include "fatfs/diskio.h"
@@ -38,8 +39,9 @@ struct FatFS {
 
 struct FileData {
     struct FatFS *ffs;
-    FIL	fil;
-
+    FIL		fil;
+    // buffered at time of open (for stat):
+    FILINFO	info;
 };
 
 int fatfs_putchar(FILE*, char);
@@ -106,6 +108,79 @@ fatfs_unmount(MountEntry *me){
     return -1;
 }
 
+#ifdef RENAMEFILE_ON_CREAT
+
+static inline void
+_make_numbered_file(char *buf, const char *name, int n){
+    int i;
+
+    for(i=0; i<8; i++){
+        if( name[i] == '.' ) break;
+        buf[i] = name[i];
+    }
+
+    if( n <= 999 ){
+        snprintf(buf+i, 13-i, ".%0.3d", n);
+    }else{
+        snprintf(buf+i, 13-i, ".%=36", n + 10*36*36 - 1);
+    }
+}
+
+static inline int
+_check_file_exists(struct FileData *fd, const char *name){
+    if( f_stat(name, & fd->info) ) return 0;
+    return 1;
+}
+
+
+static void
+_rename_backup_file(struct FileData *fd, const char *name){
+    char buf[13];
+    int n=1, m;
+
+#ifndef RENAMEFILE_ON_CREAT_SMALLER_SLOWER
+
+    // binary search for current highest numbered file
+    while(1){
+        _make_numbered_file(buf, name, n);
+        if( ! _check_file_exists(fd, buf) ){
+            n >>= 1;
+            break;
+        }
+        n <<= 1;
+    }
+    m = n >> 1;
+    // highest file is bewteen (n, 2n)
+
+    while(m){
+        _make_numbered_file(buf, name, n|m);
+        if( _check_file_exists(fd, buf) ){
+            n |= m;
+        }
+        m >>= 1;
+    }
+
+    // use next number
+    n ++;
+    // fill buf
+    _make_numbered_file(buf, name, n);
+
+#else
+    int i, n=1;
+
+    // small, slow linear search
+    while(1){
+        _make_numbered_file(buf, name, n);
+        if( !_check_file_exists(fd, buf) ) break;
+        n++;
+    }
+
+#endif
+
+    // kprintf("fatfs backup %s => %s\n", name, buf );
+    f_rename(name, buf);
+}
+#endif
 
 FILE *
 fatfs_open(MountEntry *me, const char *name, const char *how){
@@ -119,14 +194,37 @@ fatfs_open(MountEntry *me, const char *name, const char *how){
 
     if( *how == 'r' ){
         r = f_open( & fd->fil, name, FA_READ | FA_OPEN_EXISTING);
+    }else if( *how == 'a' ){
+        // append - open r+w, seek to end
+        r = f_open( & fd->fil, name, FA_READ | FA_WRITE | FA_OPEN_ALWAYS );
+        if( r == FR_OK ) f_lseek( & fd->fil, fd->fil.fsize);
     }else{
+#ifdef RENAMEFILE_ON_CREAT
+        // "w!" prevents backup copy
+        if( how[1] != '!' ){
+            // fail if file exists
+            r = f_open( & fd->fil, name, FA_WRITE | FA_CREATE_NEW );
+            if( r == FR_EXIST ){
+                _rename_backup_file(fd, name);
+                r = f_open( & fd->fil, name, FA_WRITE | FA_CREATE_NEW );
+            }
+        }else{
+            // create or replace
+            r = f_open( & fd->fil, name, FA_WRITE | FA_CREATE_ALWAYS );
+        }
+#else
+        // create or replace
         r = f_open( & fd->fil, name, FA_WRITE | FA_CREATE_ALWAYS );
+#endif
     }
 
     if( r != FR_OK ){
         free(fd, sizeof(struct FileData));
         return 0;
     }
+
+    // grab stat info for later
+    f_stat(name, & fd->info);
 
     f = alloc(sizeof(FILE));
     finit( f );
@@ -187,12 +285,11 @@ fatfs_ops(int what, MountEntry *me, ...){
         int (*fnc)(const char *, void*) = va_arg(ap, void*);
         return fatfs_glob(me, name, fnc, va_arg(ap, void*) );
     }
-#if 0
+
     case FSOP_FCHMOD:
         f = va_arg(ap, FILE*);
         return fatfs_fchmod(f, va_arg(ap, int));
 
-#endif
     default:
         return -1;
     }
@@ -393,13 +490,21 @@ fatfs_flush(FILE *f){
 int fatfs_stat(FILE *f, struct stat *s){
     struct FileData *fd = f->d;
     struct FatFS *fs = fd->ffs;
+    struct tm ft;
+
+    // convert time format
+    ft.tm_year = (fd->info.fdate >> 9) + 1980;
+    ft.tm_mon  = (fd->info.fdate >> 5) & 0xf;
+    ft.tm_mday = (fd->info.fdate) & 0x1f;
+    ft.tm_hour = (fd->info.ftime >> 11);
+    ft.tm_min  = (fd->info.ftime >> 5) & 0x3f;
+    ft.tm_sec  = (fd->info.ftime) & 0x1f;
 
     s->dev     = fs->me;
-
     s->size    = fd->fil.fsize;
-    s->ctime   = 0;
+    s->ctime   = timegm( & ft );
     s->blksize = 512;
-    s->mode    = 0;
+    s->mode    = fd->info.fattrib;
     s->flags   = 0;
 
     return 0;
@@ -410,9 +515,13 @@ int fatfs_noop(FILE*f){}
 
 /****************************************************************/
 
-#if 0
-int fatfs_fchmod(FILE * f, int attr){}
-#endif
+int fatfs_fchmod(FILE * f, int attr){
+    struct FileData *fd = f->d;
+    int a = ((attr & FFA_HIDDEN)?AM_HID:0) | ((attr & FFA_READONLY)?AM_RDO:0);
+
+    return f_chmod(fd->info.fname, a, AM_HID|AM_RDO);
+
+}
 
 /****************************************************************/
 
