@@ -44,6 +44,8 @@ static const u_char ssd1306_32_init[] = {
 static const u_char ssd1306_origin[] = { 0x00, 0x10, 0x40 };
 static const u_char ssd1306_invert[] = { 0xA7 };
 static const u_char ssd1306_normal[] = { 0xA6 };
+static const u_char ssd1306_sleep[]  = { 0xAE };
+static const u_char ssd1306_awake[]  = { 0xAF };
 
 
 //****************************************************************
@@ -67,6 +69,7 @@ public:
     virtual int  _get_pixel(int, int);
     virtual void clear_screen(void);
     virtual void set_colors(void);
+    virtual void set_sleep(bool);
 
 }  ssd1306info[ N_SSD1306 ];
 
@@ -242,6 +245,11 @@ SSD1306::_get_pixel(int px, int py){
 void
 SSD1306::clear_screen(void){
     bzero(dpybuf, _height * _width / 8);
+}
+
+void
+SSD1306::set_sleep(bool sleep){
+    _ssd1306_cmds( this, sleep ? ssd1306_sleep : ssd1306_awake, 1 );
 }
 
 //****************************************************************

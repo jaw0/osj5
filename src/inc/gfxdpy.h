@@ -62,6 +62,7 @@ public:
     virtual int  _get_pixel(int, int);
     virtual void clear_screen(void);
     virtual void set_colors(void);
+    virtual void set_sleep(bool);
 
     void init(void);
     void set_pixel(int, int, int);
