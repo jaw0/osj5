@@ -246,7 +246,14 @@ chop(my $pwd = `cd ..;pwd`);
 my $date = strftime('%Y-%m-%d %H:%M', localtime());
 my $archid = uc($arch . ($variant ? "/$variant" : ''));
 
-print CONFH "\n";
+print CONFH <<EOH;
+
+extern const char ident[];
+extern const char archid[];
+extern const char version[];
+
+EOH
+;
 
 print CONFC <<EOM;
 
@@ -260,9 +267,9 @@ $devs};
 $fsys};
 $diskdev};
 
-const char *const ident   = "$ident";
-const char *const archid  = "$archid";
-const char *const version =
+const char ident[]   = "$ident";
+const char archid[]  = "$archid";
+const char version[] =
 	"OS/J5 ($ident) $archid Release $version($number)\\n"
 	"Copyright (c) 1999-2013 Jeff Weisberg\\n"
 	"Built on $date by $whoami\@$host\\n"

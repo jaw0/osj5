@@ -161,7 +161,6 @@ dkpart_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, u_int
     fmount( & dkp->file, dkp->name, 0);
     if( fstype ) fmount( & dkp->file, dkp->name, fstype );
 
-    kprintf("disk start %x\n", start);
     bootmsg( "%s unit %d/%d %d blocks mounted on %s type %s\n",
 	     cf->name, dkno, partno, len, dkp->name, fstype );
 

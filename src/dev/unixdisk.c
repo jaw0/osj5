@@ -23,6 +23,7 @@
 #include <bootflags.h>
 #include <locks.h>
 
+#define DISKFILE	"disk_2gb"
 #define DISKSIZE	(2*1024*1024*1024LL)
 
 int udsk_ioctl(FILE*, int, void*);
@@ -69,12 +70,12 @@ udsk_init(struct Device_Conf *dev){
     int c = dev->unit;
     finit( & udsk[c].file );
     udsk[c].no   = c;
-    udsk[c].fd = open("disk_2gb", 2);
+    udsk[c].fd = open(DISKFILE, 2);
     udsk[c].file.d  = (void*)& udsk[c];
     udsk[c].file.fs = & udsk_fs;
 
-    bootmsg( "%s at unix\n",
-	     dev->name);
+    bootmsg( "%s %qd bytes @ UNIX %s\n",
+	     dev->name, DISKSIZE, DISKFILE);
 
     dkpart_learn( dev, "ud", c, &udsk[c].file, DISKSIZE / 512 );
     return 0;

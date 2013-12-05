@@ -21,8 +21,6 @@ extern int n_devs;
 extern void kflush(int);
 extern void init_ddb(void);
 
-extern const char *version;
-extern void blinky(void);
 extern hexdump(const unsigned char *p, int len);
 
 void
@@ -51,7 +49,7 @@ init(proc_t proc){
     init_ints();
 
     /* spit out banner */
-    bootmsg("\n%s\n", version);
+    bootmsg("\n%s", version);
 
     splx(IPL_PROC);
     irq_enable();

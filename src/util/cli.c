@@ -100,6 +100,8 @@ static const struct {
 
     { "tsl",     "process timeslice",        IN_PROC(timeslice, UV_TYPE_UC) },
     { "currproc",0,                          &currproc,  UV_TYPE_ULX | UV_TYPE_RO },
+    { "ident",   "system identity",          ident,      UV_TYPE_STR32 | UV_TYPE_RO },
+    { "arch",    "system arch",              archid,     UV_TYPE_STR32 | UV_TYPE_RO },
 
 
 #define DEFVAR(proto, name, init, type, docstr)	\
@@ -127,7 +129,6 @@ DEFUN(version, "display version information")
 DEFALIAS(version, vers)
 DEFALIAS(version, ver)
 {
-    extern const char *version;
 
     printf("%s\n", version);
 

@@ -418,8 +418,9 @@ DEFALIAS(rename, mv)
     return renamefile( argv[1], argv[2] );
 }
 
-DEFUN(cd, "change dir")
-DEFALIAS(cd, chdir)
+DEFUN(chdev, "change device")
+DEFALIAS(chdev, cd)
+DEFALIAS(chdir, cd)
 {
     int i;
 
