@@ -115,6 +115,7 @@ _make_numbered_file(char *buf, const char *name, int n){
     int i;
 
     for(i=0; i<8; i++){
+        if( ! name[i] ) break;
         if( name[i] == '.' ) break;
         buf[i] = name[i];
     }
@@ -342,6 +343,16 @@ fatfs_dir(MountEntry *me, int how, const char *dname){
 
     printf("========================\n"
            "  %3.3d Files = %8.8qd bytes\n", files, total);
+
+    FATFS *fat;
+    DWORD fre_clust;
+    f_getfree("", &fre_clust, &fat);
+    int tot_sect = (fat->n_fatent - 2) * fat->csize;
+    int fre_sect = fre_clust * fat->csize;
+
+    printf("      Total = %8.8d kbytes\n"
+           "      Free  = %8.8d kbytes\n",
+           tot_sect / 2, fre_sect / 2);
 
     return 0;
 }
