@@ -92,6 +92,7 @@ daysinmonth(int m, int yr){
 
 int
 rtc_get_time(int port, int verbose){
+    struct tm ntm;
     struct rtc_time_data rt;
     utime_t t = 0;
     int yr;
@@ -128,25 +129,16 @@ rtc_get_time(int port, int verbose){
     kprintf("%d-%0.2d-%0.2d %d:%0.2d:%0.2d",
             yr, rt.mon, rt.dom, rt.hr, rt.min, rt.sec);
 
-    rt.mon --;	/* make 0 based */
-    rt.dom --;	/* make 0 based */
+    ntm.tm_year = yr;
+    ntm.tm_mon  = rt.mon;
+    ntm.tm_mday = rt.dom;
+    ntm.tm_hour = rt.hr;
+    ntm.tm_min  = rt.min;
+    ntm.tm_sec  = rt.sec;
 
-    /* find number of days in all previous years */
-    t += (yr - 1) * 365;
-    t += leap_years_since_year_1(yr);
-    t -= 11; /* adjust for gregorian reformation Sep/1752 */
+    t = timegm( &ntm );
 
-    /* add in today */
-    for(i=0; i<rt.mon; i++)
-        t += daysinmonth(i, yr);
-    t += rt.dom;
-
-    /* add in current time and adjust to usec */
-    t *= 24 * 60 * 60;
-    t += (rt.hr * 60 + rt.min) * 60 + rt.sec;
-    t *= 1000000;
-
-    /* set time - usec since 1/1/1 */
+    /* set time - usec since epoch */
     systime = t;
 
     return 0;
