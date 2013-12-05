@@ -31,8 +31,6 @@
 static int show(int, char**, struct cli_env*);
 static int set (int, char**, struct cli_env*);
 static int help(int, char**, struct cli_env*);
-static int redirin(int, char**, struct cli_env*);
-static int redirout(int, char**, struct cli_env*);
 int shell_eval(int, char**, struct cli_env*);
 void fshell(FILE*, int);
 void shell(void);
@@ -56,10 +54,6 @@ static const struct {
     const char *help;
     int (*fnc)(int, char**, struct cli_env*);
 } cmds[] = {
-#ifdef USE_FILESYS
-    { "<",        "redirect input",               redirin },
-    { ">",        "redirect output",              redirout },
-#endif
     { "exit",     "exit",                         0 },
 
 #define DEFUN(name, doc)                                        \
@@ -697,54 +691,9 @@ DEFUN(if, "conditional")
 
 static void
 prompt(struct cli_env *env){
-    printf("%s", *(env->prompt) ? env->prompt : ": ");
+    printf("%s", *(env->prompt) ? env->prompt : "% ");
 }
 
-#ifdef USE_FILESYS
-static int
-redirin(int argc, char **argv, struct cli_env *env){
-    FILE *f, *s;
-    int r;
-
-    if( argc < 3 ){
-        f_error("< file cmd...");
-        return -1;
-    }
-    f = fopen( argv[1], "r" );
-    if( !f ){
-        fprintf(STDERR, "could not open \"%s\"\n", argv[1] );
-        return -1;
-    }
-    s = STDIN;
-    STDIN = f;
-    r = shell_eval( argc - 2, argv + 2, env );
-    STDIN = s;
-    fclose(f);
-    return r;
-}
-
-static int
-redirout(int argc, char **argv, struct cli_env *env){
-    FILE *f, *s;
-    int r;
-
-    if( argc < 3 ){
-        f_error("> file cmd...");
-        return -1;
-    }
-    f = fopen( argv[1], "w" );
-    if( !f ){
-        fprintf(STDERR, "could not open \"%s\"\n", argv[1] );
-        return -1;
-    }
-    s = STDOUT;
-    STDOUT = f;
-    r = shell_eval( argc - 2, argv + 2, env );
-    STDOUT = s;
-    fclose(f);
-    return r;
-}
-#endif
 
 int
 shell_eval(int argc, char **argv, struct cli_env *env){
@@ -769,22 +718,93 @@ shell_eval(int argc, char **argv, struct cli_env *env){
 
     for(i=0; cmds[i].name; i++)
         if( !strcmp(cmds[i].name, argv[0])) break;
-    if( cmds[i].name )
-        return (*cmds[i].fnc)(argc, argv, env);
 
-    if( argc > 2 && !strcmp("=", argv[1]))
+    if( !cmds[i].name && argc > 2 && !strcmp("=", argv[1]))
         return ui_f_set(argc, argv, env);
 
-    fprintf(STDERR, "command not found: \"%s\"\n", argv[0]);
+    if( !cmds[i].name ){
+        fprintf(STDERR, "command not found: \"%s\"\n", argv[0]);
+        return -1;
+    }
 
-    return -1;
+#ifdef USE_FILESYS
+#endif
+
+    // redirection:
+    //   < file		input
+    //   > file		output
+    //   >& file	output + error
+    //   >> file	output, append
+    //   >>& file	output + error, append
+    // NB: space is required ( >file is no good)
+
+    const char *ca, *infile=0, *outfile=0;
+    FILE *f=0, *s_in=0, *s_out=0, *s_err=0;
+    char cai, append=0, anderr=0;
+
+    for(cai=2; cai<=4; cai+=2){
+        if( cai > argc - 1 ) break;
+        ca = argv[argc-cai];
+
+        if( ca[0] == '<' ){
+            infile = argv[argc-cai+1];
+        }else if( ca[0] == '>' ){
+            outfile = argv[argc-cai+1];
+
+            if( ca[1] == '&' ) anderr = 1;
+            if( ca[1] == '>' ){
+                append = 1;
+                if( ca[2] == '&' ) anderr = 1;
+            }
+        }else{
+            break;
+        }
+    }
+
+    if( infile ){
+        f = fopen( infile, "r" );
+        if( !f ){
+            fprintf(STDERR, "could not open \"%s\"\n", infile );
+            return -1;
+        }
+        s_in = STDIN;
+        STDIN = f;
+        argc -= 2;
+    }
+    if( outfile ){
+        f = fopen( outfile, append ? "a" : "w" );
+        if( !f ){
+            fprintf(STDERR, "could not open \"%s\"\n", outfile );
+            if( s_in ) STDIN = s_in;
+            return -1;
+        }
+        s_out = STDOUT;
+        s_err = STDERR;
+        STDOUT = f;
+        if( anderr ) STDERR = f;
+        argc -= 2;
+    }
+
+    int r = (*cmds[i].fnc)(argc, argv, env);
+
+    if( s_in ){
+        fclose( STDIN );
+        STDIN = s_in;
+    }
+    if( s_out ){
+        fclose( STDOUT );
+        STDOUT = s_out;
+    }
+    if( s_err ) STDERR = s_err;
+
+    return r;
 }
 
 #define BUFSIZE 256
 void
 fshell(FILE *f, int interactivep){
     Catchframe cf;
-    char *argv[16];
+    char *argv[24];
     int  argc;
     char *p;
     char qc;
