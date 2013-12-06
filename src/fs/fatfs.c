@@ -173,7 +173,7 @@ _rename_backup_file(struct FileData *fd, const char *name){
     // fill buf
     _make_numbered_ext(ext, n);
 
-    kprintf("fatfs backup %s => %s\n", name, buf );
+    // kprintf("fatfs backup %s => %s\n", name, buf );
     f_rename(name, buf);
 
     free( buf, namlen + 5 );
