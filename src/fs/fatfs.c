@@ -111,19 +111,12 @@ fatfs_unmount(MountEntry *me){
 #ifdef RENAMEFILE_ON_CREAT
 
 static inline void
-_make_numbered_file(char *buf, const char *name, int n){
-    int i;
-
-    for(i=0; i<8; i++){
-        if( ! name[i] ) break;
-        if( name[i] == '.' ) break;
-        buf[i] = name[i];
-    }
+_make_numbered_ext(char *buf, int n){
 
     if( n <= 999 ){
-        snprintf(buf+i, 13-i, ".%0.3d", n);
+        snprintf(buf, 5, ".%0.3d", n);
     }else{
-        snprintf(buf+i, 13-i, ".%=36", n + 10*36*36 - 1);
+        snprintf(buf, 5, ".%=36", n + 10*36*36 - 1);
     }
 }
 
@@ -136,14 +129,28 @@ _check_file_exists(struct FileData *fd, const char *name){
 
 static void
 _rename_backup_file(struct FileData *fd, const char *name){
-    char buf[13];
-    int n=1, m;
+    char *buf, *ext=0;
+    short n=1, m=0;
 
-#ifndef RENAMEFILE_ON_CREAT_SMALLER_SLOWER
+    short namlen = strlen(name);
+    buf = alloc( namlen + 5 );
+    if( !buf ){
+        kprintf("cannot allocate memory\n");
+        return;
+    }
+
+    // copy, remove extension
+    strcpy(buf, name);
+    for(m=0; m<namlen; m++){
+        if( buf[m] == '.' ) ext = buf + m;
+        if( buf[m] == '/' ) ext = 0;
+    }
+
+    if( !ext ) ext = buf + namlen;
 
     // binary search for current highest numbered file
     while(1){
-        _make_numbered_file(buf, name, n);
+        _make_numbered_ext(ext, n);
         if( ! _check_file_exists(fd, buf) ){
             n >>= 1;
             break;
@@ -154,7 +161,7 @@ _rename_backup_file(struct FileData *fd, const char *name){
     // highest file is bewteen (n, 2n)
 
     while(m){
-        _make_numbered_file(buf, name, n|m);
+        _make_numbered_ext(ext, n|m);
         if( _check_file_exists(fd, buf) ){
             n |= m;
         }
@@ -164,22 +171,12 @@ _rename_backup_file(struct FileData *fd, const char *name){
     // use next number
     n ++;
     // fill buf
-    _make_numbered_file(buf, name, n);
+    _make_numbered_ext(ext, n);
 
-#else
-    int i, n=1;
-
-    // small, slow linear search
-    while(1){
-        _make_numbered_file(buf, name, n);
-        if( !_check_file_exists(fd, buf) ) break;
-        n++;
-    }
-
-#endif
-
-    // kprintf("fatfs backup %s => %s\n", name, buf );
+    kprintf("fatfs backup %s => %s\n", name, buf );
     f_rename(name, buf);
+
+    free( buf, namlen + 5 );
 }
 #endif
 
