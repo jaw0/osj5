@@ -363,6 +363,7 @@ fatfs_glob(MountEntry *me, const char *pattern, int (*fnc)(const char *, void*),
     int i, rv = 0;
 
     // break pattern into dir + pattern
+    //   pattern "log/foo*" => dirname "log", pattern "foo*"
     extern char *rindex(const char *, int);
     const char *slash = rindex(pattern, '/');
     char *dirname;
@@ -374,6 +375,7 @@ fatfs_glob(MountEntry *me, const char *pattern, int (*fnc)(const char *, void*),
         dirname = alloc( dirlen + 1 );
 
         strncpy(dirname, pattern, dirlen);
+        dirname[dirlen] = 0;
         pattern = slash + 1;
         fblen   = dirlen + 14;
         filebuf = alloc( fblen );
