@@ -122,7 +122,7 @@ static const struct {
 
 void
 f_error(const char *m){
-    printf("ERROR: %s\n", m);
+    fprintf(STDERR, "ERROR: %s\n", m);
 }
 
 DEFUN(version, "display version information")
@@ -699,7 +699,8 @@ prompt(struct cli_env *env){
 int
 shell_eval(int argc, char **argv, struct cli_env *env){
     char buf[8][32];
-    int i, v, n=0;
+    short i, j, v, n=0;
+    char globp=0;
 
     /* expand $var */
     for(i=0; i<argc; i++){
@@ -717,6 +718,16 @@ shell_eval(int argc, char **argv, struct cli_env *env){
         }
     }
 
+#ifdef USE_FILESYS
+    //  need glob?
+    for(i=1; i<argc; i++){
+        if( contains_globbing( argv[i] ) ){
+            globp = 1;
+            break;
+        }
+    }
+#endif
+
     for(i=0; cmds[i].name; i++)
         if( !strcmp(cmds[i].name, argv[0])) break;
 
@@ -729,7 +740,6 @@ shell_eval(int argc, char **argv, struct cli_env *env){
     }
 
 #ifdef USE_FILESYS
-#endif
 
     // redirection:
     //   < file		input
@@ -786,7 +796,12 @@ shell_eval(int argc, char **argv, struct cli_env *env){
         argc -= 2;
     }
 
-    int r = (*cmds[i].fnc)(argc, argv, env);
+    int r;
+    if( globp ){
+        r = ui_f_glob(argc, argv, env);
+    }else{
+        r = (*cmds[i].fnc)(argc, argv, env);
+    }
 
     if( s_in ){
         fclose( STDIN );
@@ -799,6 +814,10 @@ shell_eval(int argc, char **argv, struct cli_env *env){
     if( s_err ) STDERR = s_err;
 
     return r;
+
+#else
+    return (*cmds[i].fnc)(argc, argv, env);
+#endif
 }
 
 #define BUFSIZE 256
