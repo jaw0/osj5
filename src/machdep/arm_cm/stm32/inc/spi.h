@@ -29,7 +29,7 @@ typedef struct spi_msg {
 # define SPIMO_PINSOFF	6
 # define SPIMO_PINSON	7
     u_char	response;
-    short	dlen;
+    int		dlen;
     char	*data;
     int		(*until)(int);
 
