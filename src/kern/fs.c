@@ -420,7 +420,7 @@ DEFALIAS(rename, mv)
 
 DEFUN(chdev, "change device")
 DEFALIAS(chdev, cd)
-DEFALIAS(chdir, cd)
+DEFALIAS(chdev, chdir)
 {
     int i;
 
@@ -468,6 +468,7 @@ DEFUN(chmod, "change file attributes")
 
 struct GlobArgs {
     struct MountEntry *me;
+    struct cli_env *env;
     int replc;
     char **argv;
     int argc;
@@ -485,40 +486,54 @@ globfnc(const char *name, struct GlobArgs *ga){
 #endif
              name);
 
-    if( ga->replc ){
-        ga->argv[ ga->replc ] = buf;
-        return shell_eval( ga->argc - 2, ga->argv + 1 );
-    }else{
-        ga->argv[ ga->argc - 1 ] = buf;
-        return shell_eval( ga->argc - 1, ga->argv + 1 );
+    ga->argv[ ga->replc ] = buf;
+    return shell_eval( ga->argc, ga->argv );
+
+}
+
+int
+contains_globbing(const char *name){
+    short j;
+
+    for(j=0; name[j]; j++){
+        if( name[j] == '*' || name[j] == '?' || name[j] == '[' )
+            return 1;
     }
+    return 0;
 }
 
 DEFUN(glob, "expand wildcards in filenames")
 {
-    struct FSFile *ff;
-    struct FSChunk *fc;
     char *buffer;
-    int nblnk=0;
-    int offset, tlen, i, found=0, rv=0;
-    char *pattern;
+    short i, j;
+    char *pattern=0;
     struct GlobArgs ga;
 
     ga.replc = 0;
+    ga.env   = env;
 
-    for(i=0; i<argc; i++){
-        if( !strcmp(argv[i], "{}")){
+    if( !strcmp(argv[0], "glob") ){
+        argc --;
+        argv ++;
+    }
+
+    if( argc < 2 ){
+        f_error("[glob] cmd pattern");
+        return -1;
+    }
+
+    // which arg has a pattern?
+    for(i=1; i<argc; i++){
+        if( contains_globbing( argv[i] ) ){
+            pattern  = argv[i];
             ga.replc = i;
             break;
         }
     }
 
-    if( argc < 3 ){
-        f_error("glob cmd [args...] [{} args...] pattern");
-        return -1;
-    }
+    if( ! pattern )
+        return shell_eval(argc, argv, env );
 
-    pattern = argv[argc-1];
 
     ga.me = find_mount(pattern);
 #ifdef USE_PROC
@@ -534,6 +549,7 @@ DEFUN(glob, "expand wildcards in filenames")
 
     ga.argv = argv;
     ga.argc = argc;
+
     if( CHK(ga.me) )
         return (ga.me->fscf->ops)(FSOP_GLOB, ga.me, pattern, globfnc, &ga);
     return -1;
