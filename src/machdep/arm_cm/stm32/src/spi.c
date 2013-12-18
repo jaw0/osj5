@@ -188,7 +188,7 @@ spi_init(struct Device_Conf *dev){
 #elif defined(PLATFORM_STM32F4)
     switch(unit){
     case 0:
-        // on ahb2, dma1 chan2+3
+        // on ahb2, dma2 chan2+3
         // CLK = A5, MISO = A6, MOSI = A7
         ii->addr      = addr = SPI1;
         ii->irq       = IRQ_SPI1;
