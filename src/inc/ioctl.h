@@ -19,5 +19,7 @@
 #define IOC_WRBLK	_IOC('d', 'w')		/* write block */
 
 #define IOC_GFXDPY	_IOC('g', 'g')		/* get graphics object */
+#define IOC_GFXSLEEP	_IOC('g', 's')		/* sleep mode */
+#define IOC_GFXBUF	_IOC('g', 'b')		/* get buffer */
 
 #endif /* __ioctl_h__ */

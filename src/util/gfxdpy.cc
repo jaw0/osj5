@@ -451,6 +451,9 @@ done:
 void
 GFXdpy::set_sleep(bool sleep){}
 
+u_char *
+GFXdpy::get_buffer(void){ return 0; }
+
 /****************************************************************/
 
 int
@@ -495,15 +498,20 @@ gfxdpy_status(FILE*f){
 
 int
 gfxdpy_ioctl(FILE* f, int cmd, void* a){
+    GFXdpy *ii = (GFXdpy*)f->d;
 
-    if( (cmd >> 8) & 0xF != 'g' )
+    if( ((cmd >> 8) & 0xFF) != 'g' )
         return -1;
 
-    switch( cmd & 0xF ){
+    switch( cmd & 0xFF ){
     case 'g':		/* get */
-        return (int) f->d;
+        return (int) ii;
         break;
-
+    case 's':
+        ii->set_sleep( a ? 1 : 0 );
+        break;
+    case 'b':
+        return (int) ii->get_buffer();
     default:
         return -1;
     }

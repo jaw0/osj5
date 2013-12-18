@@ -31,7 +31,7 @@ class Font;
 
 class GFXdpy {
 public:
-    FILE 	file;
+    FILE   file;
     short  _height;
     short  _width;
     short  height;
@@ -63,6 +63,7 @@ public:
     virtual void clear_screen(void);
     virtual void set_colors(void);
     virtual void set_sleep(bool);
+    virtual u_char* get_buffer(void);
 
     void init(void);
     void set_pixel(int, int, int);

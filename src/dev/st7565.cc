@@ -8,6 +8,7 @@
 
 extern "C" {
 # include <conf.h>
+# include <misc.h>
 # include <proc.h>
 # include <arch.h>
 # include <alloc.h>
@@ -55,6 +56,7 @@ public:
     virtual int  _get_pixel(int, int);
     virtual void clear_screen(void);
     virtual void set_colors(void);
+    virtual u_char* get_buffer(void) { return dpybuf; }
 
 }  st7565info[ N_ST7565 ];
 
@@ -204,7 +206,6 @@ st75650_puts(const char *s){
 
 static void
 _st7565_logo(ST7565 *ii){
-    extern const char *ident;
 
     ii->clear_screen();
 

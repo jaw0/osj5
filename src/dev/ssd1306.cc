@@ -8,6 +8,7 @@
 
 extern "C" {
 # include <conf.h>
+# include <misc.h>
 # include <proc.h>
 # include <arch.h>
 # include <alloc.h>
@@ -70,6 +71,7 @@ public:
     virtual void clear_screen(void);
     virtual void set_colors(void);
     virtual void set_sleep(bool);
+    virtual u_char* get_buffer(void) { return dpybuf; }
 
 }  ssd1306info[ N_SSD1306 ];
 
@@ -249,6 +251,7 @@ SSD1306::clear_screen(void){
 
 void
 SSD1306::set_sleep(bool sleep){
+    kprintf("1306 sleep %d\n", sleep);
     _ssd1306_cmds( this, sleep ? ssd1306_sleep : ssd1306_awake, 1 );
 }
 
@@ -270,7 +273,6 @@ ssd13060_puts(const char *s){
 
 static void
 _ssd1306_logo(SSD1306 *ii){
-    extern const char *ident;
 
     ii->clear_screen();
 

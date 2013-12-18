@@ -8,6 +8,7 @@
 
 extern "C" {
 # include <conf.h>
+# include <misc.h>
 # include <proc.h>
 # include <arch.h>
 # include <alloc.h>
@@ -57,6 +58,7 @@ public:
     virtual int  _get_pixel(int, int);
     virtual void clear_screen(void);
     virtual void set_colors(void);
+    virtual u_char* get_buffer(void) { return (u_char*)dpybuf; }
 
 }  ssd1331info[ N_SSD1331 ];
 
@@ -235,7 +237,6 @@ ssd13310_puts(const char *s){
 
 static void
 _ssd1331_logo(SSD1331 *ii){
-    extern const char *ident;
     int i;
 
     int x, y;
