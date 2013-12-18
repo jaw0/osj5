@@ -246,15 +246,7 @@ chop(my $pwd = `cd ..;pwd`);
 my $date = strftime('%Y-%m-%d %H:%M', localtime());
 my $archid = uc($arch . ($variant ? "/$variant" : ''));
 
-print CONFH <<EOH;
-
-extern const char ident[];
-extern const char archid[];
-extern const char version[];
-
-EOH
-;
-
+print CONFH "\n";
 print CONFC <<EOM;
 
 const int n_devs = $ndevs;

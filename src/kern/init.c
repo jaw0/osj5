@@ -9,6 +9,7 @@
 #include <sys/param.h>
 #include <conf.h>
 #include <arch.h>
+#include <misc.h>
 #include <nstdio.h>
 #include <proc.h>
 #include <alloc.h>

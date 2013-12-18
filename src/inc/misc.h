@@ -13,5 +13,10 @@
 #define ELEMENTSIN(T) (sizeof(T)/sizeof(T[0]))
 
 
+extern const char ident[];
+extern const char archid[];
+extern const char version[];
+
+
 #endif /* __misc_h__ */
 
