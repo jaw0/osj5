@@ -108,7 +108,7 @@ fatfs_unmount(MountEntry *me){
     return -1;
 }
 
-#ifdef RENAMEFILE_ON_CREAT
+#ifdef FATFS_RENAMEFILE_ON_CREAT
 
 static inline void
 _make_numbered_ext(char *buf, int n){
@@ -197,7 +197,7 @@ fatfs_open(MountEntry *me, const char *name, const char *how){
         r = f_open( & fd->fil, name, FA_READ | FA_WRITE | FA_OPEN_ALWAYS );
         if( r == FR_OK ) f_lseek( & fd->fil, fd->fil.fsize);
     }else{
-#ifdef RENAMEFILE_ON_CREAT
+#ifdef FATFS_RENAMEFILE_ON_CREAT
         // "w!" prevents backup copy
         if( how[1] != '!' ){
             // fail if file exists

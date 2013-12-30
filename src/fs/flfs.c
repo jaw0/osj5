@@ -373,7 +373,7 @@ flfs_open_w(MountEntry *me, const char *name){
         fclose(fx);
         attr = st.mode;
 
-#ifdef DELETEFILE_ON_CREAT
+#ifdef FLFS_DELETEFILE_ON_CREAT
         if( flfs_deletefile(me, name) == -1 ){
             /* read-only file */
             free(f,  sizeof(FILE));
@@ -381,7 +381,7 @@ flfs_open_w(MountEntry *me, const char *name){
             return 0;
         }
 #else
-#    ifdef RENAMEFILE_ON_CREAT
+#    ifdef FLFS_RENAMEFILE_ON_CREAT
 
         strncpy(oname, name, FLFS_NAMELEN-1);
         oname[FLFS_NAMELEN] = 0;
@@ -685,7 +685,7 @@ findavailable(FILE *f, int type){
             }
         }
 
-        if( fc->type == FCT_DELETED && freed == -1 ){
+        if( fc->type == FCT_DELETED && freed == -1  && !(flfs->flags & SSF_BIGERASE) ){
             /* a freed chunk, make note and keep looking for unused space */
             freed = offset;
         }
@@ -1118,6 +1118,13 @@ flfs_format(MountEntry *me, char *flfsname){
     printf("flfs format\n");
     buffer = alloc(flfs->fblksize);
     fc = (struct FSChunk *)buffer;
+
+    if( flfs->flags & SSF_BIGERASE ){
+        // erase entire device
+        printf("formatting...\n");
+        fioctl(flfs->me->fdev, IOC_ERASE, (void*)0);
+        return 0;
+    }
 
     /* allocate space for boot blocks if called as flfs:<bootsize> */
     flfsname += strlen(flfs->me->name);

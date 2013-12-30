@@ -72,7 +72,7 @@ struct stat {
 #define SSF_NOERASE	2	/* need not be erased, eg RAM */
 #define SSF_READONLY	4	/* read-only */
 #define SSF_SPECIAL	8	/* special device */
-
+#define SSF_BIGERASE	16	/* can only erase entire device */
 };
 
 extern FILE *fopen(const char *, const char *);
