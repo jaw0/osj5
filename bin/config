@@ -120,9 +120,7 @@ while( <> ){
 	($type) = /type\s*([^\s]*)/  if /type/;
 
 
-	$flashdev .= "\t{ $addr, $size, $flg, $blk, \"$f[1]\", \"$type\" },\n";
-
-        feature( 'flash', 'device' );
+	$flashdev .= "\t{ (void*)$addr, $size, $flg, $blk, \"$f[1]\", \"$type\" },\n";
     }
 
     elsif( $cmd eq "disk" ){
