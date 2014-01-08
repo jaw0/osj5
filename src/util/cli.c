@@ -746,16 +746,40 @@ DEFUN(if, "conditional")
 
 static void
 prompt(struct cli_env *env){
-    printf("%s", *(env->prompt) ? env->prompt : "% ");
+    const char *p = env->prompt;
+    int u;
+
+    for(;*p; *p++){
+        if( *p != '$' ){
+            putchar(*p);
+            continue;
+        }
+        p ++;
+        if( !p ) break;
+        switch( tolower(*p) ){
+        case '$':	putchar('$');	break;
+        case 'e':	putchar('\e');	break;
+        case '[':	putchar('\e'); putchar('[');	break;
+        case 'n':	printf("%s", currproc->cwd ? currproc->cwd->name : "?"); break;
+        case 'v':	printf("%s", ident);		break;
+        case 'g':	printf("%+c", 0x27A1);		break;	// large right arrow
+        case '{':
+            // ${1234} => insert utf-8
+            u = strtoul(p + 1, &p, 16);
+            printf("%+c", u);
+            break;
+        }
+    }
 }
 
 
 int
 shell_eval(int argc, char **argv, struct cli_env *env){
-    char buf[8][32];
     short i, j, v, n=0;
     char globp=0;
 
+#if 0
+    char buf[8][32];
     /* expand $var */
     for(i=0; i<argc; i++){
         if( argv[i][0] == '$' ){
@@ -771,7 +795,7 @@ shell_eval(int argc, char **argv, struct cli_env *env){
             }
         }
     }
-
+#endif
 #ifdef USE_FILESYS
     //  need glob?
     for(i=1; i<argc; i++){
@@ -887,7 +911,8 @@ fshell(FILE *f, int interactivep){
     struct cli_env *env = (struct cli_env*)alloc(sizeof(struct cli_env));
     char *buf = (char*)alloc(BUFSIZE);
     bzero(env, sizeof(env));
-    strcpy(env->prompt, "prompt% ");
+    // 35 = purple
+    strncpy(env->prompt, "$[35;1m$v$g$[39;0m ", sizeof(env->prompt));
 
     /* handle ^C */
     if( !f ){
