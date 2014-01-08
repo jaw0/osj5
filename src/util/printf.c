@@ -214,7 +214,19 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                 break;
             case 'c':
                 val = va_arg(ap, int);
-                (*ofnc)(arg, val);
+                if( (flags & B(PF_SHOW_PLS)) && (val > 0xff) ){
+                    // utf-8 encode
+                    if( val < 0x800 ){
+                        (*ofnc)(arg, 0xC0 | (val>>6));
+                        (*ofnc)(arg, 0x80 | (val & 0x3F));
+                    }else{
+                        (*ofnc)(arg, 0xE0 | (val>>12));
+                        (*ofnc)(arg, 0x80 | ((val >> 6) & 0x3F));
+                        (*ofnc)(arg, 0x80 | (val & 0x3F));
+                    }
+                }else{
+                    (*ofnc)(arg, val);
+                }
                 pos ++;
                 break;
             case 'd':
