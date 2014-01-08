@@ -24,10 +24,15 @@ struct cli_env {
 #define UV_TYPE_IP         7
 #define UV_TYPE_TIME	   8
 #define UV_TYPE_ULX        9
-#define UV_TYPE_ENV	0x80
-#define UV_TYPE_PROC	0x40
-#define UV_TYPE_RO	0x20
+#define UV_TYPE_FLOAT    0xA
+
+#define UV_TYPE_RO	0x100
+#define UV_TYPE_PROC	0x200
+#define UV_TYPE_ENV	0x400
+#define UV_TYPE_CONFIG	0x800
 
 extern void run_script(const char*);
+extern int save_config(const char *);
+
 
 #endif /* __cli_h__ */
