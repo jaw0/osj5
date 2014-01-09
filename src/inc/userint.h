@@ -11,7 +11,7 @@
 #include <cli.h>
 
 /* functions */
-#define DEFUN(name, docstr)	int CONCAT(ui_f_, name)(int argc, char** argv, struct cli_env *env)
+#define DEFUN(name, docstr)	int CONCAT(ui_f_, name)(int argc, const char** argv, struct cli_env *env)
 #define DEFALIAS(name, aname)	/* */
 
 

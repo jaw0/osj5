@@ -28,10 +28,10 @@
 #define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
 #endif
 
-static int show(int, char**, struct cli_env*);
-static int set (int, char**, struct cli_env*);
-static int help(int, char**, struct cli_env*);
-int shell_eval(int, char**, struct cli_env*);
+static int show(int, const char**, struct cli_env*);
+static int set (int, const char**, struct cli_env*);
+static int help(int, const char**, struct cli_env*);
+int shell_eval(int, const char**, struct cli_env*);
 void fshell(FILE*, int);
 void shell(void);
 
@@ -56,7 +56,7 @@ extern utime_t boottime;
 static const struct Cmd {
     const char *name;
     const char *help;
-    int (*fnc)(int, char**, struct cli_env*);
+    int (*fnc)(int, const char**, struct cli_env*);
 } cmds[] = {
     { "exit",     "exit",                         0 },
 
@@ -228,7 +228,7 @@ DEFALIAS(show, sh)
 DEFUN(set, "set a var")
 {
     short i, n;
-    char *var;
+    const char *var;
     u_long v;
     int off = 0;
 
@@ -301,6 +301,7 @@ DEFUN(set, "set a var")
 }
 
 #ifdef USE_FILESYS
+
 // output all vars marked as configurable
 int
 save_config(const char *file){
@@ -357,11 +358,10 @@ save_config(const char *file){
         }
     }
 
-    // RSN - run other commands
-
     if( file ) fclose(f);
     return 0;
 }
+
 
 // also: show run
 // config > file
@@ -709,7 +709,8 @@ DEFALIAS(copy, cp)
     struct stat st;
     int i;
     FILE *fr, *fw;
-    char buf[32], *name;
+    char buf[32];
+    const char *name;
     int attr;
 
     if( argc != 3 && argc != 2 ){
@@ -857,7 +858,7 @@ prompt(struct cli_env *env){
 
 
 int
-shell_eval(int argc, char **argv, struct cli_env *env){
+shell_eval(int argc, const char **argv, struct cli_env *env){
     short i, j, v, n=0;
     char globp=0;
 
