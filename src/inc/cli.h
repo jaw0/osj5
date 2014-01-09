@@ -26,13 +26,17 @@ struct cli_env {
 #define UV_TYPE_ULX        9
 #define UV_TYPE_FLOAT    0xA
 
+#define UV_TYPE_MASK	 0xFF
 #define UV_TYPE_RO	0x100
 #define UV_TYPE_PROC	0x200
 #define UV_TYPE_ENV	0x400
 #define UV_TYPE_CONFIG	0x800
 
+typedef char uv_str16_t[16];
+typedef char uv_str32_t[32];
+
 extern void run_script(const char*);
-extern int save_config(const char *);
+extern int  save_config(const char *);
 
 
 #endif /* __cli_h__ */

@@ -42,7 +42,9 @@ extern double atof(const char*);
 typedef long long quad;
 typedef unsigned long long u_quad;
 
-int verbose = 0;
+int  verbose = 0;
+char gprompt[32] = "$[35;1m$v$g$[39;0m ";     // 35 = purple
+
 
 #ifdef PLATFORM_I386
 extern long k_paddr, bootmem0, bootmem1;
@@ -51,7 +53,7 @@ extern long k_paddr, bootmem0, bootmem1;
 extern utime_t boottime;
 #endif
 
-static const struct {
+static const struct Cmd {
     const char *name;
     const char *help;
     int (*fnc)(int, char**, struct cli_env*);
@@ -79,6 +81,7 @@ static const struct Var {
 
 } vars[] = {
     { "prompt",  "the prompt",               IN_ENV(prompt, UV_TYPE_STR32) },
+    { "gprompt", "default system prompt",    gprompt,       UV_TYPE_STR32 | UV_TYPE_CONFIG },
     { "time",    "temporal displacement",    &systime,      UV_TYPE_TIME },
     { "itime",   "temporal displacement",    &systime,      UV_TYPE_UQ },
 #ifdef N_RTC
@@ -148,7 +151,7 @@ interp_varref(struct cli_env *env, const struct Var *v, char *buf, int buflen){
     if( v->type & UV_TYPE_PROC )
         off = (int)currproc;
 
-    switch( v->type & 0xF ){
+    switch( v->type & UV_TYPE_MASK ){
     case UV_TYPE_STR16:
     case UV_TYPE_STR32:
         snprintf(buf, buflen, "%s", v->addr + off);
@@ -185,7 +188,7 @@ interp_varref(struct cli_env *env, const struct Var *v, char *buf, int buflen){
 
 int
 interp_var(struct cli_env *env, const char *var, char *buf, int buflen){
-    int i;
+    short i;
 
     for(i=0; vars[i].name; i++)
         if( !strcmp(vars[i].name, var)) break;
@@ -201,7 +204,7 @@ DEFALIAS(show, sho)
 DEFALIAS(show, sh)
 {
     char buf[32];
-    int i;
+    short i;
 
     if( argc != 2 ){
         f_error("show what?");
@@ -224,7 +227,7 @@ DEFALIAS(show, sh)
 /* set a b  or  a = b */
 DEFUN(set, "set a var")
 {
-    int i, n;
+    short i, n;
     char *var;
     u_long v;
     int off = 0;
@@ -251,7 +254,7 @@ DEFUN(set, "set a var")
             fprintf(STDERR, "%s: read-only\n", var);
             return -1;
         }
-        switch( vars[i].type & 0xF ){
+        switch( vars[i].type & UV_TYPE_MASK ){
         case UV_TYPE_STR16:
         case UV_TYPE_STR32:
             n = (vars[i].type==UV_TYPE_STR16)? 16 : 32;
@@ -301,7 +304,7 @@ DEFUN(set, "set a var")
 // output all vars marked as configurable
 int
 save_config(const char *file){
-    int i, r, ml=0;
+    short i, r, ml=0;
     char buf[32];
     const struct Var *bv=0, *pv=0;
     FILE *f;
@@ -321,7 +324,7 @@ save_config(const char *file){
     // measure
     for(i=0; vars[i].name; i++){
         if( !(vars[i].type & UV_TYPE_CONFIG) ) continue;
-        int l = strlen(vars[i].name);
+        short l = strlen(vars[i].name);
         if( l > ml ) ml = l;
     }
 
@@ -342,7 +345,7 @@ save_config(const char *file){
 
         r = interp_varref(0, bv, buf, sizeof(buf));
         if( r ) continue;
-        switch(bv->type){
+        switch(bv->type & UV_TYPE_MASK){
         case UV_TYPE_STR16:
         case UV_TYPE_STR32:
         case UV_TYPE_TIME:
@@ -353,6 +356,8 @@ save_config(const char *file){
             break;
         }
     }
+
+    // RSN - run other commands
 
     if( file ) fclose(f);
     return 0;
@@ -371,24 +376,68 @@ DEFUN(config, "generate config")
 DEFUN(help, "help for commands")
 DEFALIAS(help, ?)
 {
-    int i, j;
+    short  i;
 
     /* if no args, show all commands/vars */
     if( argc < 2 ){
-        printf("help command|var\ncommands:\n\t");
-        for(i=j=0; cmds[i].name; i++)
-            if( cmds[i].help ){
-                printf(" %s", cmds[i].name);
-                if( !(++j % 10) )
-                    printf("\n\t");
+        printf("help command|var\ncommands:");
+        short cd, pl = 0;
+        // 6 columns of short names, 2 columns of longer names, 1 column of untypeable names
+        for(cd=1; cd<=4; cd<<=1){
+            short cols = 6/cd;
+            short ml   = 72 / cols - 2;
+            short j    = 0;
+            const struct Cmd *b=0, *p=0;
+
+            while(1){
+                b = 0;
+                for(i=0; cmds[i].name; i++){
+                    if( ! cmds[i].help ) continue;
+                    int l = strlen(cmds[i].name);
+                    if( l > ml )  continue;
+                    if( l <= pl ) continue;
+                    if( p && strcmp(p->name, cmds[i].name) >= 0 ) continue;
+                    if( b && strcmp(b->name, cmds[i].name) <  0 ) continue;
+                    b = cmds + i;
+                }
+                if( !b ) break;
+                p = b;
+
+                if( !(j++ % cols) ) printf("\n    ");
+                printf("%-*s  ", ml, b->name);
             }
-        printf("\nvars:\n\t");
-        for(i=j=0; vars[i].name; i++)
-            if( vars[i].help ){
-                printf(" %s", vars[i].name);
-                if( !(++j % 10) )
-                    printf("\n\t");
+
+            pl = ml;
+        }
+
+        printf("\nvars:");
+        pl = 0;
+        for(cd=1; cd<=4; cd<<=1){
+            short cols = 6/cd;
+            short ml   = 72 / cols - 2;
+            short j    = 0;
+            const struct Var *b=0, *p=0;
+
+            while(1){
+                b = 0;
+                for(i=0; vars[i].name; i++){
+                    if( ! vars[i].help ) continue;
+                    int l = strlen(vars[i].name);
+                    if( l > ml )  continue;
+                    if( l <= pl ) continue;
+                    if( p && strcmp(p->name, vars[i].name) >= 0 ) continue;
+                    if( b && strcmp(b->name, vars[i].name) <  0 ) continue;
+                    b = vars + i;
+                }
+                if( !b ) break;
+                p = b;
+
+                if( !(j++ % cols) ) printf("\n    ");
+                printf("%-*s  ", ml, b->name);
             }
+            pl = ml;
+        }
+
         printf("\n");
         return 0;
     }
@@ -421,7 +470,7 @@ DEFUN(cli, "start a subshell")
 
 DEFUN(echo, "echo")
 {
-    int nl=1;
+    char nl=1;
 
     if( argc > 1 && argv[1][0] == '-' && argv[1][1] == 'n' ){
         nl = 0;
@@ -932,6 +981,7 @@ shell_eval(int argc, char **argv, struct cli_env *env){
 #endif
 }
 
+
 #define BUFSIZE 256
 void
 fshell(FILE *f, int interactivep){
@@ -945,8 +995,7 @@ fshell(FILE *f, int interactivep){
     struct cli_env *env = (struct cli_env*)alloc(sizeof(struct cli_env));
     char *buf = (char*)alloc(BUFSIZE);
     bzero(env, sizeof(env));
-    // 35 = purple
-    strncpy(env->prompt, "$[35;1m$v$g$[39;0m ", sizeof(env->prompt));
+    strncpy(env->prompt, gprompt, sizeof(env->prompt));
 
     /* handle ^C */
     if( !f ){
