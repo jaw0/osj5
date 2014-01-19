@@ -35,8 +35,8 @@ struct cli_env {
 typedef char uv_str16_t[16];
 typedef char uv_str32_t[32];
 
-extern void run_script(const char*);
-extern int  save_config(const char *);
+extern int run_script(const char*);
+extern int save_config(const char *);
 
 
 #endif /* __cli_h__ */

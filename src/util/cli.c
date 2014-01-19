@@ -1113,14 +1113,16 @@ fshell(FILE *f, int interactivep){
 }
 
 #if defined(USE_FILESYS)
-void
+int
 run_script(const char* file){
     FILE *f;
     f = fopen(file, "r" );
     if( f ){
         fshell(f, 0);
         fclose(f);
+        return 0;
     }
+    return 1;
 }
 #endif
 
