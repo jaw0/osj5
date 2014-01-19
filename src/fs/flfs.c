@@ -147,7 +147,7 @@ diskwrite(struct FLFS *flfs, u_long off, const char *buf, int len, int erasep){
     }
 
     /* erase device */
-    if( erasep && !(flfs->flags & SSF_NOERASE) ){
+    if( erasep && !(flfs->flags & SSF_NOERASE) && !(flfs->flags & SSF_BIGERASE) ){
         if( flfs->pblksize > flfs->fblksize ){
             /* if pblk is larger than fblk, then we need to:
                read pblk
@@ -803,7 +803,7 @@ flfs_write(FILE* f, const char* buf, int len){
                 buffer = alloc(fd->buflen);
                 memcpy(buffer, fd->buffer, fd->buflen);
                 fc = (struct FSChunk *)buffer;
-                fc->cnklen = fd->cnkpos;
+                fc->cnklen = fd->cnkpos - sizeof(struct FSChunk);
                 fc->totlen = fd->flfs->fblksize;
 
                 /* get next chunk */
