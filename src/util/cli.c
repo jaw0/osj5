@@ -110,10 +110,27 @@ static const struct Var {
 
 #define DEFVAR(proto, name, init, type, docstr)	\
     { QUOTIFY(name),	docstr,		     &name, type },
+#define DEFCONFUNC(name, f) /* */
+
 
 #include "defvar.list"
 
     {0,0,0,0}
+};
+
+#undef DEFUN
+#undef DEFALIAS
+#undef DEFVAR
+#undef DEFCONFUNC
+
+static const struct {
+    int (*func)(FILE *);
+} confuncs[] = {
+#define DEFVAR(proto, name, init, type, docstr) /* */
+#define DEFCONFUNC(name, f)	{ name },
+
+#include "defvar.list"
+    { 0 }
 };
 
 /****************************************************************/
@@ -121,6 +138,7 @@ static const struct Var {
 #undef DEFUN
 #undef DEFALIAS
 #undef DEFVAR
+#undef DEFCONFUNC
 #include <userint.h>
 
 
@@ -254,10 +272,11 @@ DEFUN(set, "set a var")
             fprintf(STDERR, "%s: read-only\n", var);
             return -1;
         }
-        switch( vars[i].type & UV_TYPE_MASK ){
+        short type = vars[i].type & UV_TYPE_MASK;
+        switch( type ){
         case UV_TYPE_STR16:
         case UV_TYPE_STR32:
-            n = (vars[i].type==UV_TYPE_STR16)? 16 : 32;
+            n = (type==UV_TYPE_STR16)? 16 : 32;
             strncpy( (char*)(vars[i].addr + off), argv[2], n);
             ((char*)(vars[i].addr + off))[n-1] = 0;
             break;
@@ -301,6 +320,8 @@ DEFUN(set, "set a var")
 }
 
 #ifdef USE_FILESYS
+
+static const char const *_conf_argv[] = { "conf" };
 
 // output all vars marked as configurable
 int
@@ -358,10 +379,14 @@ save_config(const char *file){
         }
     }
 
+    // run all config functions
+    for(i=0; confuncs[i].func; i++){
+        (* confuncs[i].func)(f);
+    }
+
     if( file ) fclose(f);
     return 0;
 }
-
 
 // also: show run
 // config > file
@@ -1083,7 +1108,7 @@ fshell(FILE *f, int interactivep){
             free(env, sizeof(struct cli_env));
             return;
         }
-        shell_eval(argc, argv, env);
+        shell_eval(argc, (const char**)argv, env);
     }
 }
 

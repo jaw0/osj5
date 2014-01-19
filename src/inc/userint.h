@@ -17,7 +17,7 @@
 
 /* vars */
 #define DEFVAR(proto, name, init, type, docstr) proto name = init;
-
+#define DEFCONFUNC(func, f)	int func (FILE *f)
 
 #endif /* __userint_h__ */
 

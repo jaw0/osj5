@@ -2,9 +2,11 @@
 /* defproto.gen creates defproto.h */
 #include <conf.h>
 #include <misc.h>
+typedef FILE;
 #define DEFUN(name, doc)	extern int CONCAT(ui_f_, name) (int, const char**, struct cli_env*);
 #define DEFALIAS(a,b)
 #define DEFVAR(proto, name, init, type, docstr) extern proto name;
+#define DEFCONFUNC(name, f)	extern int name(FILE *);
 
 #include <defun.list>
 #include <defvar.list>
