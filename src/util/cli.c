@@ -42,7 +42,6 @@ extern double atof(const char*);
 typedef long long quad;
 typedef unsigned long long u_quad;
 
-int  verbose = 0;
 char gprompt[32] = "$[35;1m$v$g$[39;0m ";     // 35 = purple
 
 
@@ -80,14 +79,16 @@ static const struct Var {
 #define IN_PROC(a, b)	(void*)offsetof(struct Proc, a), UV_TYPE_PROC | b
 
 } vars[] = {
-    { "prompt",  "the prompt",               IN_ENV(prompt, UV_TYPE_STR32) },
+    { "prompt",  "the prompt",               IN_ENV(prompt,  UV_TYPE_STR32) },
+    { "verbose", "echo commands in scripts", IN_ENV(verbose, UV_TYPE_UC) },
+    { "noglob",  "disable file globbing",    IN_ENV(noglob,  UV_TYPE_UC) },
+
     { "gprompt", "default system prompt",    gprompt,       UV_TYPE_STR32 | UV_TYPE_CONFIG },
     { "time",    "temporal displacement",    &systime,      UV_TYPE_TIME },
     { "itime",   "temporal displacement",    &systime,      UV_TYPE_UQ },
 #ifdef N_RTC
     { "boottime","the time we booted",       &boottime,  UV_TYPE_TIME },
 #endif
-    { "verbose", "echo commands in scripts", &verbose,   UV_TYPE_UL },
 #ifndef PLATFORM_EMUL
 #ifdef PLATFORM_I386
     { "kpa",     0,                          &k_paddr,   UV_TYPE_UL },
@@ -641,7 +642,7 @@ DEFUN(file, 0)
         if(how){
             while( (c=getchar()) != 4 ){	/* until ^D */
                 fputc(c, f);
-                if( verbose )
+                if( env && env->verbose )
                     putchar(c);
             }
         }else{
@@ -907,10 +908,12 @@ shell_eval(int argc, const char **argv, struct cli_env *env){
 #endif
 #ifdef USE_FILESYS
     //  need glob?
-    for(i=1; i<argc; i++){
-        if( contains_globbing( argv[i] ) ){
-            globp = 1;
-            break;
+    if( !env || !env->noglob ){
+        for(i=1; i<argc; i++){
+            if( contains_globbing( argv[i] ) ){
+                globp = 1;
+                break;
+            }
         }
     }
 #endif
@@ -1058,7 +1061,7 @@ fshell(FILE *f, int interactivep){
                 buf[ --i ] = 0;
         }
 
-        if( !interactivep && verbose )
+        if( !interactivep && env->verbose )
             printf("%s\n", buf);
 
         argc = 0;

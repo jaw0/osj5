@@ -10,8 +10,9 @@
 #define __cli_h__
 
 struct cli_env {
-	char prompt[32];
-	char a[32], b[32], c[32], d[32];
+    char verbose, noglob;
+    char prompt[32];
+    char a[32], b[32], c[32], d[32];
 };
 
 
