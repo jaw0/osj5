@@ -357,11 +357,15 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
 
     utime_t expires = timeo ? get_time() + timeo : 0;
 
+
     while( ii->state == I2C_STATE_BUSY ){
         if( currproc ){
+#ifdef I2C_VERBOSE
+            kprintf("i2c xfer tsleep %d\n", timeo ? expires - get_time() : 0);
+#endif
             tsleep( ii, -1, "i2c", timeo ? expires - get_time() : 0 );
         }
-        if( expires && get_time() > expires ){
+        if( expires && get_time() >= expires ){
             I2C_CRUMB("timeout", 0,0);
             break;
         }
