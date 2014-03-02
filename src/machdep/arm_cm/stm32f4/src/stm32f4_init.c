@@ -205,7 +205,8 @@ init_hw2(void){
 
     int ram = (&_estack - &_sdata)/1024;
     bootmsg("bootflags = 0x%x, cpuid %x, %dk flash, %dk RAM\n", bootflags, SCB->CPUID, *R_FLASHKB, ram);
-    bootmsg("clocks: sys %dMHz, apb1 %dMHz, apb2 %dMHz\n", freq_sys/1000000, freq_apb1/1000000, freq_apb2/1000000);
+    bootmsg("clocks: sys %dMHz, apb1 %dMHz, apb2 %dMHz, usb %dMHz\n",
+            freq_sys/1000000, freq_apb1/1000000, freq_apb2/1000000, freq_usb/1000000);
     bootmsg("uid %x-%x-%x\n", R_UNIQUE[0], R_UNIQUE[1], R_UNIQUE[2]);
 
 }
