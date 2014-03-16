@@ -525,3 +525,23 @@ void set_pixel(int, int, int){}
 int  get_pixel(int, int){ return 0; }
 void clear_screen(void) {}
 
+/****************************************************************/
+
+extern "C" {
+
+void
+c_gfxdpy_set_pixel(GFXdpy *g, int x, int y, int v){
+    g->set_pixel(x,y,v);
+}
+
+int
+c_gfxdpy_get_pixel(GFXdpy *g, int x, int y){
+    return g->get_pixel(x,y);
+}
+
+void
+c_gfxdpy_flush(GFXdpy *g){
+    g->flush();
+}
+
+}
