@@ -39,6 +39,7 @@ typedef struct i2c_msg {
 
 extern int i2c_xfer(int, int, i2c_msg*, int);
 extern int i2c_write1(int, i2c_msg*);
+extern int i2c_set_speed(int, int);
 
 
 #endif /* __i2c_h__ */

@@ -200,6 +200,23 @@ i2c_init(struct Device_Conf *dev){
     addr->CR1  &= ~3;
     addr->TRISE = (APB1CLOCK / 1000000) + 1;
 
+    speed = i2c_set_speed(i, speed);
+
+    i2cinfo[i].state = I2C_STATE_IDLE;
+    nvic_enable( i2cinfo[i].irq,     0 );	// highest priority
+    nvic_enable( i2cinfo[i].irq + 1, 0 );	// highest priority
+
+    bootmsg("%s at io 0x%x irq %d speed %dkHz\n", dev->name, i2cinfo[i].addr, i2cinfo[i].irq, speed);
+    return 0;
+}
+
+int
+i2c_set_speed(int unit, int speed){
+    if( unit >= N_I2C ) return -1;
+
+    struct I2CInfo *ii = i2cinfo + unit;
+    I2C_TypeDef *addr   = ii->addr;
+
     if( speed > 100000 ){
         int ccr = (APB1CLOCK/speed + 24)/25;	// ceil
         addr->CCR   = 0xC000 | ccr;		// fast mode
@@ -209,13 +226,10 @@ i2c_init(struct Device_Conf *dev){
         speed = APB1CLOCK/addr->CCR/2000;
     }
 
-    i2cinfo[i].state = I2C_STATE_IDLE;
-    nvic_enable( i2cinfo[i].irq,     0 );	// highest priority
-    nvic_enable( i2cinfo[i].irq + 1, 0 );	// highest priority
-
-    bootmsg("%s at io 0x%x irq %d speed %dkHz\n", dev->name, i2cinfo[i].addr, i2cinfo[i].irq, speed);
-    return 0;
+    return speed;
 }
+
+
 
 
 static void
@@ -321,7 +335,6 @@ _msg_done(i2c_msg *m){
 }
 
 /****************************************************************/
-
 int
 i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
     if( unit >= N_I2C ) return -1;
