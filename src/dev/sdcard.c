@@ -17,6 +17,7 @@
 #include <spi.h>
 #include <gpio.h>
 #include <sdcard.h>
+#include <userint.h>
 
 #define MAXTRY 3
 
@@ -140,8 +141,8 @@ sdcard_init(struct Device_Conf *dev){
     snprintf(info, sizeof(info), "%s:", ii->name);
     fmount( & ii->file, info, "fatfs" );
 
-    bootmsg( "sdcard %s unit mounted on %s type %s\n",
-	     ii->name, info, "fatfs" );
+    bootmsg( "sdcard %s speed %dkHz mounted on %s type %s\n",
+	     ii->name, ii->spicf.speed/1000, info, "fatfs" );
 #endif
 
     return (int)& ii->file;
@@ -397,7 +398,7 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
             SDRX1(m[5]);
             SDRX1(m[6]);
             m[6].until = _wait_notnull;
-            m[6].dlen  = 30000;
+            m[6].dlen  = 100000;
             SDFIN(m[7]);
             m[7].dlen = 1000;		// extra delay
 
@@ -408,6 +409,7 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
 
             kprintf("sd write error %qx, %d => %x, %x\n", pos, len, r, m[5].response);
             hexdump(m, sizeof(ii->m));
+            usleep(10000);
             sdcard_clear( ii );
         }
 
@@ -441,3 +443,13 @@ sdcard_stat(FILE *f, struct stat *s){
     return 0;
 }
 
+/****************************************************************/
+
+DEFUN(set_sdcard_speed, "change sdcard speed")
+{
+    int n = 5000000;
+
+    if( argc > 1 ) n = atoi(argv[1]);
+    sdcinfo[0].spicf.speed = n;
+    return 0;
+}
