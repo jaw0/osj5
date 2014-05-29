@@ -848,6 +848,8 @@ int
 _need_yield_bottom(void){
     /* do we need to do a yield_bottom */
     int r = ((currproc->flags & PRF_MSGPEND) && !currproc->throwing) ? 1 : 0;
+    /* signals disabled? */
+    if( r && (currproc->flags & PRF_SIGBLOCK) ) r = 0;
     /* set flag now, to avoid recursing when we come out of interrupt mode */
     if( r ) currproc->throwing = 1;
     return r;
@@ -857,3 +859,12 @@ void
 _yield_bottom_cancel(void){
     currproc->throwing = 0;
 }
+
+
+void
+sigenable(void){
+    currproc->flags &=  ~PRF_SIGBLOCK;
+    if( currproc->flags & PRF_MSGPEND ) yield();
+}
+
+

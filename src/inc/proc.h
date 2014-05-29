@@ -34,6 +34,7 @@ struct Proc {
 #define PRF_AUTOREAP	16	/* process will not reap dead kids, have scheduler do it */
 #define PRF_IMPORTANT	32	/* important system process */
 #define PRF_SIGWAKES	64	/* signals wake blocked procs */
+#define PRF_SIGBLOCK   128	/* signals are currently blocked */
 	u_char state;			/* state */
 #define PRS_RUNNABLE	0
 #define PRS_BLOCKED	1
@@ -100,6 +101,8 @@ typedef struct Proc *proc_t;
 #define getppid()		(currproc ? currproc->mommy : 0)
 #define setprio(pid, pri)	((pid)->prio = (pri))
 #define setslice(pid, slice)	((pid)->timeslice = (slice))
+#define sigdisable()		(currproc->flags |= PRF_SIGBLOCK)
+
 
 #ifdef CHECKPROC
 #	define	PROCOK(p)	{ if( (p)->magic != PROCMAGIC ) PANIC("proc: bad magic"); }
