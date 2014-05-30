@@ -397,10 +397,11 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
             m[4].dlen  = 2;
             SDRX1(m[5]);
             SDRX1(m[6]);
+            m[6].mode  = SPIMO_UNTIL_SLOW;	// typically ~2ms
             m[6].until = _wait_notnull;
             m[6].dlen  = 100000;
             SDFIN(m[7]);
-            m[7].dlen = 1000;		// extra delay
+            m[7].dlen = 16;		// extra delay
 
             r = spi_xfer(& ii->spicf, 8, m, 1000000);
 

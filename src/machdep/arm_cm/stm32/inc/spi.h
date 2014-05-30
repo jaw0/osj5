@@ -28,6 +28,8 @@ typedef struct spi_msg {
 # define SPIMO_FINISH	5	// wait for last byte to finish
 # define SPIMO_PINSOFF	6
 # define SPIMO_PINSON	7
+# define SPIMO_UNTIL_SLOW 8
+
     u_char	response;
     int		dlen;
     char	*data;
