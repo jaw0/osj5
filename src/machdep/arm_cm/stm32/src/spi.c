@@ -126,9 +126,8 @@ struct SPIInfo {
 } spiinfo[ N_SPI ];
 
 
-static int set_speed(struct SPIInfo *, int);
+static int  _set_speed(struct SPIInfo *, int);
 static void _msg_next(struct SPIInfo *);
-
 
 
 
@@ -216,7 +215,7 @@ spi_init(struct Device_Conf *dev){
         ii->rxdma     = DMA1_Stream3;
         ii->txdma     = DMA1_Stream4;
         ii->dma	      = DMA1;
-        ii->clock     = APB2CLOCK;
+        ii->clock     = APB1CLOCK;
         dmairqrx      = IRQ_DMA1_STREAM3;
         dmairqtx      = IRQ_DMA1_STREAM4;
         ii->dmanrx    = 3;
@@ -259,7 +258,7 @@ spi_init(struct Device_Conf *dev){
     addr->CR1 |= CR1_SSM | CR1_SSI | CR1_MSTR;
     addr->CR2 &= ~0xE7;
 
-    int speed = set_speed(ii, dev->baud);
+    int speed = _set_speed(ii, dev->baud);
 
     nvic_enable( ii->irq,  IPL_DISK );
     nvic_enable( dmairqrx, IPL_DISK );
@@ -274,8 +273,8 @@ spi_init(struct Device_Conf *dev){
     return 0;
 }
 
-static int
-set_speed(struct SPIInfo *ii, int speed){
+int
+_set_speed(struct SPIInfo *ii, int speed){
     SPI_TypeDef *dev   = ii->addr;
     int cspeed = ii->clock / 2;
     int clkdiv = 0;
@@ -494,7 +493,7 @@ static inline void
 _spi_conf_enable(const struct SPIConf *cf, struct SPIInfo *ii){
     SPI_TypeDef *dev   = ii->addr;
 
-    if( cf->speed ) set_speed(ii, cf->speed);
+    if( cf->speed ) _set_speed(ii, cf->speed);
     dev->CR1 |= CR1_MSTR | CR1_SSI;
 }
 
@@ -528,15 +527,22 @@ _spi_conf_done(const struct SPIConf *cf, struct SPIInfo *ii){
 static inline int
 _msg_until(struct SPIInfo *ii){
     spi_msg *m = ii->msg;
+    int count = 0;
 
     while( m->dlen -- > 0 ){
         int c = m->response = _spi_rxtx1( ii->addr, 0xFF );
         int r = m->until(c);
 
-        if( r ==  1 ) return 0;	// got it. done.
+        if( r ==  1 ){
+            SPI_CRUMB("got", c, 0);
+            return 0;	// got it. done.
+        }
         if( r == -1 ) break;    // error
 
-        if( m->mode == SPIMO_UNTIL_SLOW )
+        if( (m->mode == SPIMO_UNTIL_SLOW) && (count++ > 10) )
+            yield();
+
+        if( (m->mode == SPIMO_UNTIL) && (count++ > 100) )
             yield();
     }
 
@@ -721,6 +727,11 @@ spi_clear(const struct SPIConf * cf){
     usleep(10000);
 }
 
+int
+spi_set_speed(const struct SPIConf * cf, int speed){
+    struct SPIInfo *ii = spiinfo + cf->unit;
+    return _set_speed(ii, speed);
+}
 
 int
 spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
@@ -729,6 +740,12 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
 
     struct SPIInfo *ii = spiinfo + cf->unit;
     SPI_TypeDef *dev   = ii->addr;
+    int verbose=0;
+
+    if( msgs[0].mode & 0x80 ){
+        verbose = 1;
+        msgs[0].mode &= ~0x80;
+    }
 
     if( currproc )
         sync_lock(&ii->lock, "spi.L");
@@ -771,7 +788,7 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
     _spi_conf_done(cf, ii);
 
 #ifdef VERBOSE
-    if( (ii->state != SPI_STATE_XFER_DONE) ){
+    if( verbose || (ii->state != SPI_STATE_XFER_DONE) ){
         kprintf("spi xfer\n");
         _spi_dump_crumb();
     }

@@ -54,7 +54,7 @@ struct SDCinfo {
     u_char		ishc;
     lock_t		lock;
     u_char		cmd[6];
-    spi_msg		m[8];
+    spi_msg		m[72];
 } sdcinfo[ N_SDCARD ];
 
 
@@ -98,6 +98,7 @@ sdcard_init(struct Device_Conf *dev){
     //hexdump(ii->sdcsd, 16);
 
     ii->spicf.speed = dev->baud ? dev->baud : 25000000;
+    int actspeed = spi_set_speed( & ii->spicf, ii->spicf.speed );
 
     info[0] = ii->sdcid[1];
     info[1] = ii->sdcid[2];
@@ -142,7 +143,7 @@ sdcard_init(struct Device_Conf *dev){
     fmount( & ii->file, info, "fatfs" );
 
     bootmsg( "sdcard %s speed %dkHz mounted on %s type %s\n",
-	     ii->name, ii->spicf.speed/1000, info, "fatfs" );
+	     ii->name, actspeed/1000, info, "fatfs" );
 #endif
 
     return (int)& ii->file;
@@ -187,7 +188,7 @@ _wait_notnull(int c){
 #define SDRX1(m)	\
     m.mode  = SPIMO_UNTIL; \
     m.until = _wait_response; \
-    m.dlen  = 20000;
+    m.dlen  = 50000;
 
 #define SDFIN(m)	\
     m.mode = SPIMO_PINSOFF; \
@@ -365,47 +366,78 @@ sdcard_bread(FILE*f, char*d, int len, offset_t pos){
     return tot;
 }
 
-static const u_short token = 0xFEFF;
+#define MAXMULTI	16
+static const u_char  token_multi[] = {0xFC};
+static const u_char  token_stop[]  = {0xFD, 0xFF};	// plus delay
 
 int
 sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
     struct SDCinfo *ii = f->d;
     u_char *cmd = ii->cmd;
     spi_msg *m  = ii->m;
-    int tot = 0, tries, r;
+    int tot = 0, tries, r, nummsg;
 
     sync_lock(& ii->lock, "sdcard");
     bzero(m, sizeof(m));
-    cmd[0] = 0x40 | 24;
-
-    int plx = splproc();
+    cmd[0] = 0x40 | 25;
 
     while(len){
+        int nblk = len >> 9;
+        if( nblk > MAXMULTI ) nblk = MAXMULTI;
 
         for(tries=0; tries<MAXTRY; tries++){
 
             _sdcard_blk(ii, pos, cmd);
-            SDCMD(m[0], cmd);
-            SDRX1(m[1]);
-            m[2].mode  = SPIMO_WRITE;
-            m[2].data  = (char*)&token;	// delay + token
-            m[2].dlen  = 2;
-            m[3].mode  = SPIMO_WRITE;
-            m[3].dlen  = 512;
-            m[3].data  = (char*)d;
-            m[4].mode  = SPIMO_DELAY;	// skip crc
-            m[4].dlen  = 2;
-            SDRX1(m[5]);
-            SDRX1(m[6]);
-            m[6].mode  = SPIMO_UNTIL_SLOW;	// typically ~2ms
-            m[6].until = _wait_notnull;
-            m[6].dlen  = 100000;
-            SDFIN(m[7]);
-            m[7].dlen = 16;		// extra delay
+            SDCMD(m[0], cmd);			// command
+            SDRX1(m[1]);			// response
+            nummsg = 2;
 
-            r = spi_xfer(& ii->spicf, 8, m, 1000000);
+            // add more blocks
+            for(r=0; r<nblk; r++){
+                // start token
+                m[nummsg].mode = SPIMO_WRITE;
+                m[nummsg].data = (char*)token_multi;
+                m[nummsg].dlen = 1;
+                nummsg ++;
 
-            if( m[5].response != 0 ) r = m[5].response;
+                // data + crc
+                m[nummsg].mode = SPIMO_WRITE;
+                m[nummsg].dlen = 512 + 2;
+                m[nummsg].data = (char*)d + (r<<9);
+                nummsg ++;
+
+                // response
+                SDRX1(m[nummsg]);
+                nummsg ++;
+
+                m[nummsg].mode  = SPIMO_UNTIL_SLOW;		// this is usually quick
+                m[nummsg].until = _wait_notnull;
+                m[nummsg].dlen  = 1000000;
+                nummsg++;
+            }
+            m[nummsg].mode = SPIMO_WRITE;
+            m[nummsg].data = (char*)token_stop;
+            m[nummsg].dlen = 2;
+            nummsg ++;
+
+            m[nummsg].mode  = SPIMO_UNTIL_SLOW;		// typically ~2ms
+            m[nummsg].until = _wait_notnull;
+            m[nummsg].dlen  = 1000000;
+            nummsg++;
+
+
+            SDFIN(m[nummsg]);
+            m[nummsg].dlen = 8;				// extra delay
+            nummsg ++;
+
+            // m[0].mode |= 0x80; // XXX
+
+            //int plx = splproc();
+            r = spi_xfer(& ii->spicf, nummsg, m, 1000000);
+            //splx(plx);
+
+            // QQQ - which response?
+            if( m[nummsg-5].response != 0 ) r = m[nummsg-5].response;
             if( r == SPI_XFER_OK ) break;
 
             kprintf("sd write error %qx, %d => %x, %x\n", pos, len, r, m[5].response);
@@ -415,17 +447,17 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
         }
 
         if( r != SPI_XFER_OK ){
-            splx(plx);
+            //splx(plx);
             sync_unlock(& ii->lock );
             return -1;
         }
-        len -= 512;
-        pos += 512;
-        d   += 512;
-        tot += 512;
+        len -= nblk * 512;
+        pos += nblk * 512;
+        d   += nblk * 512;
+        tot += nblk * 512;
     }
 
-    splx(plx);
+    //splx(plx);
     sync_unlock(& ii->lock );
     return tot;
 }
@@ -452,5 +484,36 @@ DEFUN(set_sdcard_speed, "change sdcard speed")
 
     if( argc > 1 ) n = atoi(argv[1]);
     sdcinfo[0].spicf.speed = n;
+    return 0;
+}
+
+DEFUN(testfile, 0)
+{
+    int i, len;
+    FILE *f;
+
+    if( argc != 3 ){
+        f_error("mkfile name len");
+        return -1;
+    }
+
+    len = atoi(argv[2]);
+
+    ui_pause();
+    int t0 = get_hrtime();
+    f = fopen( argv[1], "w!" );
+    if( f ){
+        // start of RAM
+        while(len){
+            int wl = (len > 65536) ? 65536 : len;
+            fwrite(f, (char*)0x20000000, wl );
+            len -= wl;
+        }
+        fclose(f);
+
+        int t1 = get_hrtime();
+        printf("time: %d\n", t1 - t0);
+    }
+    ui_resume();
     return 0;
 }
