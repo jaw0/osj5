@@ -312,6 +312,7 @@ _spi_dump_crumb(void){
 #endif
 }
 
+void spi_dump_crumb(){_spi_dump_crumb();}
 
 // set/clear cs pins
 static void
@@ -534,7 +535,7 @@ _msg_until(struct SPIInfo *ii){
         int r = m->until(c);
 
         if( r ==  1 ){
-            SPI_CRUMB("got", c, 0);
+            SPI_CRUMB("got", c, count);
             return 0;	// got it. done.
         }
         if( r == -1 ) break;    // error
@@ -592,6 +593,7 @@ _msg_write(struct SPIInfo *ii){
     if( m->dlen > DMA_MIN_SIZE ){
         _dma_enable_write(ii);
         _msg_dma_wait(ii);
+        m->response = dma_idle_sink;
     }else{
         for(i=0; i<m->dlen; i++)
             _spi_rxtx1( ii->addr, m->data[i] );
@@ -768,7 +770,9 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
     dev->CR1 |= CR1_SPE;       // go!
 
     while( ii->num_msg > 0 ){
+        int plx = splproc();
         _msg_do( ii );
+        splx(plx);
         if( ii->state == SPI_STATE_ERROR ) break;
         ii->num_msg --;
         if( ii->msg ) ii->msg ++;

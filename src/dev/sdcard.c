@@ -20,6 +20,7 @@
 #include <userint.h>
 
 #define MAXTRY 3
+#define MAXMULTI	16
 
 int sdcard_ioctl(FILE*, int, void*);
 int sdcard_bread(FILE*, char*, int, offset_t);
@@ -52,6 +53,7 @@ struct SDCinfo {
     u_char		sdcsd[16];	// a meshigas of unaligned jibber-jabber
     int			sectors;
     u_char		ishc;
+    int8_t		maxblock;
     lock_t		lock;
     u_char		cmd[6];
     spi_msg		m[72];
@@ -78,6 +80,7 @@ sdcard_init(struct Device_Conf *dev){
     ii->spicf.speed = 400000;
     ii->spicf.nss   = 1;
     ii->spicf.ss[0] = dev->arg[0];
+    ii->maxblock    = MAXMULTI;
 
     // XXX - this doesn't really belong here
 #if defined(PLATFORM_STM32F1)
@@ -122,6 +125,7 @@ sdcard_init(struct Device_Conf *dev){
         nsect = (ii->sdcsd[9] + (ii->sdcsd[8]<<8) + ((ii->sdcsd[7]&0x3F)<<16) + 1) * 1024;
         sdtype = "SD/HC";
         ii->ishc = 1;
+        //ii->maxblock = 4;	// XXX - kingston card is wonky?
     }
 
     ii->sectors = nsect;
@@ -178,6 +182,11 @@ _wait_notnull(int c){
     return 1; 	// got it
 }
 
+static int
+_wait_datatoken(int c){
+    return 1;
+}
+
 /****************************************************************/
 
 #define SDCMD(m, cmd)	\
@@ -189,6 +198,11 @@ _wait_notnull(int c){
     m.mode  = SPIMO_UNTIL; \
     m.until = _wait_response; \
     m.dlen  = 50000;
+
+#define SDRXD1(m)	\
+    m.mode  = SPIMO_READ; \
+    m.data  = & m.response; \
+    m.dlen  = 1;
 
 #define SDFIN(m)	\
     m.mode = SPIMO_PINSOFF; \
@@ -309,64 +323,85 @@ sdcard_clear(struct SDCinfo *ii){
     initialize_card(ii);
 }
 
+static const char _cmd_stop[] = { 0x40 | 12, 0,0,0,0,0 };
+
 int
 sdcard_bread(FILE*f, char*d, int len, offset_t pos){
     struct SDCinfo *ii = f->d;
     u_char *cmd = ii->cmd;
     spi_msg *m  = ii->m;
-    int tot = 0, tries, r;
+    int tot = 0, tries, r, nummsg;
 
     sync_lock(& ii->lock, "sdcard");
     bzero(m, sizeof(m));
-    cmd[0] = 0x40 | 17;
-
-    int plx = splproc();
+    cmd[0] = 0x40 | 18;
 
     while(len){
+        int nblk = len >> 9;
+        if( nblk > MAXMULTI ) nblk = MAXMULTI;
 
         for(tries=0; tries<MAXTRY; tries++){
 
             _sdcard_blk(ii, pos, cmd);
-            SDCMD(m[0], cmd);
-            SDRX1(m[1]);
-            m[2].mode  = SPIMO_UNTIL;
-            m[2].until = _wait_token;
-            m[2].dlen  = 10000;
-            m[3].mode  = SPIMO_READ;
-            m[3].dlen  = 512;
-            m[3].data  = d;
-            m[4].mode  = SPIMO_DELAY;	// skip crc
-            m[4].dlen  = 2;
-            SDFIN(m[5]);
-            m[5].dlen = 16;		// extra delay
+            SDCMD(m[0], cmd);			// command
+            SDRX1(m[1]);			// response
+            nummsg = 2;
 
-            r = spi_xfer(& ii->spicf, 6, m, 1000000);
+            // add more blocks
+            for(r=0; r<nblk; r++){
+                m[nummsg].mode  = SPIMO_UNTIL;
+                m[nummsg].until = _wait_token;
+                m[nummsg].dlen  = 100000;
+                nummsg++;
 
+                m[nummsg].mode  = SPIMO_READ;
+                m[nummsg].dlen  = 512;
+                m[nummsg].data = (char*)d + (r<<9);
+                nummsg++;
+
+                m[nummsg].mode  = SPIMO_DELAY;	// skip crc
+                m[nummsg].dlen  = 2;
+                nummsg++;
+            }
+
+            // stop!
+            m[nummsg].mode = SPIMO_WRITE;
+            m[nummsg].dlen = 6;
+            m[nummsg].data = _cmd_stop;
+            nummsg++;
+            SDRX1(m[nummsg]);			// response
+            nummsg ++;
+
+            SDFIN(m[nummsg]);
+            m[nummsg].dlen = 16;		// extra delay
+            nummsg++;
+
+            r = spi_xfer(& ii->spicf, nummsg, m, 1000000);
+
+            // QQQ - which response?
+            if( m[1].response != 0 ) r = m[1].response;
             if( r == SPI_XFER_OK ) break;
 
-            kprintf("sd read error %qx, %d => %x\n", pos, len, r);
+            kprintf("sd read error %qx, %d => %x, %x\n", pos, len, r, m[5].response);
             hexdump(m, sizeof(ii->m));
+            usleep(10000);
             sdcard_clear( ii );
         }
 
         if( r != SPI_XFER_OK ){
-            splx(plx);
             sync_unlock(& ii->lock );
             return -1;
         }
-
-        len -= 512;
-        pos += 512;
-        d   += 512;
-        tot += 512;
+        len -= nblk * 512;
+        pos += nblk * 512;
+        d   += nblk * 512;
+        tot += nblk * 512;
     }
 
-    splx(plx);
     sync_unlock(& ii->lock );
     return tot;
 }
 
-#define MAXMULTI	16
 static const u_char  token_multi[] = {0xFC};
 static const u_char  token_stop[]  = {0xFD, 0xFF};	// plus delay
 
@@ -375,15 +410,18 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
     struct SDCinfo *ii = f->d;
     u_char *cmd = ii->cmd;
     spi_msg *m  = ii->m;
-    int tot = 0, tries, r, nummsg;
+    int tot = 0, r;
+    int8_t tries, nummsg;
 
     sync_lock(& ii->lock, "sdcard");
     bzero(m, sizeof(m));
     cmd[0] = 0x40 | 25;
 
+    // kprintf("sdwr %qx %d\n", pos, len);
+
     while(len){
         int nblk = len >> 9;
-        if( nblk > MAXMULTI ) nblk = MAXMULTI;
+        if( nblk > ii->maxblock ) nblk = ii->maxblock;
 
         for(tries=0; tries<MAXTRY; tries++){
 
@@ -407,7 +445,7 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
                 nummsg ++;
 
                 // response
-                SDRX1(m[nummsg]);
+                SDRXD1(m[nummsg]);
                 nummsg ++;
 
                 m[nummsg].mode  = SPIMO_UNTIL_SLOW;		// this is usually quick
@@ -422,32 +460,39 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
 
             m[nummsg].mode  = SPIMO_UNTIL_SLOW;		// typically ~2ms
             m[nummsg].until = _wait_notnull;
-            m[nummsg].dlen  = 1000000;
+            m[nummsg].dlen  = 2000000;
             nummsg++;
 
 
             SDFIN(m[nummsg]);
-            m[nummsg].dlen = 8;				// extra delay
+            m[nummsg].dlen = 16;				// extra delay
             nummsg ++;
 
-            // m[0].mode |= 0x80; // XXX
-
-            //int plx = splproc();
             r = spi_xfer(& ii->spicf, nummsg, m, 1000000);
-            //splx(plx);
 
-            // QQQ - which response?
-            if( m[nummsg-5].response != 0 ) r = m[nummsg-5].response;
+            // check responses
+            int8_t i;
+            for(i=0; i<nblk; i++){
+                //kprintf("m%dr %x; ", 4*i + 4, m[4*i+4].response);
+                if( (m[4*i+4].response & 0x1f) != 5 ) r = SPI_XFER_ERROR;;
+            }
+
+            if(r){
+                spi_dump_crumb();
+                r = SPI_XFER_ERROR;
+                // try again with less
+                if( nblk > 1 ) nblk >>= 1;
+            }
+
             if( r == SPI_XFER_OK ) break;
 
-            kprintf("sd write error %qx, %d => %x, %x\n", pos, len, r, m[5].response);
-            hexdump(m, sizeof(ii->m));
+            kprintf("sd write error %qx, %d => %x, %x\n", pos, nblk, r, m[nummsg-5].response);
+            //hexdump(m, sizeof(ii->m));
             usleep(10000);
             sdcard_clear( ii );
         }
 
         if( r != SPI_XFER_OK ){
-            //splx(plx);
             sync_unlock(& ii->lock );
             return -1;
         }
@@ -457,7 +502,6 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
         tot += nblk * 512;
     }
 
-    //splx(plx);
     sync_unlock(& ii->lock );
     return tot;
 }
@@ -467,7 +511,7 @@ sdcard_stat(FILE *f, struct stat *s){
     struct SDCinfo *ii = f->d;
 
     s->dev     = 0;
-    s->size    = ii->sectors * 512;
+    s->size    = (long long)ii->sectors * 512;
     s->ctime   = 0;
     s->blksize = 512;
     s->mode    = 0;
@@ -487,7 +531,7 @@ DEFUN(set_sdcard_speed, "change sdcard speed")
     return 0;
 }
 
-DEFUN(testfile, 0)
+DEFUN(wrfile, 0)
 {
     int i, len;
     FILE *f;
@@ -515,5 +559,36 @@ DEFUN(testfile, 0)
         printf("time: %d\n", t1 - t0);
     }
     ui_resume();
+    return 0;
+}
+
+DEFUN(rdfile, 0)
+{
+    int i, len;
+    FILE *f;
+
+    if( argc != 2 ){
+        f_error("rdfile name");
+        return -1;
+    }
+
+    len = atoi(argv[2]);
+    char *buf = alloc( 8192 );
+
+    ui_pause();
+    int t0 = get_hrtime();
+    f = fopen( argv[1], "r" );
+    if( f ){
+        while(1){
+            int rl = fread(f, buf, 8192);
+            if( rl != 8192 ) break;
+        }
+        fclose(f);
+
+        int t1 = get_hrtime();
+        printf("time: %d\n", t1 - t0);
+    }
+    ui_resume();
+    free(buf, 8192);
     return 0;
 }
