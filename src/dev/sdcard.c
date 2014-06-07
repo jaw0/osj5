@@ -383,7 +383,7 @@ sdcard_bread(FILE*f, char*d, int len, offset_t pos){
             if( r == SPI_XFER_OK ) break;
 
             kprintf("sd read error %qx, %d => %x, %x\n", pos, len, r, m[5].response);
-            hexdump(m, sizeof(ii->m));
+            //hexdump(m, sizeof(ii->m));
             usleep(10000);
             sdcard_clear( ii );
         }

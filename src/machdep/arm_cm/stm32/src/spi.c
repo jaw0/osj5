@@ -540,15 +540,17 @@ _msg_until(struct SPIInfo *ii){
         }
         if( r == -1 ) break;    // error
 
-        if( (m->mode == SPIMO_UNTIL_SLOW) && (count++ > 10) )
+        if( (m->mode == SPIMO_UNTIL_SLOW) && (count++ > 10) ){
             yield();
+        }
 
-        if( (m->mode == SPIMO_UNTIL) && (count++ > 100) )
+        if( (m->mode == SPIMO_UNTIL) && (count++ > 100) ){
             yield();
+        }
     }
 
     // failed
-    SPI_CRUMB("until-fail", m->dlen, 0);
+    SPI_CRUMB("until-fail", m->response, count);
     ii->state = SPI_STATE_ERROR;
     return 1;
 }
