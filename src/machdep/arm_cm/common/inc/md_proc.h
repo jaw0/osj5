@@ -24,6 +24,7 @@
 #define IPL_DISK	0xC0
 #define IPL_MOTOR	0xB0
 #define IPL_CLOCK	0x80
+#define IPL_I2C		0x20
 #define IPL_HIGH	0x10
 
 #define splproc()	splraise(IPL_PROC)

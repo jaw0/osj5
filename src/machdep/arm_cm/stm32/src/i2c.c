@@ -203,8 +203,8 @@ i2c_init(struct Device_Conf *dev){
     speed = i2c_set_speed(i, speed);
 
     i2cinfo[i].state = I2C_STATE_IDLE;
-    nvic_enable( i2cinfo[i].irq,     0 );	// highest priority
-    nvic_enable( i2cinfo[i].irq + 1, 0 );	// highest priority
+    nvic_enable( i2cinfo[i].irq,     IPL_I2C );
+    nvic_enable( i2cinfo[i].irq + 1, IPL_I2C );
 
     bootmsg("%s at io 0x%x irq %d speed %dkHz\n", dev->name, i2cinfo[i].addr, i2cinfo[i].irq, speed);
     return 0;
