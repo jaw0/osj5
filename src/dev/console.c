@@ -31,6 +31,11 @@ extern FILE *emulcon_port;
 FILE *console_port=0, *kconsole_port=0;
 extern u_long bootflags;
 
+int
+__console_dummy_func(int i){
+    return i + 1;
+}
+
 /* RSN have console capable devs register
    console_register(fd, name, prio)
 */

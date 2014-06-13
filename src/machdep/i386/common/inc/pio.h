@@ -39,6 +39,8 @@
 #ifndef _I386_PIO_H_
 #define _I386_PIO_H_
 
+#include <sys/types.h>
+
 /*
  * Functions to provide access to i386 programmed I/O instructions.
  *

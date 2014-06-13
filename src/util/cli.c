@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/param.h>
 #include <conf.h>
+#include <ctype.h>
 #include <nstdio.h>
 #include <proc.h>
 #include <get.h>
@@ -302,10 +303,11 @@ DEFUN(set, "set a var")
             *(u_quad*)(vars[i].addr + off) = val;
             break;
         }
+#ifndef NOPRINTFFLOAT
         case UV_TYPE_FLOAT:
             *(float*)(vars[i].addr + off) = atof( argv[2] );
             break;
-
+#endif
 #if 0
         case UV_TYPE_IP:
             v = inet_aton( argv[2] );
@@ -872,7 +874,14 @@ prompt(struct cli_env *env){
         case '[':	putchar('\e'); putchar('[');	break;
         case 'n':	printf("%s", currproc->cwd ? currproc->cwd->name : "?"); break;
         case 'v':	printf("%s", ident);		break;
-        case 'g':	printf("%+c", 0x27A1);		break;	// large right arrow
+        case 'g':
+            // XXX - we should have a utf-8 flag
+#ifdef USE_PCTERM
+            // pcterm does not support utf-8
+            printf("\x1A");			break;
+#else
+            printf("%+c", 0x27A1);		break;	// large right arrow
+#endif
         case '{':
             // ${1234} => insert utf-8
             u = strtoul(p + 1, &p, 16);

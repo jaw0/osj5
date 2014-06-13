@@ -102,7 +102,6 @@ sdcard_init(struct Device_Conf *dev){
 
     ii->spicf.speed = dev->baud ? dev->baud : 25000000;
     int actspeed = spi_set_speed( & ii->spicf, ii->spicf.speed );
-
     info[0] = ii->sdcid[1];
     info[1] = ii->sdcid[2];
     info[2] = '/';
@@ -125,7 +124,6 @@ sdcard_init(struct Device_Conf *dev){
         nsect = (ii->sdcsd[9] + (ii->sdcsd[8]<<8) + ((ii->sdcsd[7]&0x3F)<<16) + 1) * 1024;
         sdtype = "SD/HC";
         ii->ishc = 1;
-        //ii->maxblock = 4;	// XXX - kingston card is wonky?
     }
 
     ii->sectors = nsect;
@@ -336,6 +334,8 @@ sdcard_bread(FILE*f, char*d, int len, offset_t pos){
     bzero(m, sizeof(m));
     cmd[0] = 0x40 | 18;
 
+    //kprintf("sdrd %qx %d\n", pos, len);
+
     while(len){
         int nblk = len >> 9;
         if( nblk > MAXMULTI ) nblk = MAXMULTI;
@@ -417,7 +417,7 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
     bzero(m, sizeof(m));
     cmd[0] = 0x40 | 25;
 
-    // kprintf("sdwr %qx %d\n", pos, len);
+    //kprintf("sdwr %qx %d\n", pos, len);
 
     while(len){
         int nblk = len >> 9;
@@ -543,7 +543,6 @@ DEFUN(wrfile, 0)
 
     len = atoi(argv[2]);
 
-    ui_pause();
     int t0 = get_hrtime();
     f = fopen( argv[1], "w!" );
     if( f ){
@@ -558,7 +557,6 @@ DEFUN(wrfile, 0)
         int t1 = get_hrtime();
         printf("time: %d\n", t1 - t0);
     }
-    ui_resume();
     return 0;
 }
 
@@ -575,7 +573,6 @@ DEFUN(rdfile, 0)
     len = atoi(argv[2]);
     char *buf = alloc( 8192 );
 
-    ui_pause();
     int t0 = get_hrtime();
     f = fopen( argv[1], "r" );
     if( f ){
@@ -588,7 +585,7 @@ DEFUN(rdfile, 0)
         int t1 = get_hrtime();
         printf("time: %d\n", t1 - t0);
     }
-    ui_resume();
+
     free(buf, 8192);
     return 0;
 }

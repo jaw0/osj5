@@ -11,8 +11,8 @@ kern:           libc/bcmp.c libc/bcopy.c libc/bzero.c libc/fnmatch.c libc/in_cks
 kern:           libc/index.c libc/memchr.c libc/memcmp.c libc/memcpy.c libc/memset.c
 kern:           libc/rindex.c libc/strcat.c libc/strchr.c libc/strcmp.c libc/strcpy.c
 kern:           libc/strlen.c libc/strncasecmp.c libc/strncat.c libc/strncmp.c libc/strncpy.c libc/strrchr.c
-kern:           util/atof.c
 
+# kern:           util/atof.c
 # libc/divdi3.c libc/moddi3.c  libc/qdivrem.c  libc/udivdi3.c libc/umoddi3.c
 
 flash:          dev/flash.c

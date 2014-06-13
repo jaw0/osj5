@@ -25,5 +25,6 @@ all: osj5.bin
 
 osj5.bin: osj5.elf
 	$(OBJCOPY) -O binary osj5.elf osj5.bin
+	@readelf -S osj5$(LINK_SUFFIX) | egrep 'isr|text|data|bss' | awk '{printf "%-16s %s %s\n", $$3, $$5, $$7}'
 
 

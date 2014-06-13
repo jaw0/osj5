@@ -1,9 +1,10 @@
 
 
-ident   GENERIC/EMUL
+ident   GENERIC
 
 arch    i386
 
+feature mpiboot                 # old mmr-pi boot code interface
 
 feature PROC
 feature NSTDIO
@@ -14,18 +15,21 @@ option DEVPREFIX	"dev:"	# prefix for naming device files
 option CHECKPROC		# additional error checking in proc
 
 option GETLINEHIST
-# option E9_EMUL_DEBUGGING
+option USE_E9_DEBUGGING
+option NOPRINTFFLOAT
 
 ################################################################
 # FLFS options
     # what should happen when creating a file that already exists?
     # rename it, delete it, or keep it
-option RENAMEFILE_ON_CREAT
-# option DELETEFILE_ON_CREAT
+option FATFS_RENAMEFILE_ON_CREAT
+option FLFS_RENAMEFILE_ON_CREAT
+
 option ENOUGHALREADYHEURISTIC	64
 ################################################################
 
 filesys flfs
+filesys fatfs
 
 ################################################################
 
@@ -35,19 +39,19 @@ device serial1  port 0x2F8 irq 3 baud 9600
 device console
 device flash
 device rtc0     port 0x70
-device hdc0     port 0x1F0 irq 14
 
 ################################################################
 
+device hdc0     port 0x1F0 irq 14
+#
+# not used?:
+#
 disk hd0:       type flfs  on hdc0 unit 0 partition -1
 disk hd1:       type flfs  on hdc0 unit 1 partition -1
-disk hd2:       type flfs  on hdc1 unit 0 partition -1
-disk hd3:       type flfs  on hdc1 unit 1 partition -1
 
 ################################################################
 
-flashdev flash:   type flfs  @ 0  size 1048576  block 512
+# flashdev flash:   type flfs  @ 0  size 1048576  block 512
 flashdev ram:     type flfs  @ 0  size 1048576  block 512  flags SSF_NOERASE
 
-config  root on flash:  startup in startup.rc
-
+config  root on hd0a:  startup in startup.rc

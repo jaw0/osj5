@@ -95,6 +95,7 @@ is_an_mbr(const u_char *buf){
     if( buf[478] & 0x7f  ) return 0;	// status of 3rd partition: 80|00
     if( buf[494] & 0x7f  ) return 0;	// status of 4th partition: 80|00
 
+    return 1;
 }
 
 // mbr data is unaligned + little-endian
@@ -121,8 +122,8 @@ dkpart_learn(struct Device_Conf *cf, const char *pfx, int dkno, FILE *fdev, offs
 
     if( ! is_an_mbr(buf) ){
         // entire disk
-        // RSN - determine type from data
-        const char *fstype = "fatfs";
+        // RSN - determine type from data or config table
+        const char *fstype = "flfs";
         dkpart_init(cf, pfx, dkno, 0, 0, blks, fdev, fstype);
         free(buf, 512);
         return 0;

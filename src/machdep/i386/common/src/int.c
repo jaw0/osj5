@@ -331,6 +331,7 @@ trap_handler(struct intrframe fr){
 }
 
 void unusedirq(struct intrframe*);
+void spuriousirq(struct intrframe*);
 void hardclock(struct intrframe*);
 void serialirq(struct intrframe*);
 
@@ -340,31 +341,31 @@ struct {
     const char *name;
 } inthnd[] = {
     /* master */
-    { hardclock, IPL_CLOCK, "timer0" },
-    { unusedirq, IPL_HIGH,  "int0-kbd" },
-    { unusedirq, IPL_HIGH,  "slave" },
-    { unusedirq, IPL_HIGH,  "asio1/int8" },
-    { unusedirq, IPL_HIGH,  "asio0/int9" },
-    { unusedirq, IPL_HIGH,  "int1-lpt" },
-    { unusedirq, IPL_HIGH,  "int2-fdc" },
-    { unusedirq, IPL_HIGH,  "int3-lpt" },
+    { hardclock,   IPL_CLOCK, "timer0" },
+    { unusedirq,   IPL_HIGH,  "int0-kbd" },
+    { unusedirq,   IPL_HIGH,  "slave" },
+    { unusedirq,   IPL_HIGH,  "asio1/int8" },
+    { unusedirq,   IPL_HIGH,  "asio0/int9" },
+    { unusedirq,   IPL_HIGH,  "int1-lpt" },
+    { unusedirq,   IPL_HIGH,  "int2-fdc" },
+    { unusedirq,   IPL_HIGH,  "int3-lpt" },
 
     /* slave */
-    { unusedirq, IPL_HIGH,  "int4-rtc" },
-    { unusedirq, IPL_HIGH,  "ssio/int5" },
-    { unusedirq, IPL_HIGH,  "timer1" },
-    { unusedirq, IPL_HIGH,  "timer2" },
-    { unusedirq, IPL_HIGH,  "dma/int6" },
-    { unusedirq, IPL_HIGH,  "int6/dma" },
-    { unusedirq, IPL_HIGH,  "int7" },
-    { unusedirq, IPL_HIGH,  "watchdog" },
+    { unusedirq,   IPL_HIGH,  "int4-rtc" },
+    { unusedirq,   IPL_HIGH,  "ssio/int5" },
+    { unusedirq,   IPL_HIGH,  "timer1" },
+    { unusedirq,   IPL_HIGH,  "timer2" },
+    { unusedirq,   IPL_HIGH,  "dma/int6" },
+    { unusedirq,   IPL_HIGH,  "int6/dma" },	/* these just happen... */
+    { spuriousirq, IPL_HIGH,  "int7" },
+    { unusedirq,   IPL_HIGH,  "watchdog" },
 
 };
 
 int
 install_interrupt(int irq, int prio, void (*f)(struct intrframe*), const char *name){
 
-    XE9('I');
+    XE9('X');
     if( irq >= sizeof(inthnd)/sizeof(inthnd[0]) || irq < 0 )
         return -1;
     XE9('a');
@@ -433,6 +434,10 @@ intr_handler(struct intrframe fr){
         }
     }
 }
+
+void
+spuriousirq(struct intrframe* fr){}
+
 
 void
 unusedirq(struct intrframe* fr){

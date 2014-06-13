@@ -74,6 +74,5 @@ init(proc_t proc){
     init_proc(proc);
 #endif
 
-
 }
 

@@ -95,8 +95,8 @@ kprintffnc_con(char c){
 }
 
 static int
-kprintffnc_e9(char c){
-    /* outb(0xE9, c); */
+kprintffnc_e9(void *a, char c){
+    XE9(c);
 }
 
 static int
@@ -145,6 +145,14 @@ kprintf(const char *fmt, ...){
     va_start(ap,fmt);
     vprintf(kprintffnc, 0, fmt, ap);
     red_off();
+}
+
+void
+e9printf(const char *fmt, ...){
+    va_list ap;
+
+    va_start(ap,fmt);
+    vprintf(kprintffnc_e9, 0, fmt, ap);
 }
 
 void

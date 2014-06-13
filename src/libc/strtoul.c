@@ -6,6 +6,8 @@
 #define	ULONG_MAX	((u_long)(~0L))		/* 0xFFFFFFFF */
 #endif
 
+#define MIN(a,b)	(((a)<(b)) ? (a) : (b))
+
 u_long
 strtoul(s, ptr, base)
 	const char *s;
@@ -52,7 +54,7 @@ strtoul(s, ptr, base)
 	maxrem = ULONG_MAX % base;
 
 	while ((digit = *s) != '\0') {
-		if (digit >= '0' && digit < ('0' + min(base, 10)))
+		if (digit >= '0' && digit < ('0' + MIN(base, 10)))
 			digit -= '0';
 		else
 			if (base > 10) {

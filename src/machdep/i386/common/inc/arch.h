@@ -2,6 +2,7 @@
 #include <conf.h>
 
 #ifdef USE_E9_DEBUGGING
+#  include <pio.h>
 #  define XE9(x)        outb(0xE9, (x))
 #  define E9PRINTF(x)   e9printf x
 #else

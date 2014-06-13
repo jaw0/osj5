@@ -9,6 +9,7 @@
 */
 
 
+#include <conf.h>
 #include <stdarg.h>
 #include <sys/types.h>
 #ifndef TESTING

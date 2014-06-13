@@ -3,8 +3,6 @@
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 2011-Dec-11 23:51 (EST)
   Function: startup
- 
-  $Id$
 
 */
 

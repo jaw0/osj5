@@ -57,7 +57,7 @@ __RCSID("$NetBSD: fnmatch.c,v 1.16 1999/09/20 04:38:58 lukem Exp $");
 #include <string.h>
 
 #ifdef __weak_alias
-__weak_alias(fnmatch,_fnmatch);
+/* __weak_alias(fnmatch,_fnmatch); */
 #endif
 
 #define	EOS	'\0'

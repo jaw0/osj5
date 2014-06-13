@@ -16,6 +16,7 @@ static const char *const rcsid
 #include <error.h>
 #include <bootflags.h>
 #include <asmdefs.h>
+#include <arch.h>
 
 static int npanic = 0;
 extern struct Proc *schedulerproc;
@@ -24,8 +25,10 @@ void stack_trace(void *);
 void
 panic(const char *m, int l, const char *f){
 
-	if( ! npanic++ )
-		kprintf("PANIC: %s at line %d of %s (currproc=%x)\nhalting\n", m, l, f, currproc);
+        if( ! npanic++ ){
+            E9PRINTF(("PANIC: %s at line %d of %s (currproc=%x)\nhalting\n", m, l, f, currproc));
+            kprintf(  "PANIC: %s at line %d of %s (currproc=%x)\nhalting\n", m, l, f, currproc);
+        }
 
 	stack_trace(0);
 
@@ -83,7 +86,7 @@ struct stackframe {
 void
 stack_trace(void *ibp){
 	struct stackframe *bp;
-	
+
 	if( !ibp ){
 		asm volatile ("movl %%ebp, %0" : "=r" (ibp));
 	}

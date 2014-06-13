@@ -6,8 +6,11 @@ kern:           machdep/i386/common/src/md_idle.c
 kern:           machdep/i386/common/src/md_asm.S
 kern:           machdep/i386/common/src/int.c machdep/i386/common/src/panic.c
 
+kern:           libc/strtoul.c libc/moddi3.c libc/divdi3.c  libc/umoddi3.c libc/udivdi3.c libc/qdivrem.c
+
 hdc:            machdep/i386/common/src/ide.c dev/disk.c
 rtc:            machdep/i386/common/src/rtc.c
 pcterm:         machdep/i386/common/src/pcterm.c
 serial:         machdep/i386/common/src/serial.c
 
+mpiboot:        machdep/i386/common/src/crt_mpi.S

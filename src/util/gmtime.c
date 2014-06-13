@@ -10,7 +10,7 @@
 #include <conf.h>
 #include <time.h>
 #include <calendar.h>
-
+#include <ctype.h>
 
 static int
 days_in_month(int m, int y){

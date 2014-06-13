@@ -4,3 +4,5 @@ kern:           machdep/arm_cm/common/src/setjmp.S
 kern:           machdep/arm_cm/common/src/panic.c
 kern:           machdep/arm_cm/common/src/int.c
 
+kern:           util/atof.c
+

@@ -8,6 +8,7 @@
 
 #include <sys/types.h>
 #include <sys/param.h>
+#include <ctype.h>
 #include <stdarg.h>
 #include <conf.h>
 #include <nstdio.h>

@@ -2,10 +2,7 @@
   Copyright (c) 2001
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 2001
-  Function:
-
-  $Id$
-
+  Function: ide hard drive
 */
 
 #include <sys/types.h>
@@ -69,6 +66,9 @@ struct HDC_Device {
 } hdc[ N_HDC ];
 
 
+int hdc_xfer(struct HDC_Device *dev, int writep, int unit, int len, offset_t blk, u_char *buf);
+int hdc_command(struct HDC_Device *dev, int unit, offset_t blk, int cnt, int cmd);
+
 
 extern struct DiskPart_Conf disk_device[];
 extern int n_disk;
@@ -97,7 +97,7 @@ hdc_init(struct Device_Conf *dev){
 	hdc[c].hd[dk].ncyl    = 0;
 	hdc[c].hd[dk].nsect   = 0;
 	hdc[c].hd[dk].nhead   = 0;
-	hdc[c].hd[dk].disk    = 0;
+	hdc[c].hd[dk].disk    = dk;
 
 	if( hdc_probe( &hdc[c], dk ) ){
 
@@ -107,7 +107,7 @@ hdc_init(struct Device_Conf *dev){
 		    hdc[c].hd[dk].ncyl * hdc[c].hd[dk].nsect * hdc[c].hd[dk].nhead / 2
 		);
 
-            disk_learn( dev, "hd", c*2 + dk, &hdc[c].hd[dk].file, hdc[c].hd[dk].blks );
+            dkpart_learn( dev, "hd", c*2 + dk, &hdc[c].hd[dk].file, hdc[c].hd[dk].blks );
 
 	}else{
 	    /* no disk present */
@@ -176,14 +176,15 @@ hdc_bwrite(FILE* f, const char *buf, int len, offset_t pos){
 
 
 
-int hdc_xfer(struct HDC_Device *dev, int writep, int unit, offset_t blk, int len, u_char *buf){
+int
+hdc_xfer(struct HDC_Device *dev, int writep, int unit, int len, offset_t blk, u_char *buf){
     int port, n, st, plx, w;
     int hd, sec, cyl, cnt;
 
     port = dev->port;
     cnt  = (len + DISK_BLOCK_SIZE - 1) / DISK_BLOCK_SIZE;
 
-    spin_lock( &dev->lock );
+    sync_lock( &dev->lock, "ide" );
     plx = spldisk();
 
     hdc_command( dev, unit, blk, cnt,
@@ -204,7 +205,7 @@ int hdc_xfer(struct HDC_Device *dev, int writep, int unit, offset_t blk, int len
 	    n = inb( port + IDE_R_ERROR );
 	    kprintf("%s: xfer error %=2\n", dev->name, n);
 	    splx(plx);
-	    spin_unlock( &dev->lock );
+	    sync_unlock( &dev->lock );
 	    return n;
 	}
     }
@@ -216,9 +217,9 @@ int hdc_xfer(struct HDC_Device *dev, int writep, int unit, offset_t blk, int len
     }
 
     splx(plx);
-    spin_unlock( &dev->lock );
+    sync_unlock( &dev->lock );
 
-    return 0;
+    return len;
 }
 
 
@@ -244,12 +245,25 @@ hdc_command(struct HDC_Device *dev, int unit, offset_t blk, int cnt, int cmd){
     }
 
     /* 2. Load required parameters in the Command Block Registers. */
+#if 0
     outb( port + IDE_R_WCOMP, 0 );
     outb( port + IDE_R_DRHD,  (unit<<4 | (BYTE(blk,24)&0xF) | 0xE0) );
     outb( port + IDE_R_HCYL,  BYTE(blk, 16));
     outb( port + IDE_R_LCYL,  BYTE(blk, 8));
     outb( port + IDE_R_SECT,  BYTE(blk, 0));
     outb( port + IDE_R_NSECT, cnt);
+#else
+    int sec = blk % dev->hd[unit].nsect;
+    int cyl = (blk / dev->hd[unit].nsect) % dev->hd[unit].ncyl;
+    int hd  = blk / (dev->hd[unit].ncyl * dev->hd[unit].nsect);
+
+    outb( port + IDE_R_WCOMP, 0 );
+    outb( port + IDE_R_DRHD,  (unit<<4 | hd | 0xA0) );
+    outb( port + IDE_R_HCYL,  cyl>>8 );
+    outb( port + IDE_R_LCYL,  cyl & 0xFF );
+    outb( port + IDE_R_SECT,  sec + 1 );
+    outb( port + IDE_R_NSECT, cnt);
+#endif
 
     /* 3. Activate the Interrupt Enable (nIEN) bit. */
     /* RSN - we are not using interrupt driven i/o here (yet) */
