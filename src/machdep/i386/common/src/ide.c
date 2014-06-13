@@ -49,6 +49,7 @@ struct HD_Device {
     FILE file;
     int disk, ncyl, nsect, nhead;
     int blks;
+    char is_lba;
     struct HDC_Device *hdc;
 };
 
@@ -101,12 +102,6 @@ hdc_init(struct Device_Conf *dev){
 
 	if( hdc_probe( &hdc[c], dk ) ){
 
-	    bootmsg("%s unit %d %d cyl, %d sect, %d hd, %dkB\n",
-		    dev->name, dk,
-		    hdc[c].hd[dk].ncyl, hdc[c].hd[dk].nsect, hdc[c].hd[dk].nhead,
-		    hdc[c].hd[dk].ncyl * hdc[c].hd[dk].nsect * hdc[c].hd[dk].nhead / 2
-		);
-
             dkpart_learn( dev, "hd", c*2 + dk, &hdc[c].hd[dk].file, hdc[c].hd[dk].blks );
 
 	}else{
@@ -120,6 +115,7 @@ hdc_probe(struct HDC_Device *dev, int unit){
     int port = dev->port;
     int st, n, w, to;
     u_char *buf;
+    char info[64];
 
     buf = (u_char*)alloc(512);
 
@@ -144,17 +140,42 @@ hdc_probe(struct HDC_Device *dev, int unit){
 	}
     }
 
-    for(n=0; n<512; n+=2){
-	w = inw( port + IDE_R_DATA );
-	buf[n] = w;
-	buf[n+1] = w>>8;
+    rep_insw(port + IDE_R_DATA, buf, 512/2);
+
+    u_short *sb = (u_short*)buf;
+
+    dev->hd[unit].nhead  = sb[3];
+    dev->hd[unit].ncyl   = sb[1];
+    dev->hd[unit].nsect  = sb[6];
+    dev->hd[unit].is_lba = (sb[49] & (1<<9)) ? 1 : 0;
+
+    int nblk = dev->hd[unit].ncyl * dev->hd[unit].nsect * dev->hd[unit].nhead;
+
+    dev->hd[unit].blks = nblk;
+
+    memcpy(info, buf + 27*2, 40);
+    info[40] = 0;
+    // byte swap
+    for(n=0; n<40; n+=2){
+        char c = info[n];
+        info[n] = info[n+1];
+        info[n+1] = c;
     }
 
-    dev->hd[unit].nhead = ((u_short*)buf)[3];
-    dev->hd[unit].ncyl  = ((u_short*)buf)[1];
-    dev->hd[unit].nsect = ((u_short*)buf)[6];
+    // truncate padding
+    for(n=39; n>0; n--){
+        if( info[n] != ' ' ) break;
+        info[n] = 0;
+    }
 
-    dev->hd[unit].blks = dev->hd[unit].nhead * dev->hd[unit].ncyl * dev->hd[unit].nsect;
+    //hexdump(buf, 128);
+
+    bootmsg("%s unit %d <%s> %d cyl, %d sect, %d hd, %dkB %s-mode\n",
+            dev->name, unit, info,
+            dev->hd[unit].ncyl, dev->hd[unit].nsect, dev->hd[unit].nhead,
+            nblk / 2,
+            (dev->hd[unit].is_lba ? "LBA" : "CHS")
+        );
 
     free(buf);
     return 1;
@@ -173,7 +194,6 @@ hdc_bwrite(FILE* f, const char *buf, int len, offset_t pos){
 
     return hdc_xfer(hd->hdc, 1, hd->disk, len, pos/DISK_BLOCK_SIZE, (char*)buf);
 }
-
 
 
 int
@@ -228,6 +248,7 @@ hdc_xfer(struct HDC_Device *dev, int writep, int unit, int len, offset_t blk, u_
 int
 hdc_command(struct HDC_Device *dev, int unit, offset_t blk, int cnt, int cmd){
     int port = dev->port;
+    struct HD_Device *hd = & dev->hd[unit];
     int st, plx;
 
     /* 1. Wait for drive to clear BUSY. */
@@ -245,25 +266,26 @@ hdc_command(struct HDC_Device *dev, int unit, offset_t blk, int cnt, int cmd){
     }
 
     /* 2. Load required parameters in the Command Block Registers. */
-#if 0
     outb( port + IDE_R_WCOMP, 0 );
-    outb( port + IDE_R_DRHD,  (unit<<4 | (BYTE(blk,24)&0xF) | 0xE0) );
-    outb( port + IDE_R_HCYL,  BYTE(blk, 16));
-    outb( port + IDE_R_LCYL,  BYTE(blk, 8));
-    outb( port + IDE_R_SECT,  BYTE(blk, 0));
     outb( port + IDE_R_NSECT, cnt);
-#else
-    int sec = blk % dev->hd[unit].nsect;
-    int cyl = (blk / dev->hd[unit].nsect) % dev->hd[unit].ncyl;
-    int hd  = blk / (dev->hd[unit].ncyl * dev->hd[unit].nsect);
 
-    outb( port + IDE_R_WCOMP, 0 );
-    outb( port + IDE_R_DRHD,  (unit<<4 | hd | 0xA0) );
-    outb( port + IDE_R_HCYL,  cyl>>8 );
-    outb( port + IDE_R_LCYL,  cyl & 0xFF );
-    outb( port + IDE_R_SECT,  sec + 1 );
-    outb( port + IDE_R_NSECT, cnt);
-#endif
+    if( hd->is_lba ){
+        // LBA mode
+        outb( port + IDE_R_DRHD,  (unit<<4 | (BYTE(blk,24)&0xF) | 0xE0) );
+        outb( port + IDE_R_HCYL,  BYTE(blk, 16));
+        outb( port + IDE_R_LCYL,  BYTE(blk, 8));
+        outb( port + IDE_R_SECT,  BYTE(blk, 0));
+    }else{
+        // C-H-S mode
+        int sec  = blk % hd->nsect;
+        int cyl  = (blk / hd->nsect) % hd->ncyl;
+        int head = blk / (hd->ncyl * hd->nsect);
+
+        outb( port + IDE_R_DRHD,  (unit<<4 | head | 0xA0) );
+        outb( port + IDE_R_HCYL,  cyl>>8 );
+        outb( port + IDE_R_LCYL,  cyl & 0xFF );
+        outb( port + IDE_R_SECT,  sec + 1 );
+    }
 
     /* 3. Activate the Interrupt Enable (nIEN) bit. */
     /* RSN - we are not using interrupt driven i/o here (yet) */
