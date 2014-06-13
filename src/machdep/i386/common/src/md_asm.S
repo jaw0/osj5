@@ -25,7 +25,7 @@ ENTRY(rep_outsb)
 	popl %ecx
 	popl %ebp
 	ret
-	
+
 /* rep_outsw(port, char*, count) */
 ENTRY(rep_outsw)
 	push %ebp
@@ -92,7 +92,8 @@ ENTRY(rep_insw)
 	popl %ebp
 	ret
 
-
-
-
-
+/* this is placed at the front of the text section
+   so that nothing valid has an address of 0
+*/
+.section .pretext
+        .long 0xDEADBEEF

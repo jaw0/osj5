@@ -10,6 +10,7 @@ SECTIONS
   .text :
   {
     CREATE_OBJECT_SYMBOLS
+    *(.pretext)
     *(.text)
     *(.rodata)
     /* The next six sections are for SunOS dynamic linking.  The order
