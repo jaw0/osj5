@@ -390,7 +390,7 @@ serialirq(struct intrframe *fr){
 
             /* got a char, read it */
             c = inb(com[port].addr + RBR);
-            kprintf("in(%c) ", c);
+            //kprintf("in(%c) ", c);
 
 #ifdef USE_GDB
             if( c == 3 && bootflags & BOOT_USEGDB ){
@@ -425,7 +425,7 @@ serialirq(struct intrframe *fr){
             continue;
 
         case IIR_TXBMT:
-            kprintf("out ");
+            //kprintf("out ");
             /* transmitter empty */
             com[port].status &= ~ COMSTAT_TXPENDING;
             wakeup( &com[port].status );
@@ -433,22 +433,22 @@ serialirq(struct intrframe *fr){
 
         case IIR_LINE:
             c = inb( com[port].addr + LSR );
-            kprintf("line(%x) ", 0xFF & (int)c);
+            //kprintf("line(%x) ", 0xFF & (int)c);
             continue;
 
         case IIR_MODEM:
             c = inb( com[port].addr + MSR );
-            kprintf("modem(%x) ", 0xFF & (int)c);
+            //kprintf("modem(%x) ", 0xFF & (int)c);
             /* work around buggy serial port */
             if( nm ++ )
                 break;
             continue;
 
         default:
-            kprintf("none ");
+            //kprintf("none ");
             break;
         }
-        kprintf("\n");
+        //kprintf("\n");
         return;
     }
 }
