@@ -21,6 +21,6 @@ init_hw(void){
 
 void
 init_hw2(void){
-    kprintf("bootflags = 0x%x\n", bootflags);
+    kprintf("bootflags = 0x%x, mem %dkB\n", bootflags, bootmem0 + bootmem1);
 }
 
