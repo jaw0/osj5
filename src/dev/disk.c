@@ -28,7 +28,9 @@
 #define MBR_PART_STARTSEC_OFF	8
 #define MBR_PART_NUMSEC_OFF	12
 
+extern int n_disk;
 extern struct DiskPart_Conf dkpart_device[];
+extern const struct DiskPart_Conf disk_device[];
 
 struct DiskPart {
     char	name[16];
@@ -41,7 +43,7 @@ struct DiskPart {
     FILE 	*fdev;			/* underlying device */
 };
 
-int dkpart_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, u_int start, u_int len, FILE *cont, const char *fstype);
+static int dkpart_init(struct Device_Conf *, const char *, int, int, offset_t, offset_t, FILE *, const char *, const char *);
 
 int dkpart_bread(FILE*,char*,int,offset_t);
 int dkpart_bwrite(FILE*,const char*,int,offset_t);
@@ -95,6 +97,8 @@ is_an_mbr(const u_char *buf){
     if( buf[478] & 0x7f  ) return 0;	// status of 3rd partition: 80|00
     if( buf[494] & 0x7f  ) return 0;	// status of 4th partition: 80|00
 
+    if( !strncmp(buf + 0x52, "FAT", 3) ) return 0;
+
     return 1;
 }
 
@@ -110,9 +114,31 @@ mbr_val(unsigned char *buf, int partno, int valoff){
        );
 }
 
+static inline int
+dkpart_configured(struct Device_Conf *cf, const char *pfx, int dkno, int part, FILE *fdev, offset_t start, offset_t blks){
+    int partno = (part==-1) ? 0 : part;
+    int i;
+
+    // is this in the conf table?
+    for(i=0; i<n_disk; i++){
+        if( strcmp(pfx, disk_device[i].cntrlnm) ) continue;
+        if( disk_device[i].unit != dkno ) continue;
+        if( disk_device[i].part != part )   continue;
+
+        dkpart_init(cf, pfx, dkno, partno, start, blks, fdev, disk_device[i].fstype, disk_device[i].mntpt);
+        return 1;
+    }
+
+    return 0;
+}
+
+
 int
 dkpart_learn(struct Device_Conf *cf, const char *pfx, int dkno, FILE *fdev, offset_t blks){
     int i;
+
+    // is this in the conf table?
+    if( dkpart_configured(cf, pfx, dkno, -1, fdev, 0, blks)) return 0;
 
     // read part table
     char *buf = alloc(512);
@@ -123,18 +149,26 @@ dkpart_learn(struct Device_Conf *cf, const char *pfx, int dkno, FILE *fdev, offs
     if( ! is_an_mbr(buf) ){
         // entire disk
         // RSN - determine type from data or config table
-        const char *fstype = "flfs";
-        dkpart_init(cf, pfx, dkno, 0, 0, blks, fdev, fstype);
+        const char *fstype = "fatfs";
+
+        dkpart_init(cf, pfx, dkno, 0, 0, blks, fdev, fstype, 0);
         free(buf, 512);
         return 0;
     }
 
     // init all partitions
     for(i=0; i<4; i++){
+        offset_t start = mbr_val(buf, i, MBR_PART_STARTSEC_OFF);
+        offset_t len   = mbr_val(buf, i, MBR_PART_NUMSEC_OFF);
 
+        // configured ?
+        if( dkpart_configured(cf, pfx, dkno, i, fdev, start, len)) continue;
+
+        // use fs type in mbr
         const char *fstype = mbr_fs( buf[MBR_PART_START + i * MBR_PART_LEN + MBR_PART_TYPE_OFF] );
+
         if( fstype ){
-            dkpart_init(cf, pfx, dkno, i, mbr_val(buf, i, MBR_PART_STARTSEC_OFF), mbr_val(buf, i, MBR_PART_NUMSEC_OFF), fdev, fstype);
+            dkpart_init(cf, pfx, dkno, i, start, len, fdev, fstype, 0);
         }
         // else ?
     }
@@ -143,12 +177,17 @@ dkpart_learn(struct Device_Conf *cf, const char *pfx, int dkno, FILE *fdev, offs
     return 0;
 }
 
-int
-dkpart_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, u_int start, u_int len, FILE *cont, const char *fstype){
+static int
+dkpart_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, offset_t start, offset_t len,
+            FILE *cont, const char *fstype, const char *mntpt){
     struct DiskPart *dkp = alloc(sizeof(struct DiskPart));
 
     // name this
-    snprintf(dkp->name, sizeof(dkp->name), "%s%d%c:", pfx, dkno, partno + 'a');
+    if( mntpt ){
+        snprintf(dkp->name, sizeof(dkp->name), "%s", mntpt);
+    }else{
+        snprintf(dkp->name, sizeof(dkp->name), "%s%d%c:", pfx, dkno, partno + 'a');
+    }
 
     dkp->flags       = cf->flags;
     dkp->fdev        = cont;
