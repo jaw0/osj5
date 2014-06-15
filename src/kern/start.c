@@ -25,6 +25,7 @@ start(void){
     run_script( MOUNT_ROOT STARTUPFILE );
 # endif
 
+    proc0.name = "shell";
     extern void shell(void);
     shell();
 #endif
