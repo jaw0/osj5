@@ -80,6 +80,7 @@ serial_init(struct Device_Conf *dev){
 
     finit( & com[i].file );
     com[i].file.fs = &serial_port_fs;
+    com[i].file.codepage = CODEPAGE_UTF8;
     com[i].head = com[i].tail = com[i].len = 0;
     com[i].status  = 0;
     com[i].portno  = i;

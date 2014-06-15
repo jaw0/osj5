@@ -875,13 +875,16 @@ prompt(struct cli_env *env){
         case 'n':	printf("%s", currproc->cwd ? currproc->cwd->name : "?"); break;
         case 'v':	printf("%s", ident);		break;
         case 'g':
-            // XXX - we should have a utf-8 flag
-#ifdef USE_PCTERM
-            // pcterm does not support utf-8
-            printf("\x1A");			break;
-#else
-            printf("%+c", 0x27A1);		break;	// large right arrow
-#endif
+            switch( STDOUT->codepage ){
+            case CODEPAGE_UTF8:
+                printf("%+c", 0x27A1);		break;	// large right arrow
+            case CODEPAGE_PC437:
+                printf("\x1A");			break;	// right arrow
+            default:
+                printf("=>");
+            }
+            break;
+
         case '{':
             // ${1234} => insert utf-8
             u = strtoul(p + 1, &p, 16);

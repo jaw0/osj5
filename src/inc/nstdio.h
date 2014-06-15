@@ -51,6 +51,15 @@ typedef struct FILE {
 
 	char   ungotc;           /* for ungetc */
 	char   prevout;          /* previous output char - for stateful translations */
+        u_char codepage;	 /* character set */
+#define CODEPAGE_BINARY 0	 /* binary, raw, or unknown */
+#define CODEPAGE_7ASCII	1	 /* normal 7-bit ascii */
+#define CODEPAGE_GFXDPY	2	 /* the fonts used by gfxdpy.c */
+#define CODEPAGE_UTF8   3	 /* utf-8 */
+#define CODEPAGE_LATIN1 4	 /* iso-8859-1 */
+#define CODEPAGE_PC437  5	 /* the fonts built into the PC video (pcterm.c) */
+
+
 	const  struct io_fs *fs; /* functions */
         struct FILE *dupped;	 /* original F if dupped */
 	void   *d;               /* type specific data */

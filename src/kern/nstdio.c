@@ -23,11 +23,12 @@ int finit(FILE *f){
     if( !f )
         PANIC(bad_f);
 
-    f->ungotc  = 0;
-    f->flags   = 0;
-    f->prevout = 0;
-    f->dupped  = 0;
-    f->flags |= F_ICRNL | F_ONLRET;
+    f->ungotc   = 0;
+    f->flags    = 0;
+    f->prevout  = 0;
+    f->dupped   = 0;
+    f->flags   |= F_ICRNL | F_ONLRET;
+    f->codepage = CODEPAGE_BINARY;
 
     f->d = 0;
 

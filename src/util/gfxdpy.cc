@@ -103,6 +103,7 @@ GFXdpy::init(void){
     finit( & file );
     file.fs = &gfxdpy_port_fs;
     file.d  = (void*)this;
+    file.codepage = CODEPAGE_GFXDPY;
 }
 
 void

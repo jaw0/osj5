@@ -120,7 +120,7 @@ pcterm_init(struct Device_Conf *dev){
     finit( & term.file );
     term.file.fs = &term_fs;
     term.file.d = (void*)&term;
-
+    term.file.codepage = CODEPAGE_PC437;
     term.scr.x = term.scr.y = 0;
 
     if( dev->addr )

@@ -88,6 +88,7 @@ emulcon_init(struct Device_Conf * dev){
     finit( & emulterm[i].file );
     emulterm[i].file.fs = &emulcon_fs;
     emulterm[i].file.d = (void*)&emulterm;
+    emulterm[i].file.codepage = CODEPAGE_UTF8;
     emulterm[i].kbd.head = emulterm[i].kbd.tail = emulterm[i].kbd.len = 0;
     emulterm[i].kbd.state = 0;
 
