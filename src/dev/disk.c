@@ -180,6 +180,7 @@ dkpart_learn(struct Device_Conf *cf, const char *pfx, int dkno, FILE *fdev, offs
 static int
 dkpart_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, offset_t start, offset_t len,
             FILE *cont, const char *fstype, const char *mntpt){
+
     struct DiskPart *dkp = alloc(sizeof(struct DiskPart));
 
     // name this
@@ -201,7 +202,7 @@ dkpart_init(struct Device_Conf *cf, const char *pfx, int dkno, int partno, offse
     fmount( & dkp->file, dkp->name, 0);
     if( fstype ) fmount( & dkp->file, dkp->name, fstype );
 
-    bootmsg( "%s unit %d/%d %d blocks mounted on %s type %s\n",
+    bootmsg( "%s unit %d/%d %qd blocks mounted on %s type %s\n",
 	     cf->name, dkno, partno, len, dkp->name, fstype );
 
     return 0;
