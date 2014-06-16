@@ -568,6 +568,50 @@ DEFUN(stty, "set terminal modes")
     return 0;
 }
 
+static const char * _codepage[] = {
+    "binary",
+    "ascii",
+    "gfxdpy",
+    "utf8",
+    "latin1",
+    "pc437",
+};
+
+
+DEFUN(codepage, "set/get the current code page")
+{
+    if( !STDOUT ){
+        f_error("stdout is closed\n");
+        return -1;
+    }
+    if( argc < 2 ){
+        // display current setting
+        if( STDOUT->codepage < ELEMENTSIN(_codepage) )
+            printf("codepage %s\n", _codepage[STDOUT->codepage]);
+        else
+            printf("codepage unknown\n");
+        return 0;
+    }
+
+    int i;
+    // search list
+    for(i=0; i<ELEMENTSIN(_codepage); i++){
+        // match?
+        if( !strcmp(argv[1], _codepage[i]) ){
+            STDOUT->codepage = i;
+            return 0;
+        }
+    }
+
+    // so sorry
+    fprintf(STDERR, "ERROR: codepage:");
+    for(i=0; i<ELEMENTSIN(_codepage); i++){
+        fprintf(STDERR, " %s", _codepage[i]);
+    }
+    fprintf(STDERR, "\n");
+    return -1;
+}
+
 
 
 DEFUN(run, "start a process")
