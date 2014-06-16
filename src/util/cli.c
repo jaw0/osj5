@@ -880,6 +880,8 @@ prompt(struct cli_env *env){
                 printf("%+c", 0x27A1);		break;	// large right arrow
             case CODEPAGE_PC437:
                 printf("\x1A");			break;	// right arrow
+            case CODEPAGE_GFXDPY:
+                printf("\x82");			break;	// right arrow
             default:
                 printf("=>");
             }
