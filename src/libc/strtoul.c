@@ -1,3 +1,7 @@
+
+/* based on NetBSD/1.6/src/sys/lib/libkern/strtoul.c
+
+*/
 /*	$NetBSD: strtoul.c,v 1.5 2000/05/25 01:22:41 msaitoh Exp $	*/
 
 #include <sys/param.h>
