@@ -249,13 +249,18 @@ _sd_cmd_r16(struct SDCinfo *ii, spi_msg *m, const char *cmd, char *res){
 static int
 initialize_card(struct SDCinfo *ii){
     spi_msg m[6];
+    int i, r;
 
-    m[0].mode  = SPIMO_PINSOFF;
-    m[0].dlen  = 12;		// clock it > 74 cycles
-    spi_xfer(& ii->spicf, 1, m, 1000000);
+    for(i=0; i<5; i++){
+        m[0].mode  = SPIMO_PINSOFF;
+        m[0].dlen  = 12 * (i+1);		// clock it > 74 cycles
+        spi_xfer(& ii->spicf, 1, m, 1000000);
 
-    int r = _sd_cmd_r1(ii, m, cmd0);
-    //kprintf("cmd0 %x, %x\n", r, m[3].response);
+        r = _sd_cmd_r1(ii, m, cmd0);
+
+        //kprintf("cmd0 %x, %x\n", r, m[3].response);
+        if( r == SPI_XFER_OK ) break;
+    }
     if( r != SPI_XFER_OK ) return 0;
 
     // cmd8 - required to enable v2/HC features (>2GB)
