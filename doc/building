@@ -1,0 +1,16 @@
+
+
+create a config file
+        cd conf
+        cp EXAMPLE MYCONFIG
+        emacs MYCONFIG
+
+run config
+        ../bin/config MYCONFIG
+
+compile
+        cd ../build/MYCONFIG
+        make
+
+sing a happy song
+

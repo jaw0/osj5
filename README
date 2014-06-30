@@ -1,0 +1,30 @@
+
+OS/J5 - small real-time operating system
+================================================================
+
+current ports:
+    i386
+    stm32f1
+    stm32f4
+
+current device support i386:
+    serial, video, keyboard, ide, rtc
+
+current device support stm32:
+    gpio, adc, timer, serial, i2c, spi, dma, rng, ccm
+    on-chip flash (for filesystem)
+    sdcard
+    assorted oled/lcd displays
+
+filesystems:
+    FAT
+    FLFS (flash optimized log-structured)
+
+
+================================================================
+
+timing (on 168MHz STM32):
+    context switch:     2.1 usec
+
+
+================================================================
