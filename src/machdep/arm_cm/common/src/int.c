@@ -97,8 +97,6 @@ CHardFault_Handler(unsigned long *sp){
 
     kprintf("  currproc %x\n", currproc);
 
-    extern void shell(void);
-    shell();
     PANIC("hard fault");
 }
 
