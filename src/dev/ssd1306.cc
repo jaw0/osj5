@@ -267,8 +267,10 @@ _ssd1306_puts(SSD1306 *ii, const char *s){
 extern "C" void
 ssd13060_puts(const char *s){
     SSD1306 *ii = ssd1306info;
+
     while( *s )
         ii->putchar(*s ++);
+    ii->flush();
 }
 
 static void
