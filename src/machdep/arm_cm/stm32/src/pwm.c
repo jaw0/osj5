@@ -30,6 +30,10 @@ _timer_addr(int tim){
     case 2:	return (TIM_T*)TIM2;
     case 3:	return (TIM_T*)TIM3;
     case 4:	return (TIM_T*)TIM4;
+    case 5:	return (TIM_T*)TIM5;
+    case 6:	return (TIM_T*)TIM6;
+    case 7:	return (TIM_T*)TIM7;
+    case 8:	return (TIM_T*)TIM8;
         // ...
     default:
         PANIC("invalid basic timer");
@@ -71,7 +75,7 @@ pwm_init(int timer, int freq, int maxval){
         RCC->APB2ENR |= 1;
 #endif
         clock = APB2CLOCK;
-        tim->BDTR  = 0x8000;	// MOE
+        tim->BDTR  |= 0x8000;	// MOE
         break;
     case 8:
         // timer 8
@@ -81,7 +85,7 @@ pwm_init(int timer, int freq, int maxval){
         RCC->APB2ENR |= 2;
 #endif
         clock = APB2CLOCK;
-        tim->BDTR  = 0x8000;	// MOE
+        tim->BDTR  |= 0x8000;	// MOE
         break;
     default:
         RCC->APB1ENR |= 1 << (t - 2);

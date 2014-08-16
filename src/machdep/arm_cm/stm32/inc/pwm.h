@@ -28,6 +28,26 @@
 #define TIMER_4_3	0x42
 #define TIMER_4_4	0x43
 
+#define TIMER_5_1	0x50
+#define TIMER_5_2	0x51
+#define TIMER_5_3	0x52
+#define TIMER_5_4	0x53
+
+#define TIMER_6_1	0x60
+#define TIMER_6_2	0x61
+#define TIMER_6_3	0x62
+#define TIMER_6_4	0x63
+
+#define TIMER_7_1	0x70
+#define TIMER_7_2	0x71
+#define TIMER_7_3	0x72
+#define TIMER_7_4	0x73
+
+#define TIMER_8_1	0x80
+#define TIMER_8_2	0x81
+#define TIMER_8_3	0x82
+#define TIMER_8_4	0x83
+
 extern void pwm_init(int, int, int);
 extern void pwm_set(int, int);
 extern void tone_set(int, int);
