@@ -48,6 +48,7 @@ struct FileData {
 int fatfs_putchar(FILE*, char);
 int fatfs_getchar(FILE*);
 int fatfs_close(FILE*);
+int fatfs_flush(FILE*);
 int fatfs_noop(FILE*);
 int fatfs_status(FILE*);
 int fatfs_read(FILE*, char*, int);
@@ -58,7 +59,7 @@ const struct io_fs fatfs_iofs = {
     fatfs_putchar,
     fatfs_getchar,
     fatfs_close,
-    fatfs_noop,		/* flush */
+    fatfs_flush,		/* flush */
     fatfs_status,
     fatfs_read,
     fatfs_write,
