@@ -94,7 +94,7 @@ pwm_init(int timer, int freq, int maxval){
     }
 
 
-    tim->CCMR1 |= 0x6868;       // chan1+2 pwm
+    tim->CCMR1 |= 0x6868;       // chan1+2 pwm, CCR changes are buffered
     tim->CCMR2 |= 0x6868;       // chan3+4 pwm
     tim->CCER  |= 0x1111;       // output enable chan1,2,3,4
     tim->ARR   = maxval;
