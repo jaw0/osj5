@@ -93,6 +93,9 @@ sdcard_init(struct Device_Conf *dev){
 #  error "unknown platform"
 #endif
 
+    // card present? arg[1] is card detect io
+    if( dev->arg[1] && !gpio_get( dev->arg[1] ) ) return 0;
+
     int r = initialize_card(ii);
 
     if( !r ) return 0;	/* no card installed */
