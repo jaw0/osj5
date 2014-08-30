@@ -49,6 +49,8 @@
 /* NB: stm32f1 + f4 are compat, but at different addrs */
 #include <stm32.h>
 
+#define CFFLAGS_ALTPINS	3	// 2 bits of flags - alt set of pins
+
 // define in config file:
 //#define I2C_VERBOSE
 
@@ -125,6 +127,7 @@ i2c_init(struct Device_Conf *dev){
     int tmp;
 
     bzero(i2cinfo+i, sizeof(struct I2CInfo));
+    int altpins = dev->flags & CFFLAGS_ALTPINS;
 
 #if defined(PLATFORM_STM32F1)
     switch(i){
@@ -162,12 +165,17 @@ i2c_init(struct Device_Conf *dev){
 
     switch(i){
     case 0:
-        // CL=B6, DA=B7
+        // CL=B6, DA=B7 or CL=B8, DA=B9
         i2cinfo[i].addr = addr = I2C1;
         i2cinfo[i].irq  = IRQ_I2C1_EV;
         RCC->APB1ENR   |= 1<<21;
-        gpio_init( GPIO_B6, mode );
-        gpio_init( GPIO_B7, mode );
+        if( altpins ){
+            gpio_init( GPIO_B8, mode );
+            gpio_init( GPIO_B9, mode );
+        }else{
+            gpio_init( GPIO_B6, mode );
+            gpio_init( GPIO_B7, mode );
+        }
         break;
     case 1:
         // CL=B10, DA=B11
