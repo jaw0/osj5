@@ -86,15 +86,23 @@ sdcard_init(struct Device_Conf *dev){
 #if defined(PLATFORM_STM32F1)
     gpio_init( dev->arg[0], GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
     gpio_set( dev->arg[0] );
+    if( dev->arg[1] ){
+        // card present? arg[1] is card detect io
+        gpio_init( dev->arg[1], GPIO_INPUT_FLOATING );
+        if( !gpio_get( dev->arg[1] ) ) return 0;
+    }
 #elif defined(PLATFORM_STM32F4)
     gpio_init( dev->arg[0], GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_25MHZ );
     gpio_set( dev->arg[0] );
+    if( dev->arg[1] ){
+        // card present? arg[1] is card detect io
+        gpio_init( dev->arg[1], GPIO_INPUT );
+        if( !gpio_get( dev->arg[1] ) ) return 0;
+    }
 #else
 #  error "unknown platform"
 #endif
 
-    // card present? arg[1] is card detect io
-    if( dev->arg[1] && !gpio_get( dev->arg[1] ) ) return 0;
 
     int r = initialize_card(ii);
 
