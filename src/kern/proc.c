@@ -640,6 +640,7 @@ tsleep(void *wchan, int prio, const char *wmsg, int timo){
     currproc->wchan   = wchan;
     currproc->wmsg    = wmsg;
     currproc->timeout = timo ? get_time() + timo : 0;
+    utime_t to = currproc->timeout;
 
     currproc->wnext = waittable[ w ];
     currproc->wprev = 0;
@@ -655,12 +656,13 @@ tsleep(void *wchan, int prio, const char *wmsg, int timo){
     if( currproc->timeout )
         _set_timeout( currproc->timeout );
 
+
     yield();
 
     if( currproc->wchan )
         kprintf("/tsleep %x %s on %s %x, %x\n", currproc, currproc->name, wmsg, currproc->wchan, currproc->state);
 
-    return currproc->timeout ? currproc->timeout <= get_time() : 0;
+    return to ? to <= get_time() : 0;
 }
 
 int
