@@ -57,7 +57,7 @@ const struct io_fs gfxdpy_port_fs = {
 };
 
 static const Font fonts[] = {
-    // default font:
+    // default font (10):
     { font_ucs_5x8_height, font_ucs_5x8_width, font_ucs_5x8_start, font_ucs_5x8_last,
       font_ucs_5x8_size, (unsigned char *)font_ucs_5x8_data },
 
@@ -70,6 +70,7 @@ static const Font fonts[] = {
     { font_ucs_5x8_height, font_ucs_5x8_width, font_ucs_5x8_start, font_ucs_5x8_last,
       font_ucs_5x8_size, (unsigned char *)font_ucs_5x8_data },
 
+    // 14
     { font_ucs_6x10_height, font_ucs_6x10_width, font_ucs_6x10_start, font_ucs_6x10_last,
       font_ucs_6x10_size, (unsigned char *)font_ucs_6x10_data },
 
@@ -79,6 +80,7 @@ static const Font fonts[] = {
     { font_ucs_9x15_height, font_ucs_9x15_width, font_ucs_9x15_start, font_ucs_9x15_last,
       font_ucs_9x15_size, (unsigned char *)font_ucs_9x15_data },
 
+    // 17
     { font_ucs_10x20_height, font_ucs_10x20_width, font_ucs_10x20_start, font_ucs_10x20_last,
       font_ucs_10x20_size, (unsigned char *)font_ucs_10x20_data },
 };
