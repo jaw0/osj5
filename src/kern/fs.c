@@ -494,10 +494,13 @@ globfnc(const char *name, struct GlobArgs *ga){
 int
 contains_globbing(const char *name){
     short j;
+    char bkt=0;
 
     for(j=0; name[j]; j++){
-        if( name[j] == '*' || name[j] == '?' || name[j] == '[' )
+        if( name[j] == '*' || name[j] == '?' )
             return 1;
+        if( name[j] == '[' ) bkt = 1;
+        if( name[j] == ']' && bkt ) return 1;
     }
     return 0;
 }

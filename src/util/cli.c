@@ -160,6 +160,15 @@ DEFALIAS(version, ver)
     return 0;
 }
 
+static inline const struct Var *
+find_var(struct cli_env *env, const char *var){
+    short i;
+
+    for(i=0; vars[i].name; i++)
+        if( !strcmp(vars[i].name, var)) return vars + i;
+    return 0;
+}
+
 static int
 interp_varref(struct cli_env *env, const struct Var *v, char *buf, int buflen){
     int off = 0;
@@ -208,14 +217,11 @@ interp_varref(struct cli_env *env, const struct Var *v, char *buf, int buflen){
 
 int
 interp_var(struct cli_env *env, const char *var, char *buf, int buflen){
-    short i;
 
-    for(i=0; vars[i].name; i++)
-        if( !strcmp(vars[i].name, var)) break;
-    if( vars[i].name ){
-        return interp_varref(env, vars + i, buf, buflen);
-    }
-    return -1;
+    const struct Var *v = find_var(env, var);
+    if( !v ) return -1;
+
+    return interp_varref(env, v, buf, buflen);
 }
 
 
@@ -374,10 +380,10 @@ save_config(const char *file){
         case UV_TYPE_STR16:
         case UV_TYPE_STR32:
         case UV_TYPE_TIME:
-            fprintf(f, "%-*s = \"%s\"\n", ml, bv->name, buf);
+            fprintf(f, "%-*s = '%s'\n", ml, bv->name, buf);
             break;
         default:
-            fprintf(f, "%-*s = %s\n",     ml, bv->name, buf);
+            fprintf(f, "%-*s = %s\n",   ml, bv->name, buf);
             break;
         }
     }
@@ -858,50 +864,15 @@ DEFALIAS(clear, cls)
     return 0;
 }
 
-DEFUN(if, "conditional")
+DEFUN(msleep, "sleep millisecs")
 {
-    int i, tc, ec, rv;
-
-    if( argc < 4 ){
-        f_error("if cmd args... then cmd args... [else cmd args...]\n");
-        return -1;
-    }
-
-    for(i=tc=ec=0; i<argc; i++){
-        if( !strcmp(argv[i], "then")){
-            if( tc ){
-                f_error("if cmd args... then cmd args... [else cmd args...]\n");
-                return -1;
-            }else
-                tc = i;
-        }
-        if( !strcmp(argv[i], "else")){
-            if( ec ){
-                f_error("if cmd args... then cmd args... [else cmd args...]\n");
-                return -1;
-            }else
-                ec = i;
-        }
-    }
-    if( !tc ){
-        f_error("if cmd args... then cmd args... [else cmd args...]\n");
-        return -1;
-    }
-
-    rv = shell_eval( tc - 1, argv + 1, env );
-    if( ! rv ){
-        /* 0 on sucess */
-        return shell_eval( (ec?ec:argc) - tc - 1 , argv + tc + 1, env );
-    }else{
-        if( ec )
-            return shell_eval( argc - ec - 1 , argv + ec + 1, env );
-    }
+    if( argc < 2 ) return 0;
+    usleep( 1000 * atoi(argv[1]) );
     return 0;
 }
 
-
 static void
-prompt(struct cli_env *env){
+prompt(struct cli_env *env, int prno){
     const char *p = env->prompt;
     int u;
 
@@ -917,7 +888,14 @@ prompt(struct cli_env *env){
         case 'e':	putchar('\e');	break;
         case '[':	putchar('\e'); putchar('[');	break;
         case 'n':	printf("%s", currproc->cwd ? currproc->cwd->name : "?"); break;
-        case 'v':	printf("%s", ident);		break;
+        case 'v':
+            // version or mode
+            switch(prno){
+            case 0:  printf("%s", ident); break;
+            case 1:  printf("\\");        break;
+            case 2:  printf("...");       break;
+            }
+            break;
         case 'g':
             switch( STDOUT->codepage ){
             case CODEPAGE_UTF8:
@@ -941,29 +919,170 @@ prompt(struct cli_env *env){
 }
 
 
+
+/*
+  (forward) polish notation
+
+     -f file       True if file exists
+     -s file       True if file exists and has a size greater than zero.
+
+     -n string     True if the length of string is nonzero.
+     -z string     True if the length of string is zero.
+
+     string        True if string is not the null string.
+     -eq s1 s2     True if the strings s1 and s2 are identical.
+     -ne s1 s2     True if the strings s1 and s2 are not identical.
+     -lt s1 s2     True if string s1 comes before s2 based on the ASCII value
+                   of their characters.
+     -gt s1 s2     True if string s1 comes after s2 based on the ASCII value
+                   of their characters.
+     == n1 n2      True if the integers n1 and n2 are algebraically equal.
+     != n1 n2      True if the integers n1 and n2 are not algebraically equal.
+     > n1 n2       True if the integer n1 is algebraically greater than the
+                   integer n2.
+     >= n1 n2      True if the integer n1 is algebraically greater than or
+                   equal to the integer n2.
+     < n1 n2       True if the integer n1 is algebraically less than the
+                   integer n2.
+     <= n1 n2      True if the integer n1 is algebraically less than or equal
+                   to the integer n2.
+     ! expression  True if expression is false.
+     & expression1 expression2
+                   True if both expression1 and expression2 are true.
+     | expression1 expression2
+                   True if either expression1 or expression2 are true.
+
+*/
+
+static inline const char *
+test_pop(const char **stack, short *sp){
+    if( *sp <= 0 ) return "";
+    return stack[ --*sp ];
+}
+static inline void
+test_push(const char **stack, short *sp, const char *x){
+    if(  *sp > 10 ) return;
+    stack[ (*sp)++ ] = x;
+}
+static inline int
+test_bool(const char *x){
+    if(!x)      return 0;
+    if( !x[0] ) return 0;
+    // NB: "0" is true
+    return 1;
+}
+static inline int
+test_filesize(const char *x){
+#ifdef USE_FILESYS
+    struct stat s;
+    FILE *f = fopen(x, "r");
+    if( !f ) return -1;
+    fstat(f, &s);
+    fclose(f);
+    return s.size;
+#endif
+    return 0;
+}
+
+#define PUSH(x)		test_push(stack, &sp, x)
+#define POP()		test_pop(stack, &sp)
+#define POPINT()	atoi( POP() )
+#define POPBOOL()	test_bool(POP())
+#define ELIF_ARG_IS(x)	else if( !strcmp(argv[argp], x) )
+#define PSTACK() 	\
+    fprintf(STDERR, "[");                                                \
+    for(i=0; i<sp; i++) fprintf(STDERR, "%s%s", (i?", " : ""), stack[i]&&stack[i][0] ? stack[i] : "."); \
+    fprintf(STDERR, "]")
+
+
+DEFUN(test, "test a condition")
+DEFALIAS(test, [)
+{
+    const char *stack[10];
+    short sp = 0;
+    short argp;
+    short i;
+    char verbose = 0;
+
+    // ignore final ], so we can say "if [ -f foo ]"
+    if( argc && !strcmp(argv[argc-1], "]") ) argc --;
+
+    // -V - verbose test mode
+    if( argc > 1 && strcmp("-V", argv[1]) ){
+        verbose = 1;
+        argc --;
+        argv ++;
+    }
+
+    // no expr? return false
+    if( argc < 2 ) return 1;
+
+    for(argp=argc-1; argp>0; argp--){
+
+        if( verbose ){
+            PSTACK();
+        }
+
+        if( !argv[argp][0] ) PUSH("");
+        ELIF_ARG_IS("==")  PUSH( ( POPINT() == POPINT()) ? "t" : "" );
+        ELIF_ARG_IS("!=")  PUSH( ( POPINT() != POPINT()) ? "t" : "" );
+        ELIF_ARG_IS(">")   PUSH( ( POPINT() >  POPINT()) ? "t" : "" );
+        ELIF_ARG_IS("<")   PUSH( ( POPINT() <  POPINT()) ? "t" : "" );
+        ELIF_ARG_IS(">=")  PUSH( ( POPINT() >= POPINT()) ? "t" : "" );
+        ELIF_ARG_IS("<=")  PUSH( ( POPINT() <= POPINT()) ? "t" : "" );
+
+        ELIF_ARG_IS("-eq") PUSH( (strcmp(POP(), POP()) == 0) ? "t" : "" );
+        ELIF_ARG_IS("-ne") PUSH( (strcmp(POP(), POP()) != 0) ? "t" : "" );
+        ELIF_ARG_IS("-lt") PUSH( (strcmp(POP(), POP()) <  0) ? "t" : "" );
+        ELIF_ARG_IS("-gt") PUSH( (strcmp(POP(), POP()) >  0) ? "t" : "" );
+        ELIF_ARG_IS("-le") PUSH( (strcmp(POP(), POP()) <= 0) ? "t" : "" );
+        ELIF_ARG_IS("-ge") PUSH( (strcmp(POP(), POP()) >= 0) ? "t" : "" );
+
+        ELIF_ARG_IS("-n")  PUSH( strlen(POP()) ? "t" : "" );
+        ELIF_ARG_IS("-z")  PUSH( strlen(POP()) ? "" : "t" );
+        ELIF_ARG_IS("-f")  PUSH( (test_filesize(POP()) != -1) ? "t" : "" );
+        ELIF_ARG_IS("-f")  PUSH( (test_filesize(POP()) != -1) ? "t" : "" );
+        ELIF_ARG_IS("-s")  PUSH( (test_filesize(POP()) >   0) ? "t" : "" );
+
+        ELIF_ARG_IS("&"){
+            char a = POPBOOL(), b = POPBOOL();
+            PUSH( (a && b) ? "t" : "" );
+        }
+        ELIF_ARG_IS("|"){
+            char a = POPBOOL(), b = POPBOOL();
+            PUSH( (a || b) ? "t" : "" );
+        }
+
+        else{
+            // a string
+            PUSH( argv[argp] );
+        }
+
+        if( verbose ){
+            fprintf(STDERR, " %s => ", argv[argp]);
+            PSTACK();
+            fprintf(STDERR, "\n");
+        }
+    }
+
+    if( verbose ){
+        PSTACK();
+        fprintf(STDERR, "\n");
+    }
+
+    // stack contains different than 1 element - return false
+    if( sp != 1 ) return 1;
+
+    if( stack[0] && stack[0][0] ) return 0;
+    return 1;
+}
+
+
 int
 shell_eval(int argc, const char **argv, struct cli_env *env){
     short i, j, v, n=0;
     char globp=0;
 
-#if 0
-    char buf[8][32];
-    /* expand $var */
-    for(i=0; i<argc; i++){
-        if( argv[i][0] == '$' ){
-            v = interp_var(env, argv[i]+1, buf[n], sizeof(buf[0]));
-            if( v ){
-                fprintf(STDERR, "no such string var: %s\n", argv[i]);
-                return -1;
-            }
-            argv[i] = buf[n++];
-            if( n >= 8 ){
-                fprintf(STDERR, "too many vars!\n");
-                return -1;
-            }
-        }
-    }
-#endif
 #ifdef USE_FILESYS
     //  need glob?
     if( !env || !env->noglob ){
@@ -1068,21 +1187,217 @@ shell_eval(int argc, const char **argv, struct cli_env *env){
 #endif
 }
 
-
 #define BUFSIZE 256
+#define ARGLEN  24
+
+static int
+shell_next_line(struct cli_env *env, char *buf, int prno){
+
+    int i = 0;
+
+    while(1){
+        if( env->interactive ){
+            if( i )
+                prompt(env, 1);
+            else
+                prompt(env, prno);
+            getline(buf+i, BUFSIZE-i, 0);
+        }else{
+            if( !fgets(buf+i, BUFSIZE-i, env->f) ){
+                // eof
+                return -1;
+            }
+        }
+        i = strlen(buf);
+        if( buf[i-1] != '\\' )
+            break;
+        else
+            buf[ --i ] = 0;
+    }
+
+    if( !env->interactive && env->verbose )
+        printf("%s\n", buf);
+
+    return 0;
+}
+
+static char *
+shell_interp_var(struct cli_env *env, char *buf, char *p, char **argv){
+    char tmp[64];
+    const struct Var *var=0, *vx;
+    int off;
+    short buflen, varlen, vallen;
+
+    // find longest matching var
+    for(vx=vars; vx->name; vx++){
+        //printf("  - %s\n", vx->name ? vx->name : "-");
+        if( !strncmp(p+1, vx->name, strlen(vx->name)))
+            if( !var || strlen(vx->name) > strlen(var->name) ) var = vx;
+    }
+    if( !var ) return p;	// not found
+
+    switch( var->type & UV_TYPE_MASK ){
+    case UV_TYPE_STR16:
+    case UV_TYPE_STR32:
+        if( p == *argv && strlen(p+1) == strlen(var->name) ){
+            // arg is exactly $var, copy pointer into argv
+            if( var->type & UV_TYPE_ENV )
+                off = (int)env;
+            if( var->type & UV_TYPE_PROC )
+                off = (int)currproc;
+
+            // copy pointer
+            *argv = (char*) var->addr + off;
+            // move ahead
+            return p + strlen(var->name);
+        }
+    default:
+        // interp var to tmp buf
+        interp_varref(env, var, tmp, sizeof(tmp));
+        // insert tmp into p
+        vallen = strlen(tmp);
+        varlen = strlen(var->name) + 1;
+        buflen = BUFSIZE - (p - buf) - vallen - varlen + 1;
+        // slide everything in buf over
+        bcopy(p + varlen, p + vallen, buflen);
+        // insert value
+        bcopy(tmp, p, vallen);
+
+        return p + vallen - 1;
+    }
+
+    return p;
+}
+
+
+static int
+shell_parse_line(struct cli_env *env, char *buf, char **argv){
+
+    int argc = 0;
+    char *p = buf;
+    char qc;
+
+    while( *p && (argc < ARGLEN) ){
+
+        /* skip white */
+        while( *p ==' ' || *p == '\t' ){
+        next_token:
+            *p++ = 0;
+        }
+
+        /* end of input */
+        if( ! *p ){
+            break;
+        }
+
+        /* comment to end-of-line */
+        if( *p=='#' ){
+            *p = 0;
+            break;
+        }
+
+        /* single quoted arg */
+        if( *p == '\'' ){
+            p++;
+            argv[argc++] = p;
+            while( *p && *p!='\'' ){
+                p++;
+            }
+            /* terminate arg */
+            if( *p ) *p++ = 0;
+            continue;
+        }
+
+        /* double-quoted arg or bare-word until space : $var are expanded */
+        if( *p == '"' ){
+            qc = 1;
+            p ++;
+        }else
+            qc = 0;
+
+        argv[argc++] = p;
+        while( *p && (qc ? (*p!='"') : !isspace(*p)) ){
+
+            if( *p == '$' ){
+                p = shell_interp_var(env, buf, p, argv + argc - 1);
+            }
+            p ++;
+        }
+        if( *p ) *p++ = 0;
+        continue;
+
+    }
+
+    return argc;
+}
+
+DEFUN(if, "conditional")
+{
+    if( argc < 2 ){
+        f_error("if command ...\n");
+        return -1;
+    }
+    int cv = shell_eval( argc - 1, argv + 1, env );
+    int gotelse = 0;
+    int nesting = 0;
+
+    while(1){
+        int i = shell_next_line(env, env->buf, 2);
+        if( i == -1 ){
+            // eof
+            return -1;
+        }
+
+        argc = shell_parse_line(env, env->buf, env->argv);
+
+        if( !nesting && !strcmp("else", argv[0]) ){
+            if( gotelse ){
+                f_error("parse error: else unexpected\n");
+                return -1;
+            }
+
+            gotelse = 1;
+            cv = !cv;
+            continue;
+        }
+
+        if( !strcmp("endif", argv[0]) ){
+            if( !nesting ) break;
+            nesting --;
+            continue;
+        }
+
+        if( !strcmp("if", argv[0]) ){
+            nesting ++;
+            continue;
+        }
+
+        if( !nesting && !cv )
+            shell_eval(argc, argv, env);
+
+
+    }
+
+    return 0;
+}
+
+
 void
 fshell(FILE *f, int interactivep){
     Catchframe cf;
-    char *argv[24];
+    char *argv[ARGLEN];
     int  argc;
-    char *p;
-    char qc;
     int i;
 
     struct cli_env *env = (struct cli_env*)alloc(sizeof(struct cli_env));
     char *buf = (char*)alloc(BUFSIZE);
-    bzero(env, sizeof(env));
+    bzero(env, sizeof(struct cli_env));
+
     strncpy(env->prompt, gprompt, sizeof(env->prompt));
+    env->f = f ? f : STDIN;
+    env->buf  = buf;
+    env->argv = argv;
+    env->interactive = interactivep;
 
     /* handle ^C */
     if( !f ){
@@ -1095,82 +1410,24 @@ fshell(FILE *f, int interactivep){
     CATCHL(cf, MSG_CCHAR_0, xyz);
 
     while(1){
-
-        i = 0;
-        while(1){
-            if( interactivep ){
-                if( i )
-                    printf("> ");
-                else
-                    prompt(env);
-                getline(buf+i, BUFSIZE-i, 0);
-            }else{
-                if( !fgets(buf+i, BUFSIZE-i, f) ){
-                    UNCATCH(cf);
-                    free(buf, BUFSIZE);
-                    free(env, sizeof(struct cli_env));
-                    return;
-                }
-            }
-            i = strlen(buf);
-            if( buf[i-1] != '\\' )
-                break;
-            else
-                buf[ --i ] = 0;
+        i = shell_next_line(env, buf, 0);
+        if( i == -1 ){
+            // eof
+            break;
         }
 
-        if( !interactivep && env->verbose )
-            printf("%s\n", buf);
-
-        argc = 0;
-        p = buf;
-
-        /* parse cmd line into args */
-        while( argc < sizeof(argv)/sizeof(argv[0]) ){
-
-            /* skip white */
-            while( *p ==' ' || *p == '\t' ){
-            next_token:
-                *p++ = 0;
-            }
-
-            if( ! *p ){
-                break;
-            }
-
-            if( *p=='#' ){
-                *p = 0;
-                break;
-            }
-
-            /* we allow "" inside '' and '' inside "" */
-            if(*p=='"'||*p=='\''){
-                qc = *p;
-                p++;
-                argv[argc++] = p;
-                while( *p && *p!=qc ){
-                    p++;
-                }
-                if( *p )
-                    goto next_token;
-                break;
-            }
-
-            argv[argc++] = p;
-            while( *p && *p!=' ' && *p!='\t' && *p!='#' )
-                p++;
-        }
+        argc = shell_parse_line(env, buf, argv);
 
         if( !argc )
             continue;
-        if( !strcmp("exit", argv[0] )){
-            UNCATCH(cf);
-            free(buf, BUFSIZE);
-            free(env, sizeof(struct cli_env));
-            return;
-        }
+        if( !strcmp("exit", argv[0] )) break;
+
         shell_eval(argc, (const char**)argv, env);
     }
+
+    UNCATCH(cf);
+    free(buf, BUFSIZE);
+    free(env, sizeof(struct cli_env));
 }
 
 #if defined(USE_FILESYS)

@@ -9,8 +9,12 @@
 #ifndef __cli_h__
 #define __cli_h__
 
+typedef FILE;
 struct cli_env {
-    char verbose, noglob;
+    FILE *f;
+    char *buf;
+    char **argv;
+    char verbose, noglob, interactive;
     char prompt[32];
     char a[32], b[32], c[32], d[32];
 };
