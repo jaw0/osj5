@@ -86,9 +86,6 @@ static const struct Var {
     { "gprompt", "default system prompt",    gprompt,       UV_TYPE_STR32 },
     { "time",    "temporal displacement",    &systime,      UV_TYPE_TIME },
     { "itime",   "temporal displacement",    &systime,      UV_TYPE_UQ },
-#ifdef N_RTC
-    { "boottime","the time we booted",       &boottime,  UV_TYPE_TIME },
-#endif
 
     { "a", 	     0,                          IN_ENV(a, UV_TYPE_STR32) },
     { "b", 	     0,                          IN_ENV(b, UV_TYPE_STR32) },
