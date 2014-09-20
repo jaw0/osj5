@@ -603,6 +603,7 @@ int snprintf(char *buf, int len, const char *fmt, ...){
     s.s = buf;
     s.pos = 0;
     s.max = len;
+    if(len) *buf = 0;
 
     return vprintf(snprintffnc, (void*)&s, fmt, ap);
 }
