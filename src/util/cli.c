@@ -45,7 +45,6 @@ typedef unsigned long long u_quad;
 
 char gprompt[32] = "$[35;1m$v$g$[39;0m ";     // 35 = purple
 
-
 #ifdef PLATFORM_I386
 extern long k_paddr, bootmem0, bootmem1;
 #endif
@@ -84,20 +83,12 @@ static const struct Var {
     { "verbose", "echo commands in scripts", IN_ENV(verbose, UV_TYPE_UC) },
     { "noglob",  "disable file globbing",    IN_ENV(noglob,  UV_TYPE_UC) },
 
-    { "gprompt", "default system prompt",    gprompt,       UV_TYPE_STR32 | UV_TYPE_CONFIG },
+    { "gprompt", "default system prompt",    gprompt,       UV_TYPE_STR32 },
     { "time",    "temporal displacement",    &systime,      UV_TYPE_TIME },
     { "itime",   "temporal displacement",    &systime,      UV_TYPE_UQ },
 #ifdef N_RTC
     { "boottime","the time we booted",       &boottime,  UV_TYPE_TIME },
 #endif
-#ifndef PLATFORM_EMUL
-#ifdef PLATFORM_I386
-    { "kpa",     0,                          &k_paddr,   UV_TYPE_UL },
-    { "mem0",    0,                          &bootmem0,  UV_TYPE_UL },
-    { "mem1",    0,                          &bootmem1,  UV_TYPE_UL },
-#endif
-#endif
-    { "bootflags","bootflags",               &bootflags, UV_TYPE_UL },
 
     { "a", 	     0,                          IN_ENV(a, UV_TYPE_STR32) },
     { "b", 	     0,                          IN_ENV(b, UV_TYPE_STR32) },

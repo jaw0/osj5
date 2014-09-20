@@ -9,9 +9,13 @@
 */
 #include <conf.h>
 #include <arch.h>
+#include <userint.h>
 
-unsigned long bootflags = 0;
-long k_paddr = 0, bootmem0 = 0, bootmem1 = 0;
+// set by boot loader
+DEFVAR(unsigned long, bootflags, 0, UV_TYPE_UL, "bootflags")
+DEFVAR(long, k_paddr,  0, UV_TYPE_UL | UV_TYPE_RO, "")
+DEFVAR(long, bootmem0, 0, UV_TYPE_UL | UV_TYPE_RO, "")
+DEFVAR(long, bootmem1, 0, UV_TYPE_UL | UV_TYPE_RO, "")
 
 void
 init_hw(void){

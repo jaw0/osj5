@@ -22,8 +22,9 @@
 #include <bootflags.h>
 #include <calendar.h>
 #include <time.h>
+#include <userint.h>
 
-utime_t boottime = 0;
+DEFVAR(utime_t, boottime, 0, UV_TYPE_TIME, "the time we booted")
 
 #ifdef PLATFORM_EMUL
 struct emul_tm {
