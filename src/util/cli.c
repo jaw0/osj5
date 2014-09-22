@@ -996,7 +996,7 @@ DEFALIAS(test, [)
     if( argc && !strcmp(argv[argc-1], "]") ) argc --;
 
     // -V - verbose test mode
-    if( argc > 1 && strcmp("-V", argv[1]) ){
+    if( argc > 1 && !strcmp("-V", argv[1]) ){
         verbose = 1;
         argc --;
         argv ++;
