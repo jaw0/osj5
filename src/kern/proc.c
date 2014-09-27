@@ -671,19 +671,19 @@ rt_tsleep(void *wchan, const char *wmsg, int timo){
 
     plx = splproc();
     currproc->flags |= PRF_REALTIME;
-    tsleep(wchan, 0, wmsg, timo);
+    return tsleep(wchan, 0, wmsg, timo);
 }
 
 /*
   wakeup blocked processes
 */
 
-void
+int
 wakeup(void *wchan){
     struct Proc *p;
     struct Proc *n;
     int plx;
-    int w;
+    int w, r=0;
 
     w = _wait_hash( (int)wchan );
 
@@ -691,11 +691,16 @@ wakeup(void *wchan){
     for(p=waittable[w]; p; p=n){
         n = p->wnext;
         if( p == n ) PANIC("waitlist loop!");
-        if( p->wchan == wchan )
+        if( p->wchan == wchan ){
             sigunblock(p);
+            r = 1;
+        }
     }
 
     splx(plx);
+
+    /* return bool - did we wake something? */
+    return r;
 }
 
 /*
@@ -706,21 +711,29 @@ void
 readylist_add(proc_t proc){
 
     PROCOK(proc);
+    int plx = splhigh();
     if( proc->rnext || proc->rprev ){
         // NB: it is possible for a process to be woken during the yield(),
         // y_n_p will then attept to re-add to th ready list. check + skip the dupe.
         // alternatively, we could splhigh for the whole time, but that'd not be fun.
 
-        //kprintf("cannot add to readylist proc %x (%s), (%x,%x) cp %x; from %s (old %s)\n",
-        //        proc, proc->name, proc->rprev, proc->rnext, currproc, dbg, proc->rldbg);
+        // kprintf("cannot add to readylist proc %x (%s), (%x,%x) cp %x; tr %x %x\n",
+        //         proc, proc->name, proc->rprev, proc->rnext, currproc, proc->trace, proc->trace2);
+
+        splx(plx);
         return;
     }
 
-    int plx = splhigh();
     proc->rnext = 0;
 
     if( proc->prio >= READYLISTSIZE ) proc->prio = READYLISTSIZE - 1;
     struct ReadyList *rl = (struct ReadyList*)readylist + proc->prio;
+
+    if( rl->head == proc ){
+        // already on the runlist (the only thing on)
+        splx(plx);
+        return;
+    }
 
     if( rl->tail ){
         rl->tail->rnext = proc;
@@ -734,6 +747,8 @@ readylist_add(proc_t proc){
 
     splx(plx);
 }
+
+
 
 /*
   remove front process from ready list
@@ -771,6 +786,9 @@ readylist_next(void){
 
     splx(plx);
 
+    // if( next && next->rprev )
+    //     kprintf("rlnext has prev cp=%x next=%x, prev=%x\n", currproc, next, next->rprev);
+
     if( next ) return next;
     return idle_proc;
 
@@ -800,6 +818,7 @@ _yield_next_proc(void){
     int plx = splhigh();
     if( currproc && currproc->state == PRS_RUNNABLE )
         readylist_add( (proc_t)currproc );
+
     splx(plx);
 
     /* who runs next? */
@@ -863,10 +882,12 @@ _yield_bottom_cancel(void){
 }
 
 
+/* enable/disable delivery of signals/messages
+   see also sigdisable() in proc.h
+*/
 void
 sigenable(void){
     currproc->flags &=  ~PRF_SIGBLOCK;
     if( currproc->flags & PRF_MSGPEND ) yield();
 }
-
 

@@ -102,6 +102,7 @@ typedef struct Proc *proc_t;
 #define setprio(pid, pri)	((pid)->prio = (pri))
 #define setslice(pid, slice)	((pid)->timeslice = (slice))
 #define sigdisable()		(currproc->flags |= PRF_SIGBLOCK)
+// see also sigenable() in proc.c
 
 
 #ifdef CHECKPROC
@@ -136,7 +137,7 @@ extern proc_t start_proc(int, void*, const char *);
 extern void  exit(int);
 extern int   wait(proc_t);
 extern int   tsleep(void *, int, const char *, int);
-extern void  wakeup(void *);
+extern int   wakeup(void *);
 extern int   alarm(int);
 
 #endif /* __proc_h__ */

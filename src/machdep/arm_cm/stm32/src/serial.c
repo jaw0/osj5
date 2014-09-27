@@ -238,7 +238,7 @@ serial_putchar(FILE *f, char ch){
 #ifdef USE_PROC
         if( !(f->flags & F_NONBLOCK) ){
             addr->CR1 |= 0x80;	/* enable TXE irq */
-            tsleep(addr, currproc->prio, "com/o", 1000000);
+            tsleep(addr, currproc->prio, "com/o", 100000);
         }
 #endif
     }
@@ -260,16 +260,10 @@ serial_getchar(FILE *f){
     USART_TypeDef *addr = p->addr;
 
     while( 1 ){
-        if( p->len ){
-            /* make sure some one else didn't already take the char */
-            plx = spltty();
-            if( p->len )
-                break;
-            else
-                splx(plx);
-        }
+        plx = spltty();
+        if( p->len ) break;
+
         if( f->flags & F_NONBLOCK ){
-            plx = spltty();
             /* wait until something is available */
             do {
                 i = addr->SR;
@@ -283,6 +277,7 @@ serial_getchar(FILE *f){
 #endif
         }
     }
+
 
     ch = p->queue[ p->tail++ ];
     p->tail %= SERIAL_QUEUE_SIZE;
