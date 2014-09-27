@@ -78,6 +78,10 @@ struct Proc {
 	u_long p_allotted, p_yielded;	/* previous values of above */
 	u_long timeused;		/* decaying average of timeslice used */
 	u_long estcpu;			/* decaying average of total cpu */
+#  ifdef PROC_HIRES
+        utime_t hrtimestart;
+        utime_t hrtimeused;
+#  endif
 #endif
 	int exitval;			/* value passed to exit */
 
@@ -114,7 +118,7 @@ typedef struct Proc *proc_t;
 #ifndef PROC_TIME
 #  define PROC_TIME	50000		/* usec - timer int rate */
 #endif
-#define MAINT_TIME	5000000		/* usec - how often to recalc things */
+#define MAINT_TIME	(100*PROC_TIME)		/* usec - how often to recalc things */
 #define WAITTABLESIZE	23
 #define READYLISTSIZE	16
 #define WCHAN_NEVER	0		/* a wchan that is never woken */

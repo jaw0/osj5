@@ -374,16 +374,22 @@ idleloop(void){
 static void
 sysmaint(void){
     struct Proc *p;
-    u_long lastt = 0, dt;
+    utime_t lastt = 0, dt;
 
     currproc->timeslice = TIMESLICE;
     currproc->prio      = (READYLISTSIZE*3)/4;
     currproc->flags     = PRF_AUTOREAP | PRF_IMPORTANT;
 
     while(1){
-        dt      = (int)(get_time() - lastt) / PROC_TIME;
-        lastt   = get_time();
+#ifdef PROC_HIRES
+        utime_t now = get_hrtime();
+#else
+        utime_t now = get_time();
+#endif
+        dt      = now - lastt;
+        lastt   = now;
 
+        splproc();
         for(p=(proc_t)proclist; p; p=p->next){
             // printf("sm %x %x\n", p, p->next);
             PROCOK(p);
@@ -409,12 +415,18 @@ sysmaint(void){
                     int yielded = p->timeyielded  - p->p_yielded;
                     int used = alloted - yielded;
                     if( used < 0 ) used = 0;
-                    int est  = 100 * KESTCPU * used / dt;
-                    p->estcpu = ( est + p->estcpu ) / 2;
 
                     p->timeused += used;
                     p->timeused /=2;
-
+#  ifdef PROC_HIRES
+                    /* use hrtime */
+                    int est = 100 * KESTCPU * p->hrtimeused / dt;
+                    p->hrtimeused = 0;
+#  else
+                    /* timeslices used */
+                    int est  = 100 * KESTCPU * used  * PROC_TIME / dt;
+#  endif
+                    p->estcpu = ( est + p->estcpu ) / 2;
                     p->p_allotted = p->timeallotted;
                     p->p_yielded  = p->timeyielded;
 
@@ -855,6 +867,10 @@ _yield_next_proc(void){
     //kprintf("ynp sp %x, psp %x, msp %x, control %x\n",
     //        get_sp(), get_psp(), get_msp(), get_control());
 
+#ifdef PROC_HIRES
+    utime_t now = get_hrtime();
+#endif
+
     int plx = splhigh();
     if( currproc && currproc->state == PRS_RUNNABLE )
         readylist_add( (proc_t)currproc );
@@ -873,6 +889,9 @@ _yield_next_proc(void){
     if( currproc ){
         if( timeremain > 0 )
             currproc->timeyielded += timeremain;
+#  ifdef PROC_HIRES
+        currproc->hrtimeused += now - currproc->hrtimestart;
+#  endif
     }
 #endif
     //kprintf(" ynp curr %x (%s), next %x (%s); curr sp %x, next sp %x start %x\n",
@@ -889,6 +908,9 @@ _yield_next_proc(void){
 
 #ifndef PROC_SMALL
     nextproc->timeallotted += nextproc->timeslice;
+#  ifdef PROC_HIRES
+    nextproc->hrtimestart = now;
+#  endif
 #endif
     timeremain = nextproc->timeslice;
 
