@@ -101,6 +101,7 @@ start_proc(int ssize, void *entry, const char *name){
     proc->stack_start = stack;
 #ifndef PROC_SMALL
     proc->memused     = asize;
+    if(currproc) currproc->memused -= asize;
 #endif
     proc->timeslice   = TIMESLICE;
     proc->prio        = READYLISTSIZE/2;
@@ -426,6 +427,7 @@ sysmaint(void){
                     /* timeslices used */
                     int est  = 100 * KESTCPU * used  * PROC_TIME / dt;
 #  endif
+                    if( !p->p_allotted ) p->estcpu = est;	/* initial value */
                     p->estcpu = ( est + p->estcpu ) / 2;
                     p->p_allotted = p->timeallotted;
                     p->p_yielded  = p->timeyielded;
