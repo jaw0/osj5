@@ -531,7 +531,7 @@ sigkill(proc_t proc){
     _end_proc(proc, -1);
 }
 
-int
+static int
 _wait_hash(int wchan){
 
     wchan ^= wchan >> 16;
@@ -539,20 +539,8 @@ _wait_hash(int wchan){
     return wchan % WAITTABLESIZE;
 }
 
-
-/*
-  unblock a blocked process
-*/
-
-void
-sigunblock(proc_t proc){
-    int plx;
-    int w;
-
-    PROCOK(proc);
-    w = _wait_hash( (int) proc->wchan );
-    plx = splhigh();
-
+static inline void
+_remove_from_waitlist(proc_t proc, int w){
 
     /* remove from wait table */
     if( proc->wprev )
@@ -565,6 +553,21 @@ sigunblock(proc_t proc){
     proc->wnext = proc->wprev = 0;
     proc->wmsg  = 0;
     proc->wchan = 0;
+
+}
+
+/*
+  unblock a blocked process
+*/
+
+void
+sigunblock(proc_t proc){
+
+    PROCOK(proc);
+
+    int w = _wait_hash( (int) proc->wchan );
+    int plx = splhigh();
+    _remove_from_waitlist(proc, w);
 
     if( proc->state & PRS_BLOCKED ){
         proc->state &= ~ PRS_BLOCKED;
@@ -599,7 +602,7 @@ usleep(u_long usec){
 
     if( usec <= 0 ) return;
 
-    if( !currproc || currproc->flags & PRF_NONBLOCK ){
+    if( !currproc || (currproc->flags & PRF_NONBLOCK) ){
         /* this process cannot block, do special sleep */
         until = usec + get_time();
         while( get_time() < until )
@@ -608,8 +611,100 @@ usleep(u_long usec){
     }
 
     PROCOK(currproc);
-    tsleep(WCHAN_NEVER, currproc->prio, "time", usec);
+    tsleep((void*)WCHAN_NEVER, currproc->prio, "time", usec);
 }
+
+/* asynchronous sleep - add to waitlist, and return
+   wchan=0 cancels
+   call await() to block
+*/
+
+void
+asleep(void *wchan, const char *wmsg){
+
+    if(!currproc) return;
+    PROCOK(currproc);
+    if( currproc->flags & PRF_NONBLOCK ){
+        return;
+    }
+
+    int nw = wchan           ? _wait_hash( (int)wchan ) : 0;
+    int ow = currproc->wchan ? _wait_hash( (int)currproc->wchan ) : 0;
+
+    int plx = splhigh();
+
+    // already on waitlist? remove
+    if( currproc->wchan ){
+        _remove_from_waitlist( (proc_t)currproc, ow );
+        currproc->state &= ~PRS_BLOCKED;
+    }
+
+    if( wchan ){
+        // add to waitlist
+        currproc->wchan   = wchan;
+        currproc->wmsg    = wmsg;
+
+        currproc->wnext = waittable[ nw ];
+        currproc->wprev = 0;
+        if( waittable[ nw ] )
+            waittable[ nw ]->wprev = (proc_t)currproc;
+        waittable[ nw ] = (proc_t)currproc;
+
+        if( currproc->wnext == currproc || currproc->wprev == currproc )
+            PANIC("insert waitlist loop");
+
+        currproc->state |= PRS_BLOCKED;
+    }
+
+    splx(plx);
+}
+
+void
+aunsleep(void){
+
+    if(!currproc) return;
+    PROCOK(currproc);
+
+    int ow = currproc->wchan ? _wait_hash( (int)currproc->wchan ) : 0;
+    int plx = splhigh();
+
+    // already on waitlist? remove
+    if( currproc->wchan ){
+        _remove_from_waitlist( (proc_t)currproc, ow );
+        currproc->state &= ~PRS_BLOCKED;
+    }
+    splx(plx);
+}
+
+int
+await(int prio, int timo){
+
+    if(!currproc) return;
+    PROCOK(currproc);
+    if( currproc->flags & PRF_NONBLOCK ){
+        return;
+    }
+
+    if( !currproc->wchan ) return;
+
+    if( prio < 0 ) prio = currproc->prio;
+
+    int plx = splhigh();
+
+    currproc->prio = prio;
+
+    currproc->timeout = timo ? get_time() + timo : 0;
+    utime_t to = currproc->timeout;
+
+    if( currproc->timeout )
+        _set_timeout( currproc->timeout );
+
+    splx(plx);
+    yield();
+
+    return to ? to <= get_time() : 0;
+}
+
 
 /*
   returns 0 if woken by wakeup(), or 1 if timedout
@@ -617,61 +712,9 @@ usleep(u_long usec){
 
 int
 tsleep(void *wchan, int prio, const char *wmsg, int timo){
-    int plx;
-    int w;
 
-    PROCOK(currproc);
-    if( currproc->flags & PRF_NONBLOCK ){
-        return -1;
-    }
-
-    if( prio < 0 ) prio = currproc->prio;
-    w = _wait_hash( (int)wchan );
-
-    // kprintf("tsleep %x %s on %s\n", currproc, currproc->name, wmsg);
-
-    plx = splhigh();
-
-    if( currproc->wchan ){
-        kprintf("already waiting on %x %s s %x\n", currproc->wchan, currproc->wmsg, currproc->state);
-        PANIC("tsleep dupe!");
-    }
-
-    currproc->wchan   = wchan;
-    currproc->wmsg    = wmsg;
-    currproc->timeout = timo ? get_time() + timo : 0;
-    utime_t to = currproc->timeout;
-
-    currproc->wnext = waittable[ w ];
-    currproc->wprev = 0;
-    if( waittable[ w ] )
-        waittable[ w ]->wprev = (proc_t)currproc;
-    waittable[ w ] = (proc_t)currproc;
-
-    if( currproc->wnext == currproc || currproc->wprev == currproc )
-        PANIC("insert waitlist loop");
-    currproc->prio   = prio;
-    currproc->state |= PRS_BLOCKED;
-
-    if( currproc->timeout )
-        _set_timeout( currproc->timeout );
-
-
-    yield();
-
-    if( currproc->wchan )
-        kprintf("/tsleep %x %s on %s %x, %x\n", currproc, currproc->name, wmsg, currproc->wchan, currproc->state);
-
-    return to ? to <= get_time() : 0;
-}
-
-int
-rt_tsleep(void *wchan, const char *wmsg, int timo){
-    int plx;
-
-    plx = splproc();
-    currproc->flags |= PRF_REALTIME;
-    return tsleep(wchan, 0, wmsg, timo);
+    asleep( wchan, wmsg );
+    return await( prio, timo );
 }
 
 /*

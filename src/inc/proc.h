@@ -117,7 +117,7 @@ typedef struct Proc *proc_t;
 #define MAINT_TIME	5000000		/* usec - how often to recalc things */
 #define WAITTABLESIZE	23
 #define READYLISTSIZE	16
-#define WCHAN_NEVER	0		/* a wchan that is never woken */
+#define WCHAN_NEVER	-1		/* a wchan that is never woken */
 #define KESTCPU		16384
 
 extern volatile struct Proc *proclist;
@@ -133,11 +133,15 @@ extern void  sigsuspend(proc_t);
 extern void  sigcont(proc_t);
 extern void  sigkill(proc_t);
 extern void  sigunblock(proc_t);
+extern void  sigenable(void);
 extern proc_t start_proc(int, void*, const char *);
 extern void  exit(int);
 extern int   wait(proc_t);
 extern int   tsleep(void *, int, const char *, int);
 extern int   wakeup(void *);
+extern void  asleep(void*, const char*);
+extern int   await(int, int);
+extern void  aunsleep(void);
 extern int   alarm(int);
 
 #endif /* __proc_h__ */
