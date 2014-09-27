@@ -378,22 +378,20 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
 
     utime_t expires = timeo ? get_time() + timeo : 0;
 
-
     while( 1 ){
-        spldisk();
+        splproc();
+        asleep( ii, "i2c" );
         if( ii->state != I2C_STATE_BUSY ) break;
-        if( currproc ){
-#ifdef I2C_VERBOSE
-            kprintf("i2c xfer tsleep %d\n", timeo ? expires - get_time() : 0);
-#endif
-            tsleep( ii, -1, "i2c", timeo ? expires - get_time() : 0 );
-        }
+        await( -1, timeo ? expires - get_time() : 0 );
+        if( ii->state != I2C_STATE_BUSY ) break;
+
         if( expires && get_time() >= expires ){
             I2C_CRUMB("timeout", 0,0);
             break;
         }
     }
 
+    aunsleep();
     splx(plx);
 
 #ifdef I2C_VERBOSE

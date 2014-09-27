@@ -255,7 +255,7 @@ spi_init(struct Device_Conf *dev){
 #  error "unknown platform"
 #endif
 
-    addr->CR1 |= CR1_SSM | CR1_SSI | CR1_MSTR;
+    addr->CR1 |= CR1_SSM | /*CR1_SSI | */ CR1_MSTR;
     addr->CR2 &= ~0xE7;
 
     int speed = _set_speed(ii, dev->baud);
@@ -505,7 +505,7 @@ _spi_conf_disable(const struct SPIConf *cf, struct SPIInfo *ii){
     _disable_irq_dma(ii);
     dev->CR1  &= ~ (CR1_SPE | CR1_CRCEN);
 
-    SPI_CRUMB("spi-off", 0, 0);
+    SPI_CRUMB("spi-off", dev->SR, 0);
 }
 
 static void
@@ -550,25 +550,34 @@ _msg_until(struct SPIInfo *ii){
     }
 
     // failed
-    SPI_CRUMB("until-fail", m->response, count);
+    SPI_CRUMB("until-fail", ii->addr->SR, 0); // m->response, count);
     ii->state = SPI_STATE_ERROR;
     return 1;
 }
 
 static void
 _msg_dma_wait(struct SPIInfo *ii){
+    int plx;
 
     SPI_CRUMB("msg-dma-wait", 0,0);
-    while( ii->state == SPI_STATE_BUSY ){
-        if( currproc ){
-            tsleep( ii, -1, ii->name, ii->timeout );
-        }
+    while( 1 ){
+
+        plx = splproc();
+        asleep( ii, ii->name );
+        if( ii->state != SPI_STATE_BUSY ) break;
+        await( -1, get_time() - ii->timeout );
+        if( ii->state != SPI_STATE_BUSY ) break;
+
         if( ii->timeout && get_time() > ii->timeout ){
             SPI_CRUMB("timeout", 0,0);
             ii->state = SPI_STATE_ERROR;
+            splx(plx);
             return;
         }
     }
+
+    aunsleep();
+    splx(plx);
 }
 
 static inline int
@@ -775,7 +784,10 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
         int plx = splproc();
         _msg_do( ii );
         splx(plx);
-        if( ii->state == SPI_STATE_ERROR ) break;
+        if( ii->state == SPI_STATE_ERROR ){
+            SPI_CRUMB("error", 0,0);
+            break;
+        }
         ii->num_msg --;
         if( ii->msg ) ii->msg ++;
     }
@@ -792,6 +804,8 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
 
     // disable device, pins
     _spi_conf_done(cf, ii);
+
+    SPI_CRUMB("done", ii->state, 0);
 
 #ifdef VERBOSE
     if( verbose || (ii->state != SPI_STATE_XFER_DONE) ){

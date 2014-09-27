@@ -232,16 +232,30 @@ serial_putchar(FILE *f, char ch){
     p = (struct Com*)f->d;
     USART_TypeDef *addr = p->addr;
 
+#ifdef USE_PROC
+    if( f->flags & F_NONBLOCK ){
+        while(1){
+            plx = spltty();
+            if( addr->SR & SR_TXE ) break;
+        }
+    }else{
+        while(1){
+            plx = splproc();
+            asleep( addr, "com/o" );
+            if( addr->SR & SR_TXE ) break;
+            addr->CR1 |= 0x80;	/* enable TXE irq */
+            await( -1, 100000 );
+            if( addr->SR & SR_TXE ) break;
+        }
+        aunsleep();
+    }
+#else
     while(1){
         plx = spltty();
         if( addr->SR & SR_TXE ) break;
-#ifdef USE_PROC
-        if( !(f->flags & F_NONBLOCK) ){
-            addr->CR1 |= 0x80;	/* enable TXE irq */
-            tsleep(addr, currproc->prio, "com/o", 100000);
-        }
-#endif
     }
+
+#endif
 
     addr->DR = ch;
     splx(plx);
