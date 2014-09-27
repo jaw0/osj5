@@ -3,9 +3,6 @@
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 2013-Mar-11 00:46 (EDT)
   Function: stm32f1 hardware init
-
-  $Id$
-
 */
 
 #include <conf.h>
@@ -52,11 +49,14 @@ tick_init(void){
 
 utime_t
 get_hrtime(void){
-    long long t;
+    utime_t t;
 
-    irq_disable();
-    t = get_time() + (1000 - SysTick->VAL / (SYSCLOCK / 1000000 / 8));
-    irq_enable();
+    int plx = splhigh();
+    int tk  = (PROC_TIME - SysTick->VAL / (SYSCLOCK / 1000000 / 8));
+    t = get_time() + tk;
+    // is systick irq pending? adjust
+    if( (SCB->ICSR & (1<<26)) && (tk < (PROC_TIME>>1)) ) t += PROC_TIME;
+    splx(plx);
     return t;
 }
 
