@@ -615,7 +615,6 @@ usleep(u_long usec){
 }
 
 /* asynchronous sleep - add to waitlist, and return
-   wchan=0 cancels
    call await() to block
 */
 
@@ -628,22 +627,21 @@ asleep(void *wchan, const char *wmsg){
         return;
     }
 
-    int nw = wchan           ? _wait_hash( (int)wchan ) : 0;
-    int ow = currproc->wchan ? _wait_hash( (int)currproc->wchan ) : 0;
+    int nw = _wait_hash( (int)wchan );
+    int ow = _wait_hash( (int)currproc->wchan );
 
     int plx = splhigh();
 
     // already on waitlist? remove
     if( currproc->wchan ){
         _remove_from_waitlist( (proc_t)currproc, ow );
-        currproc->state &= ~PRS_BLOCKED;
     }
 
-    if( wchan ){
-        // add to waitlist
-        currproc->wchan   = wchan;
-        currproc->wmsg    = wmsg;
+    // add to waitlist
+    currproc->wchan   = wchan;
+    currproc->wmsg    = wmsg;
 
+    if( wchan != (void*)WCHAN_NEVER ){
         currproc->wnext = waittable[ nw ];
         currproc->wprev = 0;
         if( waittable[ nw ] )
@@ -652,9 +650,9 @@ asleep(void *wchan, const char *wmsg){
 
         if( currproc->wnext == currproc || currproc->wprev == currproc )
             PANIC("insert waitlist loop");
-
-        currproc->state |= PRS_BLOCKED;
     }
+
+    currproc->state |= PRS_BLOCKED;
 
     splx(plx);
 }
@@ -665,14 +663,13 @@ aunsleep(void){
     if(!currproc) return;
     PROCOK(currproc);
 
-    int ow = currproc->wchan ? _wait_hash( (int)currproc->wchan ) : 0;
+    int ow  = _wait_hash( (int)currproc->wchan );
     int plx = splhigh();
 
     // already on waitlist? remove
-    if( currproc->wchan ){
-        _remove_from_waitlist( (proc_t)currproc, ow );
-        currproc->state &= ~PRS_BLOCKED;
-    }
+    _remove_from_waitlist( (proc_t)currproc, ow );
+    currproc->state &= ~PRS_BLOCKED;
+
     splx(plx);
 }
 
@@ -685,12 +682,10 @@ await(int prio, int timo){
         return;
     }
 
-    if( !currproc->wchan ) return;
+    if( !(currproc->state & PRS_BLOCKED) ) return;
 
     if( prio < 0 ) prio = currproc->prio;
-
-    int plx = splhigh();
-
+    int oprio = currproc->prio;
     currproc->prio = prio;
 
     currproc->timeout = timo ? get_time() + timo : 0;
@@ -699,9 +694,9 @@ await(int prio, int timo){
     if( currproc->timeout )
         _set_timeout( currproc->timeout );
 
-    splx(plx);
     yield();
 
+    currproc->prio = oprio;
     return to ? to <= get_time() : 0;
 }
 
@@ -712,9 +707,11 @@ await(int prio, int timo){
 
 int
 tsleep(void *wchan, int prio, const char *wmsg, int timo){
-
+    int plx = splproc();
     asleep( wchan, wmsg );
-    return await( prio, timo );
+    int r = await( prio, timo );
+    splx(plx);
+    return r;
 }
 
 /*
