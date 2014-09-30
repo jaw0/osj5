@@ -18,8 +18,6 @@ panic(const char *m, int l, const char *f){
 
     kprintf("PANIC: %s at line %d of %s (currproc=%x)\nhalting\n", m, l, f, currproc);
 
-    splhigh();
-
 #ifdef PROJECT_PANIC
     extern void PROJECT_PANIC (const char *);
     PROJECT_PANIC(m);
