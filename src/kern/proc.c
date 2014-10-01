@@ -666,8 +666,6 @@ asleep(void *wchan, const char *wmsg){
             PANIC("insert waitlist loop");
     }
 
-    currproc->state |= PRS_BLOCKED;
-
     splx(plx);
 }
 
@@ -682,7 +680,6 @@ aunsleep(void){
 
     // already on waitlist? remove
     _remove_from_waitlist( (proc_t)currproc, ow );
-    currproc->state &= ~PRS_BLOCKED;
 
     splx(plx);
 }
@@ -696,7 +693,7 @@ await(int prio, int timo){
         return;
     }
 
-    if( !(currproc->state & PRS_BLOCKED) ) return;
+    if( !currproc->wmsg ) return;
 
     if( prio < 0 ) prio = currproc->prio;
     int oprio = currproc->prio;
@@ -708,6 +705,7 @@ await(int prio, int timo){
     if( currproc->timeout )
         _set_timeout( currproc->timeout );
 
+    currproc->state |= PRS_BLOCKED;
     yield();
 
     currproc->prio = oprio;
