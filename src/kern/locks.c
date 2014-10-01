@@ -19,13 +19,24 @@
   obtain a lock
   NB: locks are not safe for bottom-half use
 */
-void
-sync_lock(lock_t* p, const char *wname){
+
+int
+sync_tlock(lock_t* p, const char *wname, int timeout){
     if(!wname) wname = "lock";
 
-    while( sync_lockedp(p) || !sync_try_lock(p) )
-        tsleep( (void*)p, -1, wname, 0 );
+    while(1){
+        asleep( (void*)p, wname );
+        if( !sync_lockedp(p) && sync_try_lock(p) ){
+            aunsleep();
+            return 1;
+        }
+        int t = await( -1, timeout );
+        if( t ) break; /* time out */
+    }
+
+    return 0;
 }
+
 
 /* use gcc builtins */
 /* return 1 for success, 0 for fail */

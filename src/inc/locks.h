@@ -7,8 +7,11 @@
 typedef int lock_t;
 
 extern int sync_try_lock(lock_t *);
-extern void sync_lock(lock_t *, const char *);
+extern int sync_tlock(lock_t *, const char *, int);
 extern void sync_unlock(lock_t *);
+
+#define sync_lock(l, n)	sync_tlock(l,n,0)
+
 
 #endif /* __locks_h__ */
 
