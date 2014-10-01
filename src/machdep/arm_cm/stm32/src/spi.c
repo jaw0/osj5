@@ -561,23 +561,20 @@ _msg_dma_wait(struct SPIInfo *ii){
 
     SPI_CRUMB("msg-dma-wait", 0,0);
     while( 1 ){
-
-        plx = splproc();
         asleep( ii, ii->name );
-        if( ii->state != SPI_STATE_BUSY ) break;
+        if( ii->state != SPI_STATE_BUSY ){
+            aunsleep();
+            return;
+        }
         await( -1, get_time() - ii->timeout );
-        if( ii->state != SPI_STATE_BUSY ) break;
 
         if( ii->timeout && get_time() > ii->timeout ){
             SPI_CRUMB("timeout", 0,0);
             ii->state = SPI_STATE_ERROR;
-            splx(plx);
             return;
         }
     }
 
-    aunsleep();
-    splx(plx);
 }
 
 static inline int
@@ -760,8 +757,10 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
         msgs[0].mode &= ~0x80;
     }
 
-    if( currproc )
-        sync_lock(&ii->lock, "spi.L");
+    if( currproc ){
+        int r = sync_tlock(&ii->lock, "spi.L", timeout);
+        if( !r ) return SPI_XFER_TIMEOUT;
+    }
 
     cur_crumb = 0;
 
