@@ -159,6 +159,8 @@ void
 hexdump(const unsigned char *d, int len){
     int i;
     int col = 0;
+    char txt[17];
+    txt[16] = 0;
 
     kprintf("\n");
 
@@ -167,13 +169,15 @@ hexdump(const unsigned char *d, int len){
         if(! (col % 4 )) kprintf(" ");
 
         kprintf(" %x%x", (d[i]&0xF0) >> 4, (d[i]&0x0F));
+        txt[col] = (d[i] >= 0x20 && d[i] <= 0x7e) ? d[i] : '.';
 
         if( ++col == 16){
-            kprintf("\n");
+            kprintf("  %s\n", txt);
             col = 0;
         }
     }
 
+    // ...
     kprintf("\n");
 }
 
