@@ -55,7 +55,8 @@ adc_init(int chan, int samp){
     switch(chan>>5){
     case 0:
         RCC->APB2ENR |= 1<<8;
-        _adc12_conf_gpio( cn );
+        if( cn < 16 )
+            _adc12_conf_gpio( cn );
         break;
     case 1:
         RCC->APB2ENR |= 1<<9;
