@@ -485,24 +485,32 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
             nummsg ++;
 
             r = spi_xfer(& ii->spicf, nummsg, m, 1000000);
+            if( r ){
+                kprintf("spi ret %d\n", r);
+
+            }
 
             // check responses
             int8_t i;
             for(i=0; i<nblk; i++){
                 //kprintf("m%dr %x; ", 4*i + 4, m[4*i+4].response);
-                if( (m[4*i+4].response & 0x1f) != 5 ) r = SPI_XFER_ERROR;;
+                if( (m[4*i+4].response & 0x1f) != 5 ){
+                    r = SPI_XFER_ERROR;
+                    kprintf("sd bad-resp [%d/%d] => %x\n", i, 4*i+4, m[4*i+4].response);
+                }
             }
 
             if(r){
                 spi_dump_crumb();
-                r = SPI_XFER_ERROR;
+
+                //r = SPI_XFER_ERROR;
                 // try again with less
                 if( nblk > 1 ) nblk >>= 1;
             }
 
             if( r == SPI_XFER_OK ) break;
 
-            kprintf("sd write error %qx, %d => %x, %x\n", pos, nblk, r, m[nummsg-5].response);
+            kprintf("sd write error %qx, %d => %d, %x\n", pos, nblk, r, m[nummsg-5].response);
             //hexdump(m, sizeof(ii->m));
             usleep(10000);
             sdcard_clear( ii );
@@ -547,7 +555,7 @@ DEFUN(set_sdcard_speed, "change sdcard speed")
     return 0;
 }
 
-DEFUN(wrfile, 0)
+DEFUN(wrfile, "test file write timing")
 {
     int i, len;
     FILE *f;
@@ -576,7 +584,7 @@ DEFUN(wrfile, 0)
     return 0;
 }
 
-DEFUN(rdfile, 0)
+DEFUN(rdfile, "test file read timing")
 {
     int i, len;
     FILE *f;
