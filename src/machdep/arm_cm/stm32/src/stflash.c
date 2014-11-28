@@ -111,7 +111,7 @@ int stflash_stat(FILE *f, struct stat *s){
     s->dev     = 0;
     s->size    = d->size;
     s->blksize = BLOCKSIZE;
-    s->flags   = SSF_BIGERASE | SSF_BLKWRITE;
+    s->flags   = SSF_BIGERASE;
     s->mode    = 0;
     return 0;
 }
