@@ -522,6 +522,7 @@ flfs_close(FILE *f){
                 fsmsg("write %s,%d failed (line %d)\n", flfs->me->name,
                       fd->cnkstart + offsetof(struct FSChunk, totlen));
             }
+
             if( i != fd->cnktlen ){
                 /* chop - if it was uninitialized, leave it so */
                 /* otherwise erase it */
@@ -829,7 +830,7 @@ flfs_write(FILE* f, const char* buf, int len){
                 if( fd->cnkpos ) a --;
                 a &= ~(fd->flfs->fblksize-1);
 
-                /* dump buffer to flfsice */
+                /* dump buffer to device */
                 diskwrite(fd->flfs, a, fd->buffer, fd->flfs->fblksize, NEEDERASE(fd));
                 fd->bufpos = 0;
             }
@@ -838,10 +839,6 @@ flfs_write(FILE* f, const char* buf, int len){
                 /* end of chunk */
                 /* update hdr of current chunk */
                 offset = fd->cnkstart;
-                diskwrite(fd->flfs, fd->cnkstart + offsetof(struct FSChunk, cnklen),
-                          (char*)&fd->cnkdlen, sizeof(fd->cnkdlen), 0);
-                diskwrite(fd->flfs, fd->cnkstart + offsetof(struct FSChunk, totlen),
-                          (char*)&fd->cnktlen, sizeof(fd->cnktlen), 0);
 
                 /* does buffer need to be flushed? */
                 /* (should never happen) */
@@ -860,6 +857,10 @@ flfs_write(FILE* f, const char* buf, int len){
 
                 /* update hdr of current chunk */
                 if( offset != fd->cnkstart ){
+                    diskwrite(fd->flfs, fd->cnkstart + offsetof(struct FSChunk, cnklen),
+                              (char*)&fd->cnkdlen, sizeof(fd->cnkdlen), 0);
+                    diskwrite(fd->flfs, fd->cnkstart + offsetof(struct FSChunk, totlen),
+                              (char*)&fd->cnktlen, sizeof(fd->cnktlen), 0);
                     diskwrite(fd->flfs, offset + offsetof(struct FSChunk, next),
                               (char*)&fd->cnkstart, sizeof(fd->cnkstart), 0);
                 }
@@ -1037,9 +1038,11 @@ flfs_dir(MountEntry *me, int how){
         }else{
 
             tlen = fc->totlen;
-            if( tlen == 0xFFFFFFFF || tlen == 0 )
+            if( tlen == 0xFFFFFFFF || tlen == 0 ){
+                printf(">>typ %x, off %d, blk %d, chk %d, tot %d, nxt %d\n",
+                       fc->type, offset, flfs->fblksize, fc->cnklen, fc->totlen, fc->next);
                 offset += chunklength( flfs, offset );
-            else
+            }else
                 offset += tlen;
         }
 
@@ -1197,9 +1200,9 @@ flfs_deletefile(MountEntry *me, const char *name){
             memset(buffer, 0xFF, flfs->fblksize);
             diskwrite(flfs, offset, buffer, flfs->fblksize, 1);
         }else{
-            i = FCT_DELETED;
+            u_short d = FCT_DELETED;
             diskwrite(flfs, offset + offsetof(struct FSChunk, type),
-                      (char*)&i, sizeof(i), 0);
+                      (char*)&d, sizeof(d), 0);
         }
         offset = fc->next;
         if( offset == 0xFFFFFFFF ){
@@ -1230,7 +1233,7 @@ flfs_renamefile(MountEntry *me, const char *oname, const char *nname){
         return -1;
     }
 
-    /* strip flfsice from name */
+    /* strip device from name */
     nname = basenameoffile(nname);
 
     diskread(flfs, offset, buffer, flfs->fblksize);
