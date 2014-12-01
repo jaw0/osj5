@@ -154,27 +154,42 @@ wait_not_busy(void){
 int
 stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
     struct Flash_Disk *d;
-    const unsigned long *src = (unsigned long*)b;
     int i;
 
     d = f->d;
-    unsigned long *dst = (unsigned long*)(d->addr + offset);
 
     if( offset >= d->size )
         return 0;
 
-    // kprintf("stf write %d @ %x => %x\n", len, b, dst);
+    // kprintf("stf write %d @ %x => %x\n", len, b, d->addr + offset);
     ststart(d);
-    FLASH->CR |= (2<<8) | 1;	// 32 bits, enable program
 
-    len /= 4;
-    for(i=0; i<len; i++){
-        wait_not_busy();
-        dst[i] = src[i];
+    if( len & 3 ){
+        // not a multiple of 32bits, go byte-by-byte
+        const unsigned char *src = (unsigned char*)b;
+        unsigned char *dst = (unsigned char*)(d->addr + offset);
+        FLASH->CR |= (0<<8) | 1;	// 8 bits, enable program
+
+        for(i=0; i<len; i++){
+            wait_not_busy();
+            dst[i] = src[i];
+        }
+
+    }else{
+        const unsigned long *src = (unsigned long*)b;
+        unsigned long *dst = (unsigned long*)(d->addr + offset);
+        FLASH->CR |= (2<<8) | 1;	// 32 bits, enable program
+
+        len /= 4;
+        for(i=0; i<len; i++){
+            wait_not_busy();
+            dst[i] = src[i];
+        }
     }
 
     wait_not_busy();
     FLASH->CR &= ~1;		// disable program
+    FLASH->CR &= ~(3<<8);	// clear size
     stfinish(d);
 
     return len;
