@@ -1175,7 +1175,7 @@ shell_eval(int argc, const char **argv, struct cli_env *env){
 #endif
 }
 
-#define BUFSIZE 256
+#define BUFSIZE 1024
 #define ARGLEN  24
 
 static int
