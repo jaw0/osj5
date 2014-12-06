@@ -11,5 +11,5 @@ spi:    machdep/arm_cm/stm32/src/spi.c
 adc:    machdep/arm_cm/stm32f4/src/adc.c
 rng:    machdep/arm_cm/stm32f4/src/rng.c
 ccm:    machdep/arm_cm/stm32f4/src/ccm.c
-stflash:        machdep/arm_cm/stm32/src/stflash.c
+stflash:        machdep/arm_cm/stm32f4/src/stflash.c
 
