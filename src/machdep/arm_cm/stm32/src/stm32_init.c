@@ -67,3 +67,20 @@ reboot(void){
     SCB->AIRCR = (SCB->AIRCR & (0x700)) | (0x5FA << 16) | (1<<2);
 }
 /****************************************************************/
+
+/* enter low power standby mode */
+int
+power_down(void){
+
+    RCC->APB1ENR |= (1<<28);		// enable PWR system
+
+    //– Set SLEEPDEEP in CortexTM-M4F System Control register
+    //– Set PDDS bit in Power Control register (PWR_CR)
+    //– Clear WUF bit in Power Control/Status register (PWR_CSR)
+
+    SCB->SCR |= 4;	// sleepdeep
+    PWR->CR  |= 2;	// PDDS
+    PWR->CR  |= 4;	// clear WUF
+
+    __asm__("wfi");
+}
