@@ -20,6 +20,15 @@
 #include <userint.h>
 
 
+#define CR_WUTE		(1<<10)
+#define CR_WUTIE	(1<<14)
+#define ISR_RSF		(1<<5)
+#define ISR_INITF	(1<<6)
+#define ISR_INIT	(1<<7)
+#define ISR_WUTF	(1<<10)
+
+
+
 static int rtc_pre_s = 0;
 
 static inline void
@@ -35,13 +44,13 @@ rtc_unlock(void){
 
 static inline void
 init_enable(void){
-    RTC->ISR   = 1<<7;			// enter INIT mode
-    while( (RTC->ISR & (1<<6)) == 0 ){}	// wait for it
+    RTC->ISR = ISR_INIT;			// enter INIT mode
+    while( (RTC->ISR & ISR_INITF) == 0 ){}	// wait for it
 }
 
 static inline void
 init_disable(void){
-    RTC->ISR  &= ~(1<<7);		// exit INIT
+    RTC->ISR  &= ~ISR_INIT;		// exit INIT
 }
 
 void
@@ -75,8 +84,8 @@ rtc_init(void){
     RTC->PRER  = rtc_pre_s - 1;
     RTC->PRER |= (127<<16);
 
-    RTC->CR   &= ~(1<<10);		// turn off WKUP
-    RTC->ISR  &= ~(1<<5);		// clear RSF
+    RTC->CR   &= ~CR_WUTE;		// turn off WKUP
+    RTC->ISR  &= ~ISR_RSF;		// clear RSF
 
     init_disable();
     rtc_lock();
@@ -92,8 +101,8 @@ get_rtc(void){
     struct tm ts;
 
     rtc_unlock();
-    RTC->ISR  &= ~(1<<5);		// clear RSF
-    while( RTC->ISR & (1<<5) == 0 ){}	// wait for RSF
+    RTC->ISR  &= ~ISR_RSF;		// clear RSF
+    while( RTC->ISR & ISR_RSF == 0 ){}	// wait for RSF
     rtc_lock();
 
     int ss = RTC->SSR;
@@ -134,7 +143,7 @@ set_rtc(void){
     RTC->TR = tr;
     RTC->DR = dr;
 
-    RTC->ISR  &= ~(1<<5);	// clear RSF
+    RTC->ISR  &= ~ISR_RSF;	// clear RSF
 
     init_disable();
     rtc_lock();
