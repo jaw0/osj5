@@ -23,6 +23,7 @@ ssd1306:        dev/ssd1306.cc util/gfxdpy.cc
 ssd1331:        dev/ssd1331.cc util/gfxdpy.cc
 st7565:         dev/st7565.cc util/gfxdpy.cc
 sdcard:         dev/sdcard.c
+epaper:         dev/epaper.cc
 
 flfs:           fs/flfs.c
 fatfs:          fs/fatfs.c
