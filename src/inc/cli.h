@@ -26,10 +26,14 @@ struct cli_env {
 #define UV_TYPE_US         4
 #define UV_TYPE_UL         5
 #define UV_TYPE_UQ         6
-#define UV_TYPE_IP         7
-#define UV_TYPE_TIME	   8
-#define UV_TYPE_ULX        9
-#define UV_TYPE_FLOAT    0xA
+#define UV_TYPE_SC         7
+#define UV_TYPE_SS         8
+#define UV_TYPE_SL         9
+#define UV_TYPE_SQ         10
+#define UV_TYPE_IP         11
+#define UV_TYPE_TIME	   12
+#define UV_TYPE_ULX        13
+#define UV_TYPE_FLOAT      14
 
 #define UV_TYPE_MASK	 0xFF
 #define UV_TYPE_RO	0x100

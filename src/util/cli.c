@@ -188,6 +188,18 @@ interp_varref(struct cli_env *env, const struct Var *v, char *buf, int buflen){
     case UV_TYPE_UQ:
         snprintf(buf, buflen, "%Qu", *(u_quad*)(v->addr + off));
         break;
+    case UV_TYPE_SC:
+        snprintf(buf, buflen, "%d", *(u_char*)(v->addr + off));
+        break;
+    case UV_TYPE_SS:
+        snprintf(buf, buflen, "%d", *(u_short*)(v->addr + off));
+        break;
+    case UV_TYPE_SL:
+        snprintf(buf, buflen, "%d", *(u_long*)(v->addr + off));
+        break;
+    case UV_TYPE_SQ:
+        snprintf(buf, buflen, "%Qd", *(u_quad*)(v->addr + off));
+        break;
     case UV_TYPE_IP:
         snprintf(buf, buflen, "%I", *(u_long*)(v->addr + off));
         break;
@@ -277,20 +289,27 @@ DEFUN(set, "set a var")
             ((char*)(vars[i].addr + off))[n-1] = 0;
             break;
         case UV_TYPE_UC:
+        case UV_TYPE_SC:
             v = atoi( argv[2] );
             *(u_char*)(vars[i].addr + off) = v;
             break;
         case UV_TYPE_US:
+        case UV_TYPE_SS:
             v = atoi( argv[2] );
             *(u_short*)(vars[i].addr + off) = v;
             break;
         case UV_TYPE_UL:
+        case UV_TYPE_SL:
             v = atoi( argv[2] );
             *(u_long*)(vars[i].addr + off) = v;
             break;
         case UV_TYPE_TIME:
             *(u_quad*)(vars[i].addr + off) = timeiso( argv[2] );
+#ifdef USE_RTC
+            set_rtc();
+#endif
             break;
+        case UV_TYPE_SQ:
         case UV_TYPE_UQ: {
             quad val;
             val = strtoq(argv[2], 0, 0);
