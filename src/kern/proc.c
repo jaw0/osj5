@@ -111,12 +111,14 @@ start_proc(int ssize, void *entry, const char *name){
     proc->lowsp = proc->sp;
 #endif
 #ifdef USE_NSTDIO
-    /* copy from parent */
-    proc->stdin  = STDIN;
-    proc->stdout = STDOUT;
-    proc->stderr = STDERR;
+    if( currproc ){
+        /* copy from parent */
+        proc->stdin  = STDIN;
+        proc->stdout = STDOUT;
+        proc->stderr = STDERR;
+    }
 #endif
-    proc->cwd    = currproc->cwd;
+    if( currproc ) proc->cwd = currproc->cwd;
 
     /* keep track of family tree */
     /* are you my mommy? */
@@ -156,8 +158,6 @@ start_proc(int ssize, void *entry, const char *name){
 void
 init_proc(proc_t p){
 
-    bzero(readylist, sizeof(readylist));
-
     /* set up initial proc */
     bzero(p, sizeof(struct Proc));
     bzero(waittable, WAITTABLESIZE * sizeof(struct Proc *));
@@ -183,7 +183,12 @@ init_proc(proc_t p){
     p->lowsp = (u_long)&p;
 #endif
     currproc = p;
-    proclist = currproc;
+
+    p->next = (proc_t)proclist;
+    if( proclist )
+        proclist->prev = p;
+    proclist = p;
+
     timeremain = p->timeslice;
 
 #if defined(USE_FILESYS) && defined(MOUNT_ROOT)
