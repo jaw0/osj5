@@ -22,7 +22,6 @@ struct Catch {
 
 typedef struct Catch Catchframe;
 
-extern int catch(struct Catch *, u_long, void (*)(u_long,u_long), u_long);
 extern void uncatch(struct Catch *);
 extern void throw(u_long, u_long);
 extern void xthrow(void);
@@ -54,8 +53,6 @@ extern void xthrow(void);
 }
 
 
-
-
 #define UNCATCH(cf) {				\
 	currproc->clist = cf.next;		\
 }
@@ -79,7 +76,6 @@ struct Msg {
 
 extern int sendmsg(proc_t, u_long, u_long);
 extern void ksendmsg(proc_t, u_long);
-
 
 #endif /* __msgs_h__ */
 

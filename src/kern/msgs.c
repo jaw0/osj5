@@ -96,6 +96,7 @@ throw(u_long msg, u_long ret){
         c->retval = ret;
 
         if( c->func ){
+            currproc->throwing = 0;
             (c->func)(msg, ret);
             break;
         }

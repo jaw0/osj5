@@ -25,6 +25,8 @@ systime_tick(void){
 #ifdef USE_PROC
     struct Proc *p;
 
+    wakeup( &systime );
+
     for(p=(struct Proc*)proclist; p; p=p->next){
         /* check timeouts */
         if( p->state & PRS_BLOCKED ){
