@@ -322,12 +322,33 @@ DEFALIAS(dir, ll)
                 }
             }
             what = argc>2 ? argv[2] : "";
-        }else
+        }else{
             what = argc>1 ? argv[1] : "";
+
+            if( !strcmp(argv[1], DEVPREFIX) ){
+                how |= LSHOW_DEVS;
+                what = "";
+            }
+            if( !strcmp(argv[1], ":") ){
+                how |= LSHOW_FSYS;
+                what = "";
+            }
+            if( !strcmp(argv[1], "::") ){
+                how |= LSHOW_DEVS | LSHOW_FSYS | LSHOW_LONG;
+                what = "";
+            }
+
+        }
     }
 
-    if( how & LSHOW_FSYS || how & LSHOW_DEVS ){
-        /* list all devs */
+    if( (how & LSHOW_FSYS) || (how & LSHOW_DEVS) ){
+
+        if( how & LSHOW_FSYS ){
+            // synthesize a "dev" filesystem
+            printf("\tdev:%s\n", (how & LSHOW_LONG) ? "\ttype dev" : "");
+        }
+
+        /* list all devs or filesystems */
         me = mountlist;
         while( me ){
             if( (me->flags & MNTE_F_DEV) && (how & LSHOW_DEVS)
