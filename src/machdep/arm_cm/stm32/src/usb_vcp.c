@@ -45,6 +45,7 @@ const static struct io_fs vcp_port_fs = {
 // NB: the ST library only supports one
 struct VCP {
     FILE file;
+    void *pdev;
     char queue[ VCP_QUEUE_SIZE ];
     u_char head, tail, len;
 
@@ -72,8 +73,8 @@ usbvcp_init(struct Device_Conf *dev){
     gpio_init( GPIO_A12, GPIO_AF(10) | GPIO_PUSH_PULL | GPIO_SPEED_100MHZ );
 
     nvic_enable( OTG_FS_IRQn, IPL_TTY );
-    usb_start();
-    bootmsg("usb vcp\n");
+    com[i].pdev = usb_start();
+    bootmsg("%s usb/cdc/vcp on otgfs irq %d\n", dev->name, OTG_FS_IRQn);
 
     vcp0_port = &com[i].file;
     return (int) &com[i].file;
@@ -82,7 +83,7 @@ usbvcp_init(struct Device_Conf *dev){
 
 static void
 vcp_rx_ack(){
-
+    usbd_cdc_DataOutAck( com[0].pdev );
 }
 
 static int
@@ -99,7 +100,6 @@ vcp_putchar(FILE *f, char ch){
 
     p = (struct VCP*)f->d;
 
-    // XXX - need to have usbd_cdc signal when buffer is drained
     while(1){
         plx = spltty();
         i = VCP_DataTx(&ch, 1);
@@ -107,7 +107,8 @@ vcp_putchar(FILE *f, char ch){
         if( !i ) break;				// char queued
         if( f->flags & F_NONBLOCK ) break;	// drop
 
-        yield();
+        // wait for buffer to empty
+        tsleep( p->pdev, -1, "usb/o", 0 );
     }
     return 1;
 }
@@ -158,7 +159,7 @@ vcp_recvchars(char *buf, int len){
     }
 
     // tell other end to stop if buffer is filling
-    if( com[unit].len < VCP_QUEUE_SIZE - CDC_SIZE ){
+    if( !len || com[unit].len < VCP_QUEUE_SIZE - CDC_SIZE ){
         vcp_rx_ack();
     }else{
         com[unit].status = COMSTAT_THROTTLED;
