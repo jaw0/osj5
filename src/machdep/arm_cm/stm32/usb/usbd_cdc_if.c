@@ -45,6 +45,9 @@ VCP_DeInit(void){
 
 static uint16_t
 VCP_Ctrl (uint32_t Cmd, uint8_t* Buf, uint32_t Len){
+
+    // XXX - some commands have data in wValue, which is not passed in
+
   switch (Cmd)
   {
   case SEND_ENCAPSULATED_COMMAND:

@@ -258,8 +258,15 @@ __ALIGN_BEGIN uint8_t usbd_cdc_CfgDesc[USB_CDC_CONFIG_DESC_SIZ]  __ALIGN_END =
   0x04,   /* bFunctionLength */
   0x24,   /* bDescriptorType: CS_INTERFACE */
   0x02,   /* bDescriptorSubtype: Abstract Control Management desc */
-  0x02,   /* bmCapabilities */
-
+  0x06,   /* bmCapabilities */
+  /*
+    D3: 1 - Device supports the notification Network_Connection.
+    D2: 1 - Device supports the request Send_Break
+    D1: 1 - Device supports the request combination of Set_Line_Coding,
+            Set_Control_Line_State, Get_Line_Coding, and the notification Serial_State.
+    D0: 1 - Device supports the request combination of
+            Set_Comm_Feature, Clear_Comm_Feature, and Get_Comm_Feature
+  */
   /*Union Functional Descriptor*/
   0x05,   /* bFunctionLength */
   0x24,   /* bDescriptorType: CS_INTERFACE */
@@ -360,7 +367,7 @@ __ALIGN_BEGIN uint8_t usbd_cdc_OtherCfgDesc[USB_CDC_CONFIG_DESC_SIZ]  __ALIGN_EN
   0x04,   /* bFunctionLength */
   0x24,   /* bDescriptorType: CS_INTERFACE */
   0x02,   /* bDescriptorSubtype: Abstract Control Management desc */
-  0x02,   /* bmCapabilities */
+  0x06,   /* bmCapabilities */
 
   /*Union Functional Descriptor*/
   0x05,   /* bFunctionLength */
@@ -649,6 +656,8 @@ usbd_cdc_DataIn (void *pdev, uint8_t epnum){
                        CDC_IN_EP,
                        (uint8_t*)&APP_Rx_Buffer[USB_Tx_ptr],
                        USB_Tx_length);
+
+            if( !APP_Rx_length ) wakeup( pdev );
         }
     }
 
@@ -672,14 +681,19 @@ static uint8_t  usbd_cdc_DataOut (void *pdev, uint8_t epnum)
   /* USB data will be immediately processed, this allow next USB traffic being
      NAKed till the end of the application Xfer */
   APP_FOPS.pIf_DataRx(USB_Rx_Buffer, USB_Rx_Cnt);
-
-  /* Prepare Out endpoint to receive next packet */
-  DCD_EP_PrepareRx(pdev,
-                   CDC_OUT_EP,
-                   (uint8_t*)(USB_Rx_Buffer),
-                   CDC_DATA_OUT_PACKET_SIZE);
-
   return USBD_OK;
+}
+
+uint8_t
+usbd_cdc_DataOutAck(void *pdev){
+
+    /* Prepare Out endpoint to receive next packet */
+    DCD_EP_PrepareRx(pdev,
+                     CDC_OUT_EP,
+                     (uint8_t*)(USB_Rx_Buffer),
+                     CDC_DATA_OUT_PACKET_SIZE);
+
+    return USBD_OK;
 }
 
 /**
@@ -765,6 +779,9 @@ static void Handle_USBAsynchXfer (void *pdev)
                CDC_IN_EP,
                (uint8_t*)&APP_Rx_Buffer[USB_Tx_ptr],
                USB_Tx_length);
+
+    if( !APP_Rx_length ) wakeup( pdev );
+
   }
 
 }

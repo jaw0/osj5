@@ -9,7 +9,7 @@
 
 __ALIGN_BEGIN USB_OTG_CORE_HANDLE    USB_OTG_dev __ALIGN_END;
 
-void
+void *
 usb_start(void){
 
     USBD_Init(&USB_OTG_dev,
@@ -18,6 +18,7 @@ usb_start(void){
             &USBD_CDC_cb,
             &USR_cb);
 
+    return & USB_OTG_dev;
 }
 
 void
