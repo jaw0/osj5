@@ -43,26 +43,40 @@ console_init(struct Device_Conf *dev){
     FILE *f=0;
     char *n;
 
+#ifdef CONSOLE_ON
+#  ifndef DEVPREFIX
+#     define DEVPREFIX "dev:"
+#  endif
+    // try to use specified device
+    f = fopen(DEVPREFIX CONSOLE_ON, "w");
+    n = CONSOLE_ON;
+    if( !f ) kprintf("console: cannot attach %s\n", DEVPREFIX CONSOLE_ON);
+#endif
+
+    if( !f ){
+
 #ifdef USE_SERIAL
-    f = serial0_port;
-    n = "serial";
+        f = serial0_port;
+        n = "serial";
 #endif
 
 #ifdef USE_PCTERM
 #   ifdef USE_SERIAL
-    if( !(bootflags & BOOT_ALTCON) ){
+        if( !(bootflags & BOOT_ALTCON) ){
 #   endif
-        f = pcterm_port;
-        n = "pcterm0";
+            f = pcterm_port;
+            n = "pcterm0";
 #   ifdef USE_SERIAL
-    }
+        }
 #   endif
 #endif
 
 #ifdef PLATFORM_EMUL
-    f = emulcon_port;
-    n = "emulcon0";
+        f = emulcon_port;
+        n = "emulcon0";
 #endif
+
+    }
 
     if( ! f ){
         return 0;
