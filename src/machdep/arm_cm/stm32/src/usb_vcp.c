@@ -46,11 +46,11 @@ const static struct io_fs vcp_port_fs = {
 struct VCP {
     FILE file;
     void *pdev;
-    char queue[ VCP_QUEUE_SIZE ];
+    char queue[ VCP_QUEUE_SIZE ];	/* recvd chars */
     u_char head, tail, len;
 
     u_char status;
-#define COMSTAT_THROTTLED	2	/* we have dropped RTS */
+#define COMSTAT_THROTTLED	2	/* queue is full, endpoint is throttled (NAK) */
 } com[ 1 ];
 
 FILE *vcp0_port = 0;
