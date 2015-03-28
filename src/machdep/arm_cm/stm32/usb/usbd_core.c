@@ -96,7 +96,7 @@ static uint8_t  USBD_RunTestMode (USB_OTG_CORE_HANDLE  *pdev) ;
 
 __IO USB_OTG_DCTL_TypeDef SET_TEST_MODE;
 
-USBD_DCD_INT_cb_TypeDef USBD_DCD_INT_cb =
+const USBD_DCD_INT_cb_TypeDef USBD_DCD_INT_cb =
 {
   USBD_DataOutStage,
   USBD_DataInStage,
@@ -113,7 +113,7 @@ USBD_DevDisconnected,
 #endif
 };
 
-USBD_DCD_INT_cb_TypeDef  *USBD_DCD_INT_fops = &USBD_DCD_INT_cb;
+const USBD_DCD_INT_cb_TypeDef  *USBD_DCD_INT_fops = &USBD_DCD_INT_cb;
 /**
 * @}
 */

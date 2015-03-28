@@ -189,7 +189,7 @@ static uint32_t cdcCmd = 0xFF;
 static uint32_t cdcLen = 0;
 
 /* CDC interface class callbacks structure */
-USBD_Class_cb_TypeDef  USBD_CDC_cb =
+const USBD_Class_cb_TypeDef  USBD_CDC_cb =
 {
   usbd_cdc_Init,
   usbd_cdc_DeInit,

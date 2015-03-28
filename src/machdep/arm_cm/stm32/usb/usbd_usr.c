@@ -68,7 +68,7 @@ USBD_USR_DeviceDisconnected(void){
 
 //################################################################
 
-USBD_Usr_cb_TypeDef USR_cb = {
+const USBD_Usr_cb_TypeDef USR_cb = {
   USBD_USR_Init,
   USBD_USR_DeviceReset,
   USBD_USR_DeviceConfigured,
