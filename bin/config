@@ -107,6 +107,9 @@ while( <> ){
 
 	($start) = /startup in\s*([^\s]*)/;
 	print CONFH "#define STARTUPFILE \"$start\"\n" if $start;
+
+        my($console) = /console on\s+([^\s]*)/;
+        print CONFH "#define CONSOLE_ON \"$console\"\n" if $console;
     }
 
     elsif( $cmd eq "flashdev" ){
