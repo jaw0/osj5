@@ -17,6 +17,7 @@
 #include <clock.h>
 #include <stm32.h>
 #include <time.h>
+#include <userint.h>
 
 
 #define CR_WUTE		(1<<10)
@@ -217,7 +218,7 @@ set_rtc_wakeup(int secs){
 static utime_t prev_syst=0,  prev_rtct=0;
 static utime_t curr_syst=0,  curr_rtct=0, curr_rtca=0;
 static int     targ_count=0, base_count=0, max_adj=0;
-
+static int     stat_freq=0,  stat_offset=0;
 
 // this is run as a process to keep the rtc + systime in sync
 
@@ -259,6 +260,8 @@ rtc_clock_sync(void){
         int dsys = curr_syst - prev_syst;
         int drtc = curr_rtct - prev_rtct;
 
+        stat_offset = (3 * stat_offset + terr) / 4;
+
         if( terr >  MAXSHIFT ) terr =  MAXSHIFT;
         if( terr < -MAXSHIFT ) terr = -MAXSHIFT;
 
@@ -275,6 +278,8 @@ rtc_clock_sync(void){
 
         int adj    = (targ_count * terr + 5000) / 10000;
         int load   = targ_count - adj;
+
+        stat_freq  = dsys * 1000 / drtc;
 
         //bootmsg("tick adj: terr %d, dsys %d, drtc %d\t=> %d,%d\n", terr, dsys, drtc, targ_count, adj);
         SysTick->LOAD = load;
@@ -294,6 +299,8 @@ rtc_clock_sync(void){
         if( targ_count < base_count - max_adj ) targ_count = base_count - max_adj;
 
         int adj    = (rtc_pre_s * terr + 500) / 1000;
+
+        stat_freq  = drtc * 1000 / dsys;
 
         rtc_unlock();
 
@@ -333,4 +340,17 @@ rtc_clock_sync(void){
     }
 }
 
+#endif
+
+#if defined(USE_CLI)
+DEFUN(rtcstats, "show rtc stats")
+{
+
+#if defined(RTC_SYNC_CLOCK_FROM_RTC) || defined(RTC_SYNC_RTC_FROM_CLOCK)
+    printf("offset: %d\n", stat_offset);
+    printf("freq:   %d\n", stat_freq);
+#endif
+
+    return 0;
+}
 #endif
