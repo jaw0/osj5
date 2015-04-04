@@ -12,6 +12,7 @@
 #include <arch.h>
 #include <error.h>
 #include <dev.h>
+#include <msgs.h>
 #include <bootflags.h>
 #include <stm32.h>
 #include <gpio.h>
@@ -43,7 +44,7 @@ const static struct io_fs vcp_port_fs = {
 
 
 // NB: the ST library only supports one
-struct VCP {
+static struct VCP {
     FILE file;
     void *pdev;
     char queue[ VCP_QUEUE_SIZE ];	/* recvd chars */
@@ -51,7 +52,7 @@ struct VCP {
 
     u_char status;
 #define COMSTAT_THROTTLED	2	/* queue is full, endpoint is throttled (NAK) */
-} com[ 1 ];
+} vcom[ 1 ];
 
 FILE *vcp0_port = 0;
 
@@ -60,12 +61,12 @@ usbvcp_init(struct Device_Conf *dev){
 
     int i = 0; // dev->unit;
 
-    finit( & com[i].file );
-    com[i].file.fs = &vcp_port_fs;
-    com[i].file.codepage = CODEPAGE_UTF8;
-    com[i].head = com[i].tail = com[i].len = 0;
-    com[i].status  = 0;
-    com[i].file.d  = (void*)&com[i];
+    finit( & vcom[i].file );
+    vcom[i].file.fs = &vcp_port_fs;
+    vcom[i].file.codepage = CODEPAGE_UTF8;
+    vcom[i].head = vcom[i].tail = vcom[i].len = 0;
+    vcom[i].status  = 0;
+    vcom[i].file.d  = (void*)&vcom[i];
 
     RCC->AHB2ENR |= 1<<7;
 
@@ -73,17 +74,17 @@ usbvcp_init(struct Device_Conf *dev){
     gpio_init( GPIO_A12, GPIO_AF(10) | GPIO_PUSH_PULL | GPIO_SPEED_100MHZ );
 
     nvic_enable( OTG_FS_IRQn, IPL_TTY );
-    com[i].pdev = usb_start();
+    vcom[i].pdev = usb_start();
     bootmsg("%s usb/cdc/vcp on otgfs irq %d\n", dev->name, OTG_FS_IRQn);
 
-    vcp0_port = &com[i].file;
-    return (int) &com[i].file;
+    vcp0_port = &vcom[i].file;
+    return (int) &vcom[i].file;
 
 }
 
 static void
 vcp_rx_ack(){
-    usbd_cdc_DataOutAck( com[0].pdev );
+    usbd_cdc_DataOutAck( vcom[0].pdev );
 }
 
 static int
@@ -146,26 +147,37 @@ vcp_getchar(FILE *f){
 void
 vcp_recvchars(char *buf, int len){
     int unit = 0;
-    int i;
+    short i, j;
 
     for(i=0; i<len; i++){
-        if( com[unit].len < VCP_QUEUE_SIZE ){
+        /* special control char ? */
+        for(j=0; j<sizeof(vcom[unit].file.cchars); j++){
+            if(vcom[unit].file.cchars[j] && buf[i] == vcom[unit].file.cchars[j]){
+                sigunblock( vcom[unit].file.ccpid );
+                ksendmsg( vcom[unit].file.ccpid, MSG_CCHAR_0 + j );
+                goto skip;
+            }
+        }
+
+        if( vcom[unit].len < VCP_QUEUE_SIZE ){
             /* queue it up */
-            com[unit].queue[ com[unit].head++ ] = buf[i];
-            com[unit].head %= VCP_QUEUE_SIZE;
-            com[unit].len ++;
+            vcom[unit].queue[ vcom[unit].head++ ] = buf[i];
+            vcom[unit].head %= VCP_QUEUE_SIZE;
+            vcom[unit].len ++;
         }
         // else drop
+    skip:
+        continue;
     }
 
     // tell other end to stop if buffer is filling
-    if( !len || com[unit].len < VCP_QUEUE_SIZE - CDC_SIZE ){
+    if( !len || vcom[unit].len < VCP_QUEUE_SIZE - CDC_SIZE ){
         vcp_rx_ack();
     }else{
-        com[unit].status = COMSTAT_THROTTLED;
+        vcom[unit].status = COMSTAT_THROTTLED;
     }
 
-    wakeup(&com[unit].len);
+    wakeup(&vcom[unit].len);
     return 0;
 }
 
