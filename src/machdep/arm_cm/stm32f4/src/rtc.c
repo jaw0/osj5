@@ -179,6 +179,7 @@ set_rtc(void){
     rtc_was_set = 1;
 }
 
+// set the wakeup timer
 int
 set_rtc_wakeup(int secs){
     // secs == 0 => forever (or reset)
@@ -186,8 +187,8 @@ set_rtc_wakeup(int secs){
     // wkup - max ~36 hours (2^17 secs)
 
     rtc_unlock();
-    RTC->ISR &= ~(1<<10);	// clear WUTF
-    RTC->CR  &= ~(1<<10);	// disable WUT
+    RTC->ISR &= ~ISR_WUTF;	// clear WUTF
+    RTC->CR  &= ~CR_WUTE;	// disable WUT
 
     if( secs ){
         while( (RTC->ISR & (1<<2)) == 0 ) {}	// wait for it
@@ -208,6 +209,13 @@ set_rtc_wakeup(int secs){
     rtc_lock();
 
     // then call stm32_init: power_down();
+}
+
+// was the system woken up by a wakeup event?
+int
+was_rtc_wakeup(void){
+
+    return (RTC->ISR & ISR_WUTF) ? 1 : 0;
 }
 
 //################################################################
