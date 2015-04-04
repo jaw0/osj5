@@ -28,4 +28,8 @@ rng_get(void){
     return RNG->DR;
 }
 
+unsigned int
+random(void){
+    return rng_get() & 0x7FFFFFFF;
+}
 
