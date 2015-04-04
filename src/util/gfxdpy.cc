@@ -287,6 +287,7 @@ GFXdpy::putchar(int ch){
         goto done;
     case ';' | GOTBRACK:
         x3_argn ++;
+        x3_flags &= ~FLAGMINUS;
         if( x3_argn >= MAXX3ARG ) x3_argn = MAXX3ARG - 1;
         goto done;
     case '-' | GOTBRACK:
@@ -330,11 +331,8 @@ GFXdpy::putchar(int ch){
         if( cy < 0 ) cy = 0;
         cx = 0;
     case 'G' | GOTBRACK:	// set column (0 based, not 1 based); negative -> from right
-        if( x3_arg[0] < 0 )
-            cx = width - x3_arg[0] * font->width  * text_scale;
-        else
-            cx = x3_arg[0] * font->width  * text_scale;
-
+        cx = x3_arg[0] * font->width  * text_scale;
+        if( cx < 0 ) cx = width + cx;
         if( cx < 0 ) cx = 0;
         if( cx > width - text_scale * font->width ) cx = width - text_scale * font->width;
         break;
@@ -345,9 +343,11 @@ GFXdpy::putchar(int ch){
         cx = cy = 0;
         break;
 
-    case 'H' | GOTBRACK: 	// move cursor (0 based, not 1 based)
-        cx = x3_arg[0] * font->width  * text_scale;
-        cy = x3_arg[1] * font->height * text_scale;
+    case 'H' | GOTBRACK: 	// move cursor (0 based, not 1 based); negative -> from right/bottom
+        cy = x3_arg[0] * font->height * text_scale;
+        cx = x3_arg[1] * font->width  * text_scale;
+        if( cx < 0 ) cx = width  + cx;
+        if( cy < 0 ) cy = height + cy;
         break;
 
     case 'm' | GOTBRACK:

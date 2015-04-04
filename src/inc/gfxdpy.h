@@ -49,7 +49,7 @@ public:
 private:
     short  cx,cy;
 
-    char x3_arg[MAXX3ARG];
+    signed char x3_arg[MAXX3ARG];
     char x3_argn;
     u_char x3_flags;
     short x3_mode;
