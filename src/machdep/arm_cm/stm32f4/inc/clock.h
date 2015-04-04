@@ -15,6 +15,7 @@
 
 
 #ifdef STM32F411
+#  define SYSMAX	100000000
 #  define AHBMAX   	100000000	/* depends on voltage, and VOS bits */
 #  define APB2MAX  	100000000	/* depends on voltage, and VOS bits */
 #  define APB1MAX  	 50000000	/* depends on voltage, and VOS bits */
@@ -22,9 +23,10 @@
 #  define USBFREQ  	 48000000
 #  define FLASHMAX 	 30000000       /* NB: depends on voltage */
 #  define PLLVCOTARGET    2000000
-#  define PLLVCOMIN     192000000
+#  define PLLVCOMIN     100000000
 #  define PLLVCOMAX     432000000
 #else
+#  define SYSMAX	168000000
 #  define AHBMAX   	168000000
 #  define APB2MAX  	 84000000
 #  define APB1MAX  	 42000000
