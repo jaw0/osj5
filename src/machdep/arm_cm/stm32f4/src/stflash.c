@@ -18,25 +18,48 @@
 #include <flash.h>
 #include <dev.h>
 #include <fs.h>
+#include <misc.h>
 
 #include <stm32.h>
 
-// currently, we only support sector 11 (the last sector)
-#define FLASHSECT	11
-#define BLOCKSIZE	(128*1024)
+#define R_FLASHKB	((unsigned short *)(0x1FFF7A22))
+
+#define FLASHSTART	0x08000000
+#define BLOCKSIZE       (128*1024)
+#define BLOCKSHIFT	17
+
+const struct Flash_Info {
+    int     block;
+    u_int   addr;
+} flashinfo[] = {
+    {  5, 0x08020000 },
+    {  6, 0x08040000 },
+    {  7, 0x08060000 },
+    {  8, 0x08080000 },
+    {  9, 0x080A0000 },
+    { 10, 0x080C0000 },
+    { 11, 0x080E0000 },
+        // 12-16: a bunch of small blocks
+    { 17, 0x08120000 },
+    { 18, 0x08140000 },
+    { 19, 0x08160000 },
+    { 20, 0x08180000 },
+    { 21, 0x081A0000 },
+    { 22, 0x081C0000 },
+    { 23, 0x081E0000 },
+};
 
 extern struct Flash_Conf flash_device[];
 extern FILE *flfs_open(MountEntry *, const char *, const char *);
 extern int n_flashdev;
-
+extern const u_char* _etext;
 
 static struct Flash_Disk {
-    FILE 	file;
-    struct Flash_Conf	*conf;
-    lock_t 	lock;
-
-    u_char 	*addr;
-    int 	size;
+    FILE               file;
+    lock_t             lock;
+    int                blocks;
+    const struct Flash_Conf *conf;
+    const struct Flash_Info *info;
 
 } fldsk[ N_FLASHDEV ];
 
@@ -62,15 +85,60 @@ static const struct io_fs stflash_port_fs = {
 
 int
 stflash_init(struct Device_Conf *dev){
-    int i;
+    short i, n, ba=-1, bz=-1;
     const char *nm;
     const char *type;
     char mntpt[16];
 
+    /*
+       determine size of flash
+       determine end of code
+       determine what we can use
+    */
+    u_int fend = FLASHSTART + ((*R_FLASHKB) << 10);
+
+    for(n=0; n<ELEMENTSIN(flashinfo); n++){
+        if( flashinfo[n].addr < (u_int)&_etext ) continue;
+        if( flashinfo[n].addr + BLOCKSIZE > fend ) break;
+        bz = n;
+        if( ba == -1 ) ba = n;
+    }
+
     for (i=0; i<n_flashdev; i++ ){
-        fldsk[i].conf   = flash_device + i;
-        fldsk[i].size   = flash_device[i].size;
-        fldsk[i].addr   = flash_device[i].addr;
+        fldsk[i].conf = flash_device + i;
+        fldsk[i].info = 0;
+
+        if( flash_device[i].addr ){
+            // use specified region of flash
+
+            // find conf for specified addr
+            for(n=0; n<ELEMENTSIN(flashinfo); n++){
+                if( flashinfo[n].addr == (u_int)flash_device[i].addr ){
+                    fldsk[i].info = flashinfo + n;
+                    break;
+                }
+            }
+
+            if( ! fldsk[i].info ){
+                bootmsg("mem%d cannot configure flash @ 0x%x\n", i, flashinfo[n].addr);
+                return 0;
+            }
+            if( flash_device[i].size ){
+                fldsk[i].blocks = flash_device[i].size / BLOCKSIZE;
+            }else{
+                fldsk[i].blocks = 1;
+            }
+
+        }else{
+            // auto configure all available flash
+
+            if( ba == -1 ){
+                bootmsg("mem%d cannot configure flash. no free space\n");
+                return 0;
+            }
+            fldsk[i].info   = flashinfo + ba;
+            fldsk[i].blocks = bz - ba + 1;
+        }
 
         finit( & fldsk[i].file );
         fldsk[i].file.d = (void*)& fldsk[i];
@@ -94,9 +162,9 @@ stflash_init(struct Device_Conf *dev){
         snprintf(mntpt, 16, "mem%d", i);
         fmount( & fldsk[i].file, mntpt, 0 );
 
-        if( fldsk[i].addr ){
+        if( fldsk[i].info ){
             bootmsg("mem%d %d bytes @ 0x%X mounted on %s type %s\n",
-                    i, fldsk[i].size, fldsk[i].addr, nm, type);
+                    i, fldsk[i].blocks<<BLOCKSHIFT, fldsk[i].info->addr, nm, type);
         }
     }
 
@@ -109,7 +177,7 @@ int stflash_stat(FILE *f, struct stat *s){
     d = f->d;
 
     s->dev     = 0;
-    s->size    = d->size;
+    s->size    = d->blocks << BLOCKSHIFT;
     s->blksize = BLOCKSIZE;
     s->flags   = SSF_BIGERASE;
     s->mode    = 0;
@@ -123,10 +191,13 @@ stflash_bread(FILE *f, char *buf, int len, offset_t offset){
 
     d = f->d;
 
-    if( offset >= d->size )
+    if( offset >= d->blocks<<BLOCKSHIFT )
         return 0;
 
-    memcpy(buf, (char*)d->addr + offset, len);
+    int blk = offset >> BLOCKSHIFT;
+    int off = offset & (BLOCKSIZE - 1);
+
+    memcpy(buf, (char*)d->info[blk].addr + off, len);
     return len;
 }
 
@@ -158,8 +229,11 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
 
     d = f->d;
 
-    if( offset >= d->size )
+    if( offset >= d->blocks<<BLOCKSHIFT )
         return 0;
+
+    int blk = offset >> BLOCKSHIFT;
+    int off = offset & (BLOCKSIZE - 1);
 
     // kprintf("stf write %d @ %x => %x\n", len, b, d->addr + offset);
     ststart(d);
@@ -167,7 +241,7 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
     if( len & 3 ){
         // not a multiple of 32bits, go byte-by-byte
         const unsigned char *src = (unsigned char*)b;
-        unsigned char *dst = (unsigned char*)(d->addr + offset);
+        unsigned char *dst = (unsigned char*)(d->info[blk].addr + off);
         FLASH->CR |= (0<<8) | 1;	// 8 bits, enable program
 
         for(i=0; i<len; i++){
@@ -177,7 +251,7 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
 
     }else{
         const unsigned long *src = (unsigned long*)b;
-        unsigned long *dst = (unsigned long*)(d->addr + offset);
+        unsigned long *dst = (unsigned long*)(d->info[blk].addr + off);
         FLASH->CR |= (2<<8) | 1;	// 32 bits, enable program
 
         len /= 4;
@@ -216,12 +290,15 @@ static int
 erase(struct Flash_Disk *fdk, int a){
 
     kprintf("stm32 flash erase\n");
+    int blk  = a >> BLOCKSHIFT;
+    int sect = fdk->info[blk].block;
+
     ststart(fdk);
     wait_not_busy();
-    FLASH->CR |= (FLASHSECT<<3) | 2;	// sector erase
+    FLASH->CR |= (sect<<3) | 2;	// sector erase
     FLASH->CR |= 1<<16;			// start
     wait_not_busy();
-    FLASH->CR &= ~( (FLASHSECT<<3) | 2 | (1<<16) );
+    FLASH->CR &= ~( (sect<<3) | 2 | (1<<16) );
     stfinish(fdk);
     return 0;
 }
