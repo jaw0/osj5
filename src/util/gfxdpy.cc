@@ -83,6 +83,7 @@ static const Font fonts[] = {
     // 17
     { font_ucs_10x20_height, font_ucs_10x20_width, font_ucs_10x20_start, font_ucs_10x20_last,
       font_ucs_10x20_size, (unsigned char *)font_ucs_10x20_data },
+
 };
 
 
@@ -106,6 +107,36 @@ GFXdpy::init(void){
     file.fs = &gfxdpy_port_fs;
     file.d  = (void*)this;
     file.codepage = CODEPAGE_GFXDPY;
+}
+
+void
+GFXdpy::set_font(int f){
+    font = fonts + f % ELEMENTSIN(fonts);
+}
+
+void
+GFXdpy::set_font(const Font *f){
+    font = f;
+}
+
+void
+GFXdpy::set_pos(int x, int y){
+    cx = x;
+    cy = y;
+    if( cx < 0 ) cx = width  + cx;
+    if( cy < 0 ) cy = height + cy;
+}
+
+void
+GFXdpy::get_pos(int *x, int *y){
+    *x = cx;
+    *y = cy;
+}
+
+void
+GFXdpy::puts(const char *s){
+    while( *s )
+        putchar(*s ++);
 }
 
 void
@@ -168,6 +199,33 @@ GFXdpy::scroll_horiz(int ya, int yz, int dx){
         }
     }
 }
+
+void
+GFXdpy::scroll_vert(int xa, int xz, int dy){
+    int y;
+
+    if( dy > 0 ){
+        for( ; xa<xz; xa++){
+            for(y=0; y<height-dy; y++){
+                int pix = get_pixel(xa, y+dy);
+                set_pixel(xa, y, pix);
+            }
+            for(y=height-dy; y<height; y++)
+                set_pixel(xa, y, color_bg);
+        }
+    }else{
+        dy = - dy;
+        for( ; xa<xz; xa++){
+            for(y=height-1; y>=dy; y--){
+                int pix = get_pixel(xa, y-dy);
+                set_pixel(xa, y, pix);
+            }
+            for(y=0; y<dy; y++)
+                set_pixel(xa, y, color_bg);
+        }
+    }
+}
+
 
 inline void
 GFXdpy::set_pixel(int x, int y, int val){
@@ -391,7 +449,7 @@ GFXdpy::putchar(int ch){
 
         case 10: case 11: case 12: case 13: case 14:
         case 15: case 16: case 17: case 18: case 19:
-            font = fonts + (x3_arg[0] - 10) % ELEMENTSIN(fonts);
+            set_font( x3_arg[0] - 10 );
         }
         break;
 
@@ -520,13 +578,6 @@ gfxdpy_ioctl(FILE* f, int cmd, void* a){
     }
 }
 
-
-/****************************************************************/
-
-void flush(void){}
-void set_pixel(int, int, int){}
-int  get_pixel(int, int){ return 0; }
-void clear_screen(void) {}
 
 /****************************************************************/
 
