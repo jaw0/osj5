@@ -282,6 +282,38 @@ reapkids(void){
 }
 
 /*
+  become detached orphan
+*/
+
+void
+proc_detach(proc_t pid){
+
+    if( !pid ) pid = currproc;
+
+    int plx = splproc();
+
+    /* remove from sibling list */
+    if( pid->brother )
+        pid->brother->sister = pid->sister;
+    if( pid->sister )
+        pid->sister->brother = pid->brother;
+
+    /* remove from parent */
+    if( pid->mommy && pid->mommy->booboo == pid ){
+        if( pid->sister )
+            pid->mommy->booboo = pid->sister;
+        else
+            pid->mommy->booboo = pid->brother;
+    }
+
+    pid->sister = pid->brother = 0;
+    pid->mommy = 0;
+
+    splx(plx);
+}
+
+
+/*
   do the work of cleaning up a dead process
 */
 
@@ -302,21 +334,11 @@ dispose_of_cadaver(proc_t pid){
 
     /* need to orphan any children it had */
     for(p=pid->booboo; p; p=p->brother){
-        p->mommy = 0;
+        proc_detach( p );
     }
 
     /* remove from sibling list */
-    if( pid->brother )
-        pid->brother->sister = pid->sister;
-    if( pid->sister )
-        pid->sister->brother = pid->brother;
-
-    if( pid->mommy && pid->mommy->booboo == pid ){
-        if( pid->sister )
-            pid->mommy->booboo = pid->sister;
-        else
-            pid->mommy->booboo = pid->brother;
-    }
+    proc_detach( pid );
 
     splhigh();
 
