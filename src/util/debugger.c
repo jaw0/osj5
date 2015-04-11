@@ -231,6 +231,7 @@ DEFUN(trace, "show stack trace")
 }
 #endif
 
+#ifdef KTESTING
 DEFUN(dfile, "dump FILE*")
 {
     FILE *f;
@@ -253,5 +254,6 @@ DEFUN(dfile, "dump FILE*")
     return 0;
 
 }
+#endif
 
 
