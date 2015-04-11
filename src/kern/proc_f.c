@@ -43,7 +43,7 @@ static void
 ps_header(void){
 
     printf("  R Runnable      D Dead         N Non-Blocking\n");
-    printf("  B Blocked       C Real-Time    K Dead Child\n");
+    printf("  B Blocked       T Real-Time    K Dead Child\n");
     printf("  Z Suspended     S System       M Msg Pending\n");
     printf("\n");
 }
@@ -63,7 +63,7 @@ proc_ps(proc_t p){
 	    p->state & PRS_SUSPENDED ? 'Z' : '-',
 	    p->state & PRS_DEAD      ? 'D' : '-',
 
-	    p->flags & PRF_REALTIME  ? 'C' : '-',
+	    p->flags & PRF_REALTIME  ? 'T' : '-',
 	    p->flags & PRF_IMPORTANT ? 'S' : '-',
 	    p->flags & PRF_NONBLOCK  ? 'N' : '-',
 	    p->flags & PRF_DEADKID   ? 'K' : '-',
@@ -105,7 +105,7 @@ DEFUN(ps, "list processes")
 
     ps_header();
 
-    printf("PID      PPID     PRI TSL STATE FLGS WCHAN %%CPU %%TSL   MEM CWD    COMMAND\n");
+    printf("PID      PPID     PRI TSL STATE FLGS WCHAN %%CPU %%TSL   MEM DEV    COMMAND\n");
     plx = splproc();
     if( !p ){
         for(p=(proc_t)proclist; p; p = p->next){
