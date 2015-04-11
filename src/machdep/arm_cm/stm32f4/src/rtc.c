@@ -108,7 +108,7 @@ rtc_init(void){
     bootmsg("rtc using %s: %#T\n", info, systime);
 
 #if defined(RTC_SYNC_CLOCK_FROM_RTC) || defined(RTC_SYNC_RTC_FROM_CLOCK)
-    start_proc(768, rtc_clock_sync, "rtcsync");
+    start_proc(512, rtc_clock_sync, "rtcsync");
 #endif
 
 }
