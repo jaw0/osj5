@@ -177,7 +177,7 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                 gmtime_r(&val, &tr);
 
                 if( flags & B(PF_ALT) )
-                    snprintf(buf, sizeof(buf), "%d-%0.2d-%0.2d %d:%0.2d:%0.2d.%0.6d",
+                    snprintf(buf, sizeof(buf), "%d-%0.2d-%0.2d T%d:%0.2d:%0.2d.%0.6d",
                              tr.tm_year, tr.tm_mon, tr.tm_mday, tr.tm_hour, tr.tm_min, tr.tm_sec, tr.tm_usec);
                 else
                     snprintf(buf, sizeof(buf), "%d-%0.2d-%0.2d T%0.2d:%0.2d:%0.2d",
