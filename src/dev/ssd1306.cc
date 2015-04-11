@@ -72,6 +72,7 @@ public:
     virtual void set_colors(void);
     virtual void set_sleep(bool);
     virtual u_char* get_buffer(void) { return dpybuf; }
+    virtual bool is_color(void) { return 0; }
 
 }  ssd1306info[ N_SSD1306 ];
 
@@ -139,7 +140,12 @@ ssd1306_init(struct Device_Conf *dev){
     else
         _ssd1306_cmds( ii, ssd1306_32_init, sizeof(ssd1306_32_init) );
 
+#ifdef PROJECT_SPLASH
+    extern void PROJECT_SPLASH( GFXdpy * );
+    PROJECT_SPLASH( ii );
+#else
     _ssd1306_logo( ii );
+#endif
 
     if( ii->flag_spi )
         bootmsg("%s at spi%d size %dx%d\n", dev->name, ii->port, ii->_width, ii->_height);
@@ -251,7 +257,6 @@ SSD1306::clear_screen(void){
 
 void
 SSD1306::set_sleep(bool sleep){
-    kprintf("1306 sleep %d\n", sleep);
     _ssd1306_cmds( this, sleep ? ssd1306_sleep : ssd1306_awake, 1 );
 }
 

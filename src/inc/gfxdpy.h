@@ -64,6 +64,7 @@ public:
     virtual void set_colors(void);
     virtual void set_sleep(bool);
     virtual u_char* get_buffer(void);
+    virtual bool is_color(void);
 
     void init(void);
     void set_pixel(int, int, int);
@@ -71,9 +72,16 @@ public:
     void set_orientation(int);
     void scroll(void);
     void scroll_horiz(int,int,int);
+    void scroll_vert(int,int,int);
     void render_glyph(int);
     void putchar(int);
+    void puts(const char *);
+    void get_pos(int*, int*);
+    void set_pos(int, int);
+    void set_font(int);
+    void set_font(const Font*);
 
+    // RSN: drawing: line, arc, ...
 };
 
 #endif /* __gfxdpy_h__ */

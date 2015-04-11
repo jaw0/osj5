@@ -57,6 +57,7 @@ public:
     virtual void clear_screen(void);
     virtual void set_colors(void);
     virtual u_char* get_buffer(void) { return dpybuf; }
+    virtual bool is_color(void){ return 0; }
 
 }  st7565info[ N_ST7565 ];
 
@@ -108,7 +109,12 @@ st7565_init(struct Device_Conf *dev){
     // init dev
     _st7565_cmds( ii, st7565_init_dat, sizeof(st7565_init_dat) );
 
+#ifdef PROJECT_SPLASH
+    extern void PROJECT_SPLASH( GFXdpy * );
+    PROJECT_SPLASH( ii );
+#else
     _st7565_logo( ii );
+#endif
 
     bootmsg("%s at spi%d size %dx%d\n", dev->name, ii->port, ii->_width, ii->_height);
 

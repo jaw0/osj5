@@ -546,6 +546,7 @@ sdcard_stat(FILE *f, struct stat *s){
 
 /****************************************************************/
 
+#ifdef KTESTING
 DEFUN(set_sdcard_speed, "change sdcard speed")
 {
     int n = 5000000;
@@ -613,3 +614,4 @@ DEFUN(rdfile, "test file read timing")
     free(buf, 8192);
     return 0;
 }
+#endif

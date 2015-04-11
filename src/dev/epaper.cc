@@ -48,6 +48,7 @@ public:
     virtual void clear_screen(void);
     virtual void set_colors(void);
     virtual u_char* get_buffer(void) { return dpybuf; }
+    virtual bool is_color(void){ return 0; }
 
 private:
     int  _addr(int, int);
@@ -101,7 +102,13 @@ epaper_init(struct Device_Conf *dev){
     ii->vcom    = 0;
 
     _init_dpy( ii );
+
+#ifdef PROJECT_SPLASH
+    extern void PROJECT_SPLASH( GFXdpy * );
+    PROJECT_SPLASH( ii );
+#else
     _epaper_logo( ii );
+#endif
 
     bootmsg("%s at spi%d size %dx%d\n", dev->name, ii->port, ii->_width, ii->_height);
 

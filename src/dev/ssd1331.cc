@@ -59,6 +59,7 @@ public:
     virtual void clear_screen(void);
     virtual void set_colors(void);
     virtual u_char* get_buffer(void) { return (u_char*)dpybuf; }
+    virtual bool is_color(void){ return 1; }
 
 }  ssd1331info[ N_SSD1331 ];
 
@@ -115,7 +116,12 @@ ssd1331_init(struct Device_Conf *dev){
     // init dev
     _ssd1331_cmds( ii, ssd1331_dpy_init, sizeof(ssd1331_dpy_init) );
 
+#ifdef PROJECT_SPLASH
+    extern void PROJECT_SPLASH( GFXdpy * );
+    PROJECT_SPLASH( ii );
+#else
     _ssd1331_logo( ii );
+#endif
 
     bootmsg("%s at spi%d size %dx%d color\n", dev->name, ii->port, ii->_width, ii->_height);
 
