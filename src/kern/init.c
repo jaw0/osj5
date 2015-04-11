@@ -61,6 +61,11 @@ init(proc_t proc){
     init_ddb();
 #endif
 
+#ifdef PROJECT_HWINIT
+    extern void PROJECT_HWINIT(void);
+    PROJECT_HWINIT();
+#endif
+
     autoconfig();
 
     kflush(0);	/* flush buffered output */
