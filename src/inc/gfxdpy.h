@@ -42,9 +42,9 @@ public:
     u_char text_scale;
     u_char text_attr;
 
-    u_char text_fg,  text_bg;
+    u_char text_fg,  text_bg;	// ANSI code
 
-    int	   color_fg, color_bg;
+    int	   color_fg, color_bg;	// rgb
 
 private:
     short  cx,cy;
@@ -80,6 +80,7 @@ public:
     void set_pos(int, int);
     void set_font(int);
     void set_font(const Font*);
+    bool set_font(const char *);
 
     // RSN: drawing: line, arc, ...
 };

@@ -59,6 +59,7 @@ print CONFC <<EOM;
 #include <disk.h>
 #include <dev.h>
 #include <fs.h>
+#include <font.h>
 
 EOM
     ;
@@ -71,6 +72,7 @@ my $nfsys = 0;
 my $fsys = "const struct FSType_Conf filesystems[] = {\n";
 my $ndisk = 0;
 my $diskdev = "const struct DiskPart_Conf disk_device[] = {\n";
+my @font;
 
 my($root, $start, $name, %devs);
 
@@ -100,6 +102,11 @@ while( <> ){
     elsif( $cmd eq 'srcfile' ){
         # app src code
         push @appfiles, $f[1];
+    }
+    elsif( $cmd eq 'font' ){
+        # font fontname
+        shift @f;
+        push @font, @f;
     }
     elsif( $cmd eq "config" ){
 	($root) = /root on\s*([^\s]*)/;
@@ -230,6 +237,8 @@ while( <> ){
     }
 }
 
+################################################################
+
 feature('kern', 'feature');
 
 
@@ -247,7 +256,6 @@ chop(my $pwd = `cd ..;pwd`);
 my $date = strftime('%Y-%m-%d %H:%M', localtime());
 my $archid = uc($arch . ($variant ? "/$variant" : ''));
 
-print CONFH "\n";
 print CONFC <<EOM;
 
 const int n_devs = $ndevs;
@@ -269,9 +277,6 @@ const char version[] =
 	"Built in $pwd\\n";
 
 EOM
-
-close CONFC;
-close CONFH;
 
 if( -f "../src/machdep/$arch/$variant/etc/link.ld" ){
     print CONFM "LINK_SCRIPT = ../../src/machdep/$arch/$variant/etc/link.ld\n";
@@ -321,11 +326,54 @@ for my $file (@appfiles){
     push @srcs, "$dir$file";
 }
 
+# icky - but backwards compat
+if( defined $usefiles{'util/gfxdpy.cc'} ){
+    unless(@font){
+        @font = qw(5x8 4x6 5x7 5x8 6x10 6x12 9x15 10x20);
+    }
+}
+
+# unique
+my %font;
+@font{@font} = @font;
+
+for my $font (keys %font){
+    # user dir or sys?
+
+    my($base) = $font =~ m|([^/]+)$|;
+
+    my $dir = '';
+    # search specified dirs
+    for my $d (@appdirs){
+        if( -f "$d/$font.c" ){
+            $dir = $d;
+            $dir .= '/' unless $dir =~ m|/$|;
+            last;
+        }
+    }
+
+    $dir ||= '../../src/font/';
+    print CONFD "$base.o: $dir$font.c\n";
+    push @objs, "$base.o";
+    push @srcs, "$dir$font.c";
+}
+
+print CONFC "extern const struct Font font_$_;\n" for @font;
+print CONFC "const struct Font * const fonts[] = {\n";
+print CONFC "\t&font_$_,\n" for @font;
+print CONFC "};\n\n";
+
+print CONFH "#define N_FONT ", scalar(@font), "\n";
+
+print CONFH "\n";
 
 print CONFM "\nOBJS = conf.o @objs\n\n";
 print CONFM "\nSRCS = @srcs\n\n";
 close CONFM;
 close CONFD;
+close CONFC;
+close CONFH;
+
 
 
 ################################################################

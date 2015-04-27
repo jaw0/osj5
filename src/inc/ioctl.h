@@ -21,5 +21,8 @@
 #define IOC_GFXDPY	_IOC('g', 'g')		/* get graphics object */
 #define IOC_GFXSLEEP	_IOC('g', 's')		/* sleep mode */
 #define IOC_GFXBUF	_IOC('g', 'b')		/* get buffer */
+#define IOC_GFXFONT	_IOC('g', 'f')		/* set font */
+#define IOC_GFXFONTNAME	_IOC('g', 'F')		/* set font by name */
+
 
 #endif /* __ioctl_h__ */

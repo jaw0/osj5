@@ -21,17 +21,10 @@ extern "C" {
 # include <i2c.h>
 # include <gpio.h>
 # include <gfxdpy.h>
-# include <strings.h>
+
 };
 #include <font.h>
 
-#include <font/ada_5x7.h>
-#include <font/ucs_4x6.h>
-#include <font/ucs_5x8.h>
-#include <font/ucs_6x10.h>
-#include <font/ucs_6x12.h>
-#include <font/ucs_9x15.h>
-#include <font/ucs_10x20.h>
 
 int gfxdpy_putchar(FILE*, char);
 int gfxdpy_getchar(FILE*);
@@ -56,35 +49,11 @@ const struct io_fs gfxdpy_port_fs = {
     gfxdpy_ioctl,
 };
 
-static const Font fonts[] = {
-    // default font (10):
-    { font_ucs_5x8_height, font_ucs_5x8_width, font_ucs_5x8_start, font_ucs_5x8_last,
-      font_ucs_5x8_size, (unsigned char *)font_ucs_5x8_data },
+// add fonts using "font name" in config file
+extern const struct Font * const fonts[N_FONT];
 
-    { font_ucs_4x6_height, font_ucs_4x6_width, font_ucs_4x6_start, font_ucs_4x6_last,
-      font_ucs_4x6_size, (unsigned char *)font_ucs_4x6_data },
-
-    { font_ada_5x7_height, font_ada_5x7_width, font_ada_5x7_start, font_ada_5x7_last,
-      font_ada_5x7_size, (unsigned char *)font_ada_5x7_data },
-
-    { font_ucs_5x8_height, font_ucs_5x8_width, font_ucs_5x8_start, font_ucs_5x8_last,
-      font_ucs_5x8_size, (unsigned char *)font_ucs_5x8_data },
-
-    // 14
-    { font_ucs_6x10_height, font_ucs_6x10_width, font_ucs_6x10_start, font_ucs_6x10_last,
-      font_ucs_6x10_size, (unsigned char *)font_ucs_6x10_data },
-
-    { font_ucs_6x12_height, font_ucs_6x12_width, font_ucs_6x12_start, font_ucs_6x12_last,
-      font_ucs_6x12_size, (unsigned char *)font_ucs_6x12_data },
-
-    { font_ucs_9x15_height, font_ucs_9x15_width, font_ucs_9x15_start, font_ucs_9x15_last,
-      font_ucs_9x15_size, (unsigned char *)font_ucs_9x15_data },
-
-    // 17
-    { font_ucs_10x20_height, font_ucs_10x20_width, font_ucs_10x20_start, font_ucs_10x20_last,
-      font_ucs_10x20_size, (unsigned char *)font_ucs_10x20_data },
-
-};
+extern "C" void bzero(void*, size_t);
+extern "C" int  strcmp(const char*, const char*);
 
 
 #define GOTESC		0x100
@@ -98,7 +67,7 @@ void
 GFXdpy::init(void){
     orientation = cx = cy = text_attr = text_flags = x3_argn = x3_mode = 0;
     text_scale = 1;
-    font = fonts + 0;
+    font = fonts[0];
     text_fg  = 7;
     text_bg  = 0;
     set_colors();
@@ -111,12 +80,27 @@ GFXdpy::init(void){
 
 void
 GFXdpy::set_font(int f){
-    font = fonts + f % ELEMENTSIN(fonts);
+    font = fonts[ f % ELEMENTSIN(fonts) ];
 }
 
 void
 GFXdpy::set_font(const Font *f){
     font = f;
+}
+
+bool
+GFXdpy::set_font(const char *name){
+    short i;
+
+    for(i=0; i<N_FONT; i++){
+        if( !strcmp(name, fonts[i]->name) ){
+            font = fonts[i];
+            return 1;
+        }
+    }
+    // not found
+    kprintf("font not found '%s'\n", name);
+    return 0;
 }
 
 void
@@ -280,21 +264,21 @@ GFXdpy::get_pixel(int x, int y){
 }
 
 inline int
-Font::get_charld(int ch, int x) const {
+get_charld(const Font *f, int ch, int x) {
 
-    if( ch < startchar ) return 0;
-    if( ch > lastchar  ) return 0;
-    ch -= startchar;
+    if( ch < f->startchar ) return 0;
+    if( ch > f->lastchar  ) return 0;
+    ch -= f->startchar;
 
-    int e = ch * width + x;
+    int e = ch * f->width + x;
 
-    switch( byteschar ){
+    switch( f->byteschar ){
     case 1:
-        return data[e];
+        return f->data[e];
     case 2:
-        return ((unsigned short*)data)[e];
+        return ((unsigned short*)f->data)[e];
     case 4:
-        return ((unsigned long*)data)[e];
+        return ((unsigned long*)f->data)[e];
     }
 }
 
@@ -306,7 +290,7 @@ GFXdpy::render_glyph(int ch){
     int h = text_scale * font->height;
 
     for(x=0; x<text_scale * font->width; x++){
-        int gl = font->get_charld(ch, x / text_scale);
+        int gl = get_charld(font, ch, x / text_scale);
 
         for(y=0; y<h; y++){
             int pix = gl & (1<<(y/text_scale));
@@ -412,7 +396,7 @@ GFXdpy::putchar(int ch){
         switch(x3_arg[0]){
         case 0:	 // reset
             text_attr = 0;
-            font      = fonts;
+            font      = fonts[0];
             text_fg   = 7;
             text_bg   = 0;
             set_colors();
@@ -573,7 +557,14 @@ gfxdpy_ioctl(FILE* f, int cmd, void* a){
         break;
     case 'b':
         return (int) ii->get_buffer();
+    case 'f':
+        ii->set_font( (const Font*)a );
+        return 0;
+    case 'F':
+        return ii->set_font( (const char*)a );
+
     default:
+        kprintf("invalid ioctl '%x'\n", cmd);
         return -1;
     }
 }

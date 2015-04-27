@@ -8,6 +8,6 @@
 FONTS="4x6 5x7 5x8 6x9 6x10 6x12 6x13 8x13 9x15 10x20"
 
 for f in $FONTS; do
-    bin/bdftoc $f.bdf > src/inc/font/ucs_$f.h
+    bin/bdftoc font/$f.bdf > src/font/`basename $f`.c
 done
 

@@ -8,16 +8,14 @@
 #ifndef __font_h__
 #define __font_h__
 
-class Font {
-public:
-    int height;
-    int width;
-    int startchar;
-    int lastchar;
-    int byteschar;
-    const unsigned char *data;
-
-    int get_charld(int, int) const;
+struct Font {
+    const char *name;
+    char  height;
+    char  width;
+    char  byteschar;
+    short startchar;
+    short lastchar;
+    const unsigned char data[];
 };
 
 

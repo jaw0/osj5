@@ -10,15 +10,16 @@
 
 use strict;
 
-my $DIR = "/home/athena/src/font/ucs";
 my $file = shift @ARGV;
 
 my $START = 32;
 my $LAST  = 146;
 
-(my $fontname = "ucs_$file") =~ s/\..*//;
+(my $base = $file) =~ s|.*/||;
+(my $fontname = "$base") =~ s/\..*//;
+# RSN - clean name more...?
 
-open(F, "$DIR/$file") || die "cannot open $file: $!\n";
+open(F, $file) || die "cannot open $file: $!\n";
 
 my %CHARNAME;
 while(<DATA>){
@@ -33,7 +34,7 @@ my $cchar;
 my @bitmap;
 my %font;
 
-print "\n// file: $DIR/$file\n";
+print "\n// file: $file\n";
 
 while(<F>){
     chop;
@@ -61,9 +62,9 @@ while(<F>){
     }
 }
 
-my $type = 'unsigned char';
-$type   = 'unsigned short' if $bby > 8;
-$type   = 'unsigned long'  if $bby > 16;
+my $chbytes = 1;
+$chbytes = 2 if $bby > 8;
+$chbytes = 4 if $bby > 16;
 
 my $xbits = 8;
 $xbits = 16 if $bbx > 8;
@@ -71,13 +72,16 @@ $xbits = 32 if $bbx > 16;
 
 print <<EOH;
 
-#define font_${fontname}_height $bby
-#define font_${fontname}_width  $bbx
-#define font_${fontname}_start  $START
-#define font_${fontname}_last   $LAST
-#define font_${fontname}_size	sizeof($type)
+#include <font.h>
 
-static const $type font_${fontname}_data[] = {
+const struct Font font_${fontname} = {
+    .name	= "$fontname",
+    .height	= $bby,
+    .width	= $bbx,
+    .byteschar	= $chbytes,
+    .startchar  = $START,
+    .lastchar	= $LAST,
+    .data       = {
 EOH
 ;
 
@@ -87,6 +91,7 @@ for my $n ($START .. $LAST){
     mkglyph( $n );
 }
 
+print "    }\n";
 print "};\n";
 exit;
 
@@ -107,7 +112,13 @@ sub mkglyph {
             my $p = ($b->[$y] & (1<<($xbits-$x-1))) ? 1 : 0;
             $line |= $p << $y;
         }
-        printf "0x%x, ", $line;
+
+        # little endian
+        for (1 .. $chbytes){
+            printf "0x%x, ", $line & 0xFF;
+            $line >>= 8;
+        }
+
     }
 
     print "\t// $n\t$name\n";
@@ -177,3 +188,5 @@ u+8F	uni21BB		# cw arrow
 u+90	smileface
 u+91	uni2639		# frown
 u+92	uni2620		# skull+crossbones
+u+93	copyright
+u+94	heart
