@@ -29,6 +29,7 @@
 #define ISR_SHPF	(1<<3)
 
 
+static int rtc_isr_boot;
 static int rtc_pre_s   = 0;
 static int rtc_pre_a   = 0;
 static int rtc_was_set = 0;
@@ -64,6 +65,8 @@ rtc_init(void){
 
     RCC->APB1ENR |= (1<<28);		// enable PWR system
     PWR->CR |= (1<<8);			// enable backup domain (DBP)
+
+    rtc_isr_boot = RTC->ISR;		// save it, so we can check t later
 
     rtc_pre_s = 0;
     rtc_pre_a = 128;
@@ -215,7 +218,7 @@ set_rtc_wakeup(int secs){
 int
 was_rtc_wakeup(void){
 
-    return (RTC->ISR & ISR_WUTF) ? 1 : 0;
+    return (rtc_isr_boot & ISR_WUTF) ? 1 : 0;
 }
 
 //################################################################
