@@ -30,6 +30,8 @@ while(<DATA>){
 
 
 my($bbx, $bby, $ox, $oy);
+my($cbx, $cby, $cox, $coy);
+
 my $cchar;
 my @bitmap;
 my %font;
@@ -49,14 +51,25 @@ while(<F>){
         $cchar = $v;
         next;
     }
+    if( $k eq 'BBX' ){
+        ($cbx, $cby, $cox, $coy) = split /\s+/, $v;
+        next;
+    }
     if( $k eq 'BITMAP' ){
         while(<F>){
             chop;
             last if /ENDCHAR/;
+            # RSN - shift for cox
+            #print STDERR ">>$_\n" if length($_) > 8;
             push @bitmap, hex($_);
         }
+        # shift up/down
+        if( $cby + $coy < $bby + $oy ){
+            unshift @bitmap, 0 for (1 .. $bby + $oy - $cby - $coy);
+        }
+
         $font{ $cchar } = [@bitmap];
-        # print "$cchar => @bitmap\n";
+        #print STDERR "$cchar => @bitmap\n";
         @bitmap = ();
         $cchar  = '';
     }
@@ -102,8 +115,21 @@ sub mkglyph {
     my $n = shift;
 
     my $c    = chr($n);
-    my $name = $CHARNAME{$c} || $CHARNAME{sprintf("u+%02X", $n)} || $c;
-    my $b = $font{$name} || [];
+    my @name = ($CHARNAME{$c}, $CHARNAME{sprintf("u+%02X", $n)}, $c,
+                sprintf('%03d', $n), sprintf('%04d', $n),
+                sprintf("u+%02X", $n), sprintf("U+%04X", $n) );
+
+    my $name;
+    my $b;
+    for my $x (@name){
+        $name = $x;
+        # $name = chr($n) if $n > 32 && $n < 127;
+        $b = $font{$x};
+        last if $b;
+    }
+    $b ||= [];
+
+    #printf STDERR "n $n, c %s => $name\n", chr($n), $name;
 
     print "\t";
     for my $x (0 .. $bbx-1){
