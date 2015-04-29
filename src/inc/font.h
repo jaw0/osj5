@@ -10,9 +10,11 @@
 
 struct Font {
     const char *name;
-    char  height;
-    char  width;
-    char  byteschar;
+    char  type;
+    char  height;	// height in pixels
+    char  width;	// width in pixels
+    char  bytescol;	// height in bytes
+    char  numcol;	// width in columns
     short startchar;
     short lastchar;
     const unsigned char data[];

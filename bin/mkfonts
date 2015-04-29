@@ -5,11 +5,12 @@
 # Created: 2013-Mar-31 13:05 (EDT)
 # Function: make fonts
 
-FONTS="4x6 5x7 5x8 6x9 6x10 6x12 6x13 8x13 9x15 10x20 \
-6x13B 7x13B 7x14B 8x13B 9x15B
-profont10  profont11  profont12  profont15  profont17  profont22  profont29"
+
+FONTS=`ls -1 font | grep bdf | sed s/.bdf//`
 
 for f in $FONTS; do
+    echo $f
     bin/bdftoc font/$f.bdf > src/font/`basename $f`.c
+    bin/bdftoc -n font/$f.bdf > src/font/`basename $f`_n.c
 done
 

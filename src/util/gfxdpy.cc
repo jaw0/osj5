@@ -270,9 +270,9 @@ get_charld(const Font *f, int ch, int x) {
     if( ch > f->lastchar  ) return 0;
     ch -= f->startchar;
 
-    int e = ch * f->width + x;
+    int e = ch * f->numcol + x;
 
-    switch( f->byteschar ){
+    switch( f->bytescol ){
     case 1:
         return f->data[e];
     case 2:
@@ -388,6 +388,13 @@ GFXdpy::putchar(int ch){
     case 'H' | GOTBRACK: 	// move cursor (0 based, not 1 based); negative -> from right/bottom
         cy = x3_arg[0] * font->height * text_scale;
         cx = x3_arg[1] * font->width  * text_scale;
+        if( cx < 0 ) cx = width  + cx;
+        if( cy < 0 ) cy = height + cy;
+        break;
+
+    case '=' | GOTBRACK: 	// move cursor, by pixels
+        cy = x3_arg[0];
+        cx = x3_arg[1];
         if( cx < 0 ) cx = width  + cx;
         if( cy < 0 ) cy = height + cy;
         break;
