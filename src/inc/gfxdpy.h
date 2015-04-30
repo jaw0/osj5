@@ -29,9 +29,15 @@
 
 class Font;
 
+typedef unsigned char u_char;
+typedef signed   char s_char;
+#undef putchar
+
 class GFXdpy {
 public:
+#ifdef USE_NSTDIO
     FILE   file;
+#endif
     short  _height;
     short  _width;
     short  height;
@@ -46,25 +52,25 @@ public:
 
     int	   color_fg, color_bg;	// rgb
 
-private:
+//private:
     short  cx,cy;
 
-    signed char x3_arg[MAXX3ARG];
-    char x3_argn;
+    s_char x3_arg[MAXX3ARG];
+    char   x3_argn;
     u_char x3_flags;
-    short x3_mode;
+    short  x3_mode;
 
     const Font *font;
 
 public:
-    virtual void flush(void);
-    virtual void _set_pixel(int, int, int);
-    virtual int  _get_pixel(int, int);
-    virtual void clear_screen(void);
-    virtual void set_colors(void);
+    virtual void flush(void) = 0;
+    virtual void _set_pixel(int, int, int) = 0;
+    virtual int  _get_pixel(int, int) = 0;
+    virtual void clear_screen(void) = 0;
+    virtual void set_colors(void) = 0;
     virtual void set_sleep(bool);
     virtual u_char* get_buffer(void);
-    virtual bool is_color(void);
+    virtual bool is_color(void) = 0;
 
     void init(void);
     void set_pixel(int, int, int);
@@ -82,7 +88,11 @@ public:
     void set_font(const Font*);
     bool set_font(const char *);
 
-    // RSN: drawing: line, arc, ...
+    void line(int,int, int,int, int, unsigned p=0xFFFFFFFF);
+    void rect(int,int, int,int, int, unsigned p=0xFFFFFFFF);
+    void rect_filled(int,int, int,int, int);
+
+    // RSN: drawing: arc, circle, ellipse, ...
 };
 
 #endif /* __gfxdpy_h__ */

@@ -7,24 +7,16 @@
 
 extern "C" {
 # include <conf.h>
-# include <misc.h>
-# include <proc.h>
-# include <arch.h>
-# include <alloc.h>
-# include <nstdio.h>
-
-# include <locks.h>
-# include <dev.h>
-# include <error.h>
-# include <spi.h>
-
-# include <i2c.h>
-# include <gpio.h>
-# include <gfxdpy.h>
-
+# ifdef USE_NSTDIO
+#  include <nstdio.h>
+# endif
 };
+
+#include <gfxdpy.h>
 #include <font.h>
 
+
+#ifdef USE_NSTDIO
 
 int gfxdpy_putchar(FILE*, char);
 int gfxdpy_getchar(FILE*);
@@ -48,18 +40,21 @@ const struct io_fs gfxdpy_port_fs = {
     0,
     gfxdpy_ioctl,
 };
+#endif
 
 // add fonts using "font name" in config file
-extern const struct Font * const fonts[N_FONT];
+extern const struct Font * const fonts[];
 
-extern "C" void bzero(void*, size_t);
+extern "C" void bzero(void*, int);
 extern "C" int  strcmp(const char*, const char*);
 
 
 #define GOTESC		0x100
 #define GOTBRACK	0x200
-
 #define FLAGMINUS	1
+#define ABS(x)		((x)<0 ? -(x) : (x))
+
+typedef signed char schar;
 
 //****************************************************************
 
@@ -72,15 +67,17 @@ GFXdpy::init(void){
     text_bg  = 0;
     set_colors();
 
+#ifdef USE_NSTDIO
     finit( & file );
     file.fs = &gfxdpy_port_fs;
     file.d  = (void*)this;
     file.codepage = CODEPAGE_GFXDPY;
+#endif
 }
 
 void
 GFXdpy::set_font(int f){
-    font = fonts[ f % ELEMENTSIN(fonts) ];
+    font = fonts[ f % N_FONT ];
 }
 
 void
@@ -99,7 +96,6 @@ GFXdpy::set_font(const char *name){
         }
     }
     // not found
-    kprintf("font not found '%s'\n", name);
     return 0;
 }
 
@@ -481,6 +477,7 @@ GFXdpy::putchar(int ch){
         cy += text_scale * font->height;
         break;
     default:
+
         if( cy > height - text_scale * font->height ){
             scroll();
         }
@@ -500,6 +497,74 @@ done:
     return;
 }
 
+/****************************************************************/
+
+void
+GFXdpy::line(int x0, int y0, int x1, int y1, int color, unsigned pattern){
+    short dx = x1 - x0;
+    short dy = y1 - y0;
+    short ax = ABS(dx) * 2;
+    short ay = ABS(dy) * 2;
+    schar sx = dx < 0 ? -1 : 1;
+    schar sy = dy < 0 ? -1 : 1;
+    unsigned i = 1;
+
+    if( ax > ay ){
+        short d = ay - (ax>>1);
+
+        while(1){
+            if( pattern & i) set_pixel(x0, y0, color);
+            i <<= 1;
+            if( !i ) i = 1;
+
+            if( x0 == x1 ) break;
+            if(d >= 0){
+                y0 += sy;
+                d -= ax;
+            }
+            x0 += sx;
+            d += ay;
+        }
+    }else{
+        short d = ax - (ay>>1);
+
+        while(1){
+            if( pattern & i) set_pixel(x0, y0, color);
+            i <<= 1;
+            if( !i ) i = 1;
+
+            if( y0 == y1 ) break;
+            if( d >= 0 ){
+                x0 += sx;
+                d -= ay;
+            }
+            y0 += sy;
+            d += ax;
+        }
+    }
+}
+
+void
+GFXdpy::rect(int x0, int y0, int x1, int y1, int color, unsigned pattern){
+    line(x0,y0, x1,y0, color, pattern);
+    line(x0,y1, x1,y1, color, pattern);
+    line(x0,y0, x0,y1, color, pattern);
+    line(x1,y0, x1,y1, color, pattern);
+}
+
+void
+GFXdpy::rect_filled(int x0, int y0, int x1, int y1, int color){
+    short i, j;
+
+    for(j=y0; j<=y1; j++){
+        for(i=x0; i<=x1; i++){
+            set_pixel(i,j, color);
+        }
+    }
+}
+
+/****************************************************************/
+
 void
 GFXdpy::set_sleep(bool sleep){}
 
@@ -507,6 +572,8 @@ u_char *
 GFXdpy::get_buffer(void){ return 0; }
 
 /****************************************************************/
+
+#ifdef USE_NSTDIO
 
 int
 gfxdpy_putchar(FILE *f, char ch){
@@ -576,6 +643,7 @@ gfxdpy_ioctl(FILE* f, int cmd, void* a){
     }
 }
 
+#endif
 
 /****************************************************************/
 

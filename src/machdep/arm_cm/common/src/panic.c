@@ -29,3 +29,7 @@ panic(const char *m, int l, const char *f){
         idle();
     }
 }
+
+void __cxa_pure_virtual(void){
+    panic("pure virtual function called", -1, "?");
+}
