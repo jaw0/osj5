@@ -4,15 +4,15 @@
 # Copyright (c) 2013
 # Author: Jeff Weisberg <jaw @ tcp4me.com>
 # Created: 2013-Mar-28 21:15 (EDT)
-# Function:
-#
-# $Id$
+# Function: convert bdf font to C.
+#   see also src/util/gfxdpy.c, src/inc.font.h
 
 use Getopt::Std;
 use strict;
 
 my %opt;
-getopts('n', \%opt) || die ;
+getopts('dn', \%opt) || die ;
+# -d	- enable debug output
 # -n	- mini-numeric font
 
 
@@ -100,7 +100,7 @@ while(<F>){
 }
 
 ################################################################
-# what glyphs?
+# what glyphs should we include?
 
 my $START = 33;
 my $LAST  = $font{144} ? 148 : 127;
@@ -116,7 +116,8 @@ my($xbits, $ybits, $xbytes, $ybytes);
 
 analyze();
 setsize();
-#print STDERR "=>\t$fbw,$fbh,$fbx,$fby\n";
+
+debug( "FBBX=>\t$fbw, $fbh, $fbx, $fby" );
 
 die "$fontname: font too tall!\n" if $ybytes > 4;
 
@@ -189,13 +190,9 @@ sub fixglyph {
 sub mkglyph {
     my $n = shift;
 
-    my $name;
-
     my $g = $font{ $n };
-    #die "XXX $n\n" unless $g;
-
     my $b = fixglyph( $g );
-    $name ||= $g->{name} || chr($n);
+    my $name = $g->{name} || chr($n);
 
     print "\t";
     for my $x (0 .. $fbw-1){
@@ -210,7 +207,6 @@ sub mkglyph {
             printf "0x%x, ", $line & 0xFF;
             $line >>= 8;
         }
-
     }
 
     print "\t// $n\t$name\n";
@@ -250,14 +246,12 @@ sub analyze {
         $maxy = $Y if $Y > $maxy || !defined $maxy;
 
 
-
-        #print STDERR chr($n)," y $h; dx $g->{dwidth}\n";
-        #print STDERR "M: $w,$h, $x, $y\n" if $n == 77;
+        debug( chr($n), "height $h; dx $g->{dwidth}" );
     }
 
-    #print STDERR "ps: $pixsize\n";
-    #print STDERR "fb:\t$fbw,$fbh,$fbx,$fby\n";
-    #print STDERR "dx:\t$dx; $maxdx\nbb:\t$minx, $maxx, $miny, $maxy\n";
+    debug( "fbbx:\t$fbw, $fbh, $fbx, $fby" );
+    debug( "dx:\t$dx; $maxdx" );
+    debug( "bb:\tx: $minx - $maxx, y: $miny - $maxy" );
 
     $fbh = $pixsize || int( $maxy * 1.25 - $miny );
 
@@ -286,6 +280,12 @@ sub setsize {
 
     $xbits = $xbytes * 8;
     $ybits = $ybytes * 8;
+}
+
+sub debug {
+    return unless $opt{d};
+
+    print STDERR "@_\n";
 }
 
 sub readext {
