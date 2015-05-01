@@ -15,10 +15,9 @@ extern "C" {
 #include <gfxdpy.h>
 #include <font.h>
 
-#include <stdio.h>
-#undef putchar
 
 #ifdef USE_NSTDIO
+
 int gfxdpy_putchar(FILE*, char);
 int gfxdpy_getchar(FILE*);
 int gfxdpy_noop(FILE*);
@@ -55,6 +54,7 @@ extern "C" int  strcmp(const char*, const char*);
 #define FLAGMINUS	1
 #define ABS(x)		((x)<0 ? -(x) : (x))
 
+typedef signed char schar;
 
 //****************************************************************
 
@@ -85,28 +85,17 @@ GFXdpy::set_font(const Font *f){
     font = f;
 }
 
-const Font *
-GFXdpy::find_font(const char *name){
-    short i;
-
-    for(i=0; i<N_FONT; i++){
-        if( !strcmp(name, fonts[i]->name) ){
-            return fonts[i];
-        }
-    }
-    // not found
-    return 0;
-}
-
 bool
 GFXdpy::set_font(const char *name){
     short i;
 
-    const Font *f = find_font(name);
-    if(f){
-        font = f;
-        return 1;
+    for(i=0; i<N_FONT; i++){
+        if( !strcmp(name, fonts[i]->name) ){
+            font = fonts[i];
+            return 1;
+        }
     }
+    // not found
     return 0;
 }
 
@@ -512,12 +501,12 @@ done:
 
 void
 GFXdpy::line(int x0, int y0, int x1, int y1, int color, unsigned pattern){
-    short  dx = x1 - x0;
-    short  dy = y1 - y0;
-    short  ax = ABS(dx) * 2;
-    short  ay = ABS(dy) * 2;
-    s_char sx = dx < 0 ? -1 : 1;
-    s_char sy = dy < 0 ? -1 : 1;
+    short dx = x1 - x0;
+    short dy = y1 - y0;
+    short ax = ABS(dx) * 2;
+    short ay = ABS(dy) * 2;
+    schar sx = dx < 0 ? -1 : 1;
+    schar sy = dy < 0 ? -1 : 1;
     unsigned i = 1;
 
     if( ax > ay ){
@@ -564,113 +553,12 @@ GFXdpy::rect(int x0, int y0, int x1, int y1, int color, unsigned pattern){
 }
 
 void
-GFXdpy::hline(int x0, int y0, int x1, int y1, int color){
-
-    if( x0 < x1 ){
-        for( ;x0<=x1; x0++)
-            set_pixel(x0,y0, color);
-    }else{
-        for( ;x1<=x0; x1++)
-            set_pixel(x1,y0, color);
-    }
-}
-
-void
 GFXdpy::rect_filled(int x0, int y0, int x1, int y1, int color){
     short i, j;
 
     for(j=y0; j<=y1; j++){
         for(i=x0; i<=x1; i++){
             set_pixel(i,j, color);
-        }
-    }
-}
-
-
-void
-GFXdpy::triangle(int x0, int y0, int x1, int y1, int x2, int y2, int color, unsigned pattern){
-    line(x0,y0, x1,y1, color, pattern);
-    line(x0,y0, x2,y2, color, pattern);
-    line(x1,y1, x2,y2, color, pattern);
-}
-
-#define SWAP(a,b) tmp = a; a = b; b = tmp;
-
-void
-GFXdpy::triangle_filled(int x0, int y0, int x1, int y1, int x2, int y2, int color){
-    short tmp;
-
-    // roughly based on: http://www-users.mat.uni.torun.pl/~wrona/3d_tutor/tri_fillers.html
-
-    // put points in vertical order
-    if( y1 < y0 ){
-        SWAP(x0,x1);
-        SWAP(y0,y1);
-    }
-    if( y2 < y1 ){
-        SWAP(x1,x2);
-        SWAP(y1,y2);
-    }
-    if( y1 < y0 ){
-        SWAP(x0,x1);
-        SWAP(y0,y1);
-    }
-
-    if( y0 == y2 ){
-        // degenerate case
-        line(x0,y0, x1,y1, color);
-        line(x1,y1, x2,y2, color);
-        return;
-    }
-
-    short dx1 = x1 - x0;
-    short dy1 = y1 - y0;
-    short dx2 = x2 - x0;
-    short dy2 = y2 - y0;
-    short dx3 = x2 - x1;
-    short dy3 = y2 - y1;
-
-    if( y0 == y1 ) dx1 = dy1 = 0;
-    if( y1 == y2 ) dx3 = dy3 = 0;
-
-    short s=x0, e=x0;
-    short es=0, ee=0;
-    short y = y0;
-
-    // top half
-    while( y <= y1 ){
-        // avoid a single disconected corner point when the top is scalene
-        if( !((dx1 < 0 && dx2 < 0 || dx1 > 0 && dx2 > 0) && s == e) )
-            hline(s,y, e,y, color);
-
-        y++;
-        if( dy2 ){
-            es += dx2;
-            s = x0 + es / dy2;
-        }
-        if( dy1 ){
-            ee += dx1;
-            e = x0 + ee / dy1;
-        }
-    }
-
-    // bottom half
-    ee = dx3 * (y - y1);
-    es = dx2 * (y - y0);
-    s  = x0 + es / dy2;
-    e  = x1 + ee / dy3;
-
-    while( y <= y2 ){
-        hline(s,y, e,y, color);
-
-        y++;
-        if( dy2 ){
-            es += dx2;
-            s = x0 + es / dy2;
-        }
-        if( dy3 ){
-            ee += dx3;
-            e = x1 + ee / dy3;
         }
     }
 }
