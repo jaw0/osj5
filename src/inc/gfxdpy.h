@@ -38,29 +38,29 @@ public:
 #ifdef USE_NSTDIO
     FILE   file;
 #endif
-    short  _height;
+    short  _height;		// display physical size
     short  _width;
-    short  height;
+    short  height;		// effective size in this orientation
     short  width;
 
-    u_char orientation;
-    u_char text_flags;
-    u_char text_scale;
-    u_char text_attr;
+    u_char orientation;		// GFX_ORIENT_*
+    u_char text_flags;		// GFX_FLAG_*
+    u_char text_scale;		// scale factor for text
+    u_char text_attr;		// ATTR_*
 
     u_char text_fg,  text_bg;	// ANSI code
-
     int	   color_fg, color_bg;	// rgb
 
 private:
-    short  cx,cy;
+    short  cx,cy;		// current cursor position
 
+    // putchar ansi x3.64 state
     s_char x3_arg[MAXX3ARG];
     char   x3_argn;
     u_char x3_flags;
     short  x3_mode;
 
-    const Font *font;
+    const Font *font;		// current font
 
 public:
     virtual void flush(void) = 0;
