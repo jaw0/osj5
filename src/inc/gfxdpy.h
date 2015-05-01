@@ -52,7 +52,7 @@ public:
 
     int	   color_fg, color_bg;	// rgb
 
-//private:
+private:
     short  cx,cy;
 
     s_char x3_arg[MAXX3ARG];
@@ -87,10 +87,15 @@ public:
     void set_font(int);
     void set_font(const Font*);
     bool set_font(const char *);
+    static const Font* find_font(const char *);
+
+    void hline(int,int, int,int, int);
 
     void line(int,int, int,int, int, unsigned p=0xFFFFFFFF);
     void rect(int,int, int,int, int, unsigned p=0xFFFFFFFF);
     void rect_filled(int,int, int,int, int);
+    void triangle(int,int, int,int, int,int, int, unsigned p=0xFFFFFFFF);
+    void triangle_filled(int,int, int,int, int,int, int);
 
     // RSN: drawing: arc, circle, ellipse, ...
 };
