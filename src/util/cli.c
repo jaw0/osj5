@@ -87,11 +87,6 @@ static const struct Var {
     { "time",    "temporal displacement",    &systime,      UV_TYPE_TIME },
     { "itime",   "temporal displacement",    &systime,      UV_TYPE_UQ },
 
-    { "a", 	     0,                          IN_ENV(a, UV_TYPE_STR32) },
-    { "b", 	     0,                          IN_ENV(b, UV_TYPE_STR32) },
-    { "c", 	     0,                          IN_ENV(c, UV_TYPE_STR32) },
-    { "d", 	     0,                          IN_ENV(d, UV_TYPE_STR32) },
-
     { "tsl",     "process timeslice",        IN_PROC(timeslice, UV_TYPE_UC) },
     { "currproc",0,                          &currproc,  UV_TYPE_ULX | UV_TYPE_RO },
     { "ident",   "system identity",          ident,      UV_TYPE_STR32 | UV_TYPE_RO },
@@ -163,8 +158,10 @@ interp_varref(struct cli_env *env, const struct Var *v, char *buf, int buflen){
 
     if( !v ) return;
 
-    if( v->type & UV_TYPE_ENV )
+    if( v->type & UV_TYPE_ENV ){
+        if( !env ) return;
         off = (int)env;
+    }
     if( v->type & UV_TYPE_PROC )
         off = (int)currproc;
 
@@ -581,7 +578,7 @@ DEFUN(stty, "set terminal modes")
     return 0;
 }
 
-static const char * _codepage[] = {
+static const char * const _codepage[] = {
     "binary",
     "ascii",
     "gfxdpy",
@@ -1248,8 +1245,10 @@ shell_interp_var(struct cli_env *env, char *buf, char *p, char **argv){
     case UV_TYPE_STR32:
         if( p == *argv && strlen(p+1) == strlen(var->name) ){
             // arg is exactly $var, copy pointer into argv
-            if( var->type & UV_TYPE_ENV )
+            if( var->type & UV_TYPE_ENV ){
+                if( !env ) break;
                 off = (int)env;
+            }
             if( var->type & UV_TYPE_PROC )
                 off = (int)currproc;
 
@@ -1277,7 +1276,7 @@ shell_interp_var(struct cli_env *env, char *buf, char *p, char **argv){
 }
 
 
-static int
+int
 shell_parse_line(struct cli_env *env, char *buf, char **argv){
 
     int argc = 0;
@@ -1436,6 +1435,7 @@ fshell(FILE *f, int interactivep){
     free(buf, BUFSIZE);
     free(env, sizeof(struct cli_env));
 }
+
 
 #if defined(USE_FILESYS)
 int
