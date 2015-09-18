@@ -24,7 +24,7 @@
 */
 
 
-extern FILE *kconsole_port;
+extern FILE *kconsole_port, *console_port;
 #ifdef N_LCD
 extern FILE *klcd_port;
 #endif
@@ -137,6 +137,23 @@ kprintffnc(void *a, char c){
     }
 }
 
+static int
+kcprintffnc(void *a, char c){
+
+    if(console_port){
+        fputc(c, console_port);
+    }
+}
+
+static int
+ktprintffnc(void *a, char c){
+
+    if(currproc && currproc->stderr){
+        fputc(c, currproc->stderr);
+    }
+}
+
+
 void
 kprintf(const char *fmt, ...){
     va_list ap;
@@ -145,6 +162,26 @@ kprintf(const char *fmt, ...){
     va_start(ap,fmt);
     vprintf(kprintffnc, 0, fmt, ap);
     red_off();
+}
+
+/* output to the console - no buffering, may block */
+void
+kcprintf(const char *fmt, ...){
+    va_list ap;
+
+    if( console_port ) fputs(RED, console_port);
+    va_start(ap,fmt);
+    vprintf(kcprintffnc, 0, fmt, ap);
+    if( console_port ) fputs(WHT, console_port);
+}
+
+/* output to the the current process' stderr */
+void
+ktprintf(const char *fmt, ...){
+    va_list ap;
+
+    va_start(ap,fmt);
+    vprintf(ktprintffnc, 0, fmt, ap);
 }
 
 void
