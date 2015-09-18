@@ -4,6 +4,12 @@
 #ifndef __misc_h__
 #define __misc_h__
 
+#ifdef __cplusplus
+# define EXTERN extern "C"
+#else
+# define EXTERN extern
+#endif
+
 #define __QUOTIFY(x)	#x
 #define QUOTIFY(x)	__QUOTIFY(x)
 
