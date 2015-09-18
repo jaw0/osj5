@@ -18,7 +18,7 @@
 #include <stm32.h>
 #include <nvic.h>
 
-#define VERBOSE
+// #define SPIVERBOSE
 
 
 #define CR1_CRCEN	0x2000
@@ -69,7 +69,7 @@ static char dma_idle_source = 0xFF;
 static char dma_idle_sink;
 
 
-#ifdef VERBOSE
+#ifdef SPIVERBOSE
 struct crumb {
     const char *event;
     int when;
@@ -298,7 +298,7 @@ static void
 _spi_dump_crumb(void){
     int i;
 
-#ifdef VERBOSE
+#ifdef SPIVERBOSE
     int st = (cur_crumb > NR_CRUMBS) ? cur_crumb - NR_CRUMBS : 0;
     int wh = crumbs[st].when;
 
@@ -329,7 +329,7 @@ _spi_cspins(const struct SPIConf *cf, int on){
             gpio_set( s & 0x7F );
         else
             gpio_clear( s & 0x7F );
-#ifdef VERBOSE
+#ifdef SPIVERBOSE
         // kprintf("pin %x %s\n", (s & 0x7f), (on==m)?"on":"off");
 #endif
     }
@@ -530,6 +530,8 @@ _msg_until(struct SPIInfo *ii){
     spi_msg *m = ii->msg;
     int count = 0;
 
+    //proc_trace_add("spi/until", m->dlen);
+
     while( m->dlen -- > 0 ){
         int c = m->response = _spi_rxtx1( ii->addr, 0xFF );
         int r = m->until(c);
@@ -539,14 +541,22 @@ _msg_until(struct SPIInfo *ii){
             return 0;	// got it. done.
         }
         if( r == -1 ) break;    // error
+#if 1
+        spl0();
 
-        if( (m->mode == SPIMO_UNTIL_SLOW) && (count++ > 10) ){
+        if( !(++count % 10) ) yield();
+
+#else
+        if( /* (m->mode == SPIMO_UNTIL_SLOW) && */ (count++ > 10) ){
             yield();
+            count = 0;
         }
 
         if( (m->mode == SPIMO_UNTIL) && (count++ > 100) ){
             yield();
+            count = 0;
         }
+#endif
     }
 
     // failed
@@ -617,6 +627,7 @@ _msg_do(struct SPIInfo *ii){
     int i;
 
     SPI_CRUMB("msg-do", m->mode, m->dlen);
+    proc_trace_add("spi/do", m->mode);
 
     m->response = 0;
     ii->state = SPI_STATE_BUSY;
@@ -764,7 +775,7 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
 
     cur_crumb = 0;
 
-#ifdef VERBOSE
+#ifdef SPIVERBOSE
     //kprintf("spi xfer2 starting, %d msgs\n", nmsg);
 #endif
 
@@ -806,12 +817,11 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
 
     SPI_CRUMB("done", ii->state, 0);
 
-#ifdef VERBOSE
+#ifdef SPIVERBOSE
     if( verbose || (ii->state != SPI_STATE_XFER_DONE) ){
         kprintf("spi xfer\n");
         _spi_dump_crumb();
     }
-    //kprintf("spi xfer2 done\n");
 #endif
 
     int r;

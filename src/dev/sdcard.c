@@ -398,7 +398,7 @@ sdcard_bread(FILE*f, char*d, int len, offset_t pos){
             if( m[1].response != 0 ) r = m[1].response;
             if( r == SPI_XFER_OK ) break;
 
-            kprintf("sd read error %qx, %d => %x, %x\n", pos, len, r, m[5].response);
+            kcprintf("sd read error %qx, %d => %x, %x\n", pos, len, r, m[5].response);
             //hexdump(m, sizeof(ii->m));
             usleep(10000);
             sdcard_clear( ii );
@@ -485,10 +485,6 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
             nummsg ++;
 
             r = spi_xfer(& ii->spicf, nummsg, m, 1000000);
-            if( r ){
-                kprintf("spi ret %d\n", r);
-
-            }
 
             // check responses
             int8_t i;
@@ -496,7 +492,7 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
                 //kprintf("m%dr %x; ", 4*i + 4, m[4*i+4].response);
                 if( (m[4*i+4].response & 0x1f) != 5 ){
                     r = SPI_XFER_ERROR;
-                    kprintf("sd bad-resp [%d/%d] => %x\n", i, 4*i+4, m[4*i+4].response);
+                    kcprintf("sd bad-resp [%d/%d] => %x\n", i, 4*i+4, m[4*i+4].response);
                 }
             }
 
@@ -510,7 +506,7 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
 
             if( r == SPI_XFER_OK ) break;
 
-            kprintf("sd write error %qx, %d => %d, %x\n", pos, nblk, r, m[nummsg-5].response);
+            kcprintf("sd write error %qx, %d => %d, %x\n", pos, nblk, r, m[nummsg-5].response);
             //hexdump(m, sizeof(ii->m));
             usleep(10000);
             sdcard_clear( ii );
