@@ -76,171 +76,11 @@ my @font;
 
 my($root, $start, $name, %devs);
 
-while( <> ){
-    chop;
-    s/#.*//;
-    next if /^\s*$/;
+# read + process config file
+process_file( $ARGV[0] );
 
-    my @f = split;
-    my $cmd = $f[0];
-
-    if( $cmd eq "option" ){
-	print CONFH "#define $f[1] $f[2]\n";
-    }
-
-    elsif( $cmd eq "feature" ){
-	print CONFH "#define USE_\U$f[1]\n";
-        feature( lc($f[1]), 'feature' );
-    }
-    elsif( $cmd eq 'files' ){
-        # config file
-        conf_files( $f[1], 4 );
-    }
-    elsif( $cmd eq 'srcdir' ){
-        push @appdirs, $f[1];
-    }
-    elsif( $cmd eq 'srcfile' ){
-        # app src code
-        push @appfiles, $f[1];
-    }
-    elsif( $cmd eq 'font' ){
-        # font fontname
-        shift @f;
-        push @font, @f;
-    }
-    elsif( $cmd eq "config" ){
-	($root) = /root on\s*([^\s]*)/;
-	print CONFH "#define MOUNT_ROOT \"$root\"\n" if $root;
-
-	($start) = /startup in\s*([^\s]*)/;
-	print CONFH "#define STARTUPFILE \"$start\"\n" if $start;
-
-        my($console) = /console on\s+([^\s]*)/;
-        print CONFH "#define CONSOLE_ON \"$console\"\n" if $console;
-    }
-
-    elsif( $cmd eq "flashdev" ){
-	$nflashdev ++;
-	my( $addr, $size, $blk, $flg, $type ) = (0,0,0,0);
-
-	($addr) = /@\s*([^\s]*)/     if /@/;
-	($size) = /size\s*([^\s]*)/  if /size/;
-	($blk)  = /block\s*([^\s]*)/ if /block/;
-	($flg)  = /flags\s*([^\s]*)/ if /flags/;
-	($type) = /type\s*([^\s]*)/  if /type/;
-
-
-	$flashdev .= "\t{ (void*)$addr, $size, $flg, $blk, \"$f[1]\", \"$type\" },\n";
-    }
-
-    elsif( $cmd eq "disk" ){
-	$ndisk ++;
-	my( $cont, $unit, $part, $flags, $type ) = (0,0,0,0,0);
-
-	($cont)   = /on\s*([^\s]*)/ if /on/;
-	($unit)   = /unit\s*([^\s]*)/ if /unit/;
-	($part)   = /partition\s*([^\s]*)/ if /partition/;
-	($flags)  = /flags\s*([^\s]*)/ if /flags/;
-	($type)   = /type\s*([^\s]*)/  if /type/;
-
-	$diskdev .= "\t{ \"$f[1]\", \"$type\", \"$cont\", $unit, $part, $flags },\n";
-    }
-
-    elsif( $cmd eq "filesys" ){
-
-	my $type = $f[1];
-
-	$nfsys ++;
-	print CONFC "extern int ${type}_init(struct MountEntry *);\n";
-	print CONFC "extern int ${type}_ops(int, struct MountEntry *, ...);\n";
-	print CONFC "extern FILE* ${type}_open(struct MountEntry *, const char*, const char*);\n";
-	$fsys .= "\t{ \"$type\", ${type}_init, ${type}_open, ${type}_ops },\n";
-
-        feature( $type, 'filesystem' );
-    }
-
-    elsif( $cmd eq "device" ){
-	my $name = $f[1];
-	my( $port, $addr, $irq, $flags, $baud, $init ) = (0,0,0,0,0,0);
-        my $type = '';
-        my $args = '';
-        my $unit;
-
-	my ($dev, $n) = $name =~ /(\S*\D+)(\d*)$/;
-
-	($port) = /port\s*([^\s]*)/   if /port/;
-	($baud) = /baud\s*([^\s]*)/   if /baud/;
-	($irq) = /irq\s*([^\s]*)/     if /irq/;
-	($flags) = /flags\s*([^\s]*)/ if /flags/;
-	($addr) = /addr\s*([^\s]*)/   if /addr/;
-	($init) = /init\s*([^\s]*)/   if /init/;
-	($type) = /type\s*([^\s]*)/   if /type/;
-	($unit) = /unit\s*([^\s]*)/   if /unit/;
-        ($args) = /args\s+([0-9a-fx, ]+)/i if /args/;
-
-        $type ||= $dev;
-        $unit = $n unless defined $unit;
-
-	print CONFH "#define USE_\U$type\E\n" unless $devs{$type};
-
-        $devs{ $type } = $unit if $unit > $devs{$type};
-	$devs{ $type } ++;
-        feature( $type, 'device' );
-
-	$init = $init || "${type}_init";
-
-	print CONFC "extern int $init(struct Device_Conf *);\n";
-
-        if( $n ne "" ){
-	    $devs .= "\t{ $unit, $port, $addr, $irq, $baud, $flags, { $args }, $init, ";
-	}else{
-	    $devs .= "\t{ 0, 0, 0, 0, 0, 0, { $args }, $init, ";
-	}
-	if( /nodev/ ){
-	    $devs .= "0 },\n";
-	}else{
-	    $devs .= "\"$name\" },\n";
-	}
-	$ndevs ++;
-
-    }
-
-    elsif( $cmd eq "ident" ){
-	$ident = $f[1];
-    }
-
-    elsif( $cmd eq 'arch' ){
-        $arch = $f[1];
-        print CONFH "#define PLATFORM_", uc($arch), "\n";
-        print CONFM "CONF_ARCH = $arch\n";
-
-        conf_files( "../src/machdep/$arch/common/etc/files", 2 );
-    }
-    elsif( $cmd eq 'variant' ){
-        $variant = $f[1];
-        print CONFH "#define PLATFORM_", uc($variant), "\n";
-        print CONFM "CONF_VARIANT = $variant\n";
-
-        conf_files( "../src/machdep/$arch/$variant/etc/files", 3 );
-    }
-    elsif( $cmd eq 'compile-prefix' ){
-        print CONFM "CONF_PREFIX = $f[1]\n";
-    }
-    elsif( $cmd eq 'compile-flags' ){
-        shift @f;
-        print CONFM "CONF_FLAGS = @f\n";
-    }
-
-    else{
-	print STDERR "unrecognized config: $_\n";
-	exit -1;
-    }
-}
-
-################################################################
 
 feature('kern', 'feature');
-
 
 for my $d (keys %devs){
     print CONFH "#define N_\U$d\E $devs{$d}\n";
@@ -374,7 +214,178 @@ close CONFD;
 close CONFC;
 close CONFH;
 
+exit;
 
+################################################################
+
+sub process_file {
+    my $file = shift;
+
+    open(my $fd, '<', $file) || die "cannot open '$file': $!\n";
+
+    while( <> ){
+        chop;
+        s/#.*//;
+        next if /^\s*$/;
+
+        my @f = split;
+        my $cmd = $f[0];
+
+        if( $cmd eq "option" ){
+            print CONFH "#define $f[1] $f[2]\n";
+        }
+        elsif( $cmd eq 'include' ){
+            process_file( $f[1] );
+        }
+        elsif( $cmd eq "feature" ){
+            print CONFH "#define USE_\U$f[1]\n";
+            feature( lc($f[1]), 'feature' );
+        }
+        elsif( $cmd eq 'files' ){
+            # config file
+            conf_files( $f[1], 4 );
+        }
+        elsif( $cmd eq 'srcdir' ){
+            push @appdirs, $f[1];
+        }
+        elsif( $cmd eq 'srcfile' ){
+            # app src code
+            push @appfiles, $f[1];
+        }
+        elsif( $cmd eq 'font' ){
+            # font fontname
+            shift @f;
+            push @font, @f;
+        }
+        elsif( $cmd eq "config" ){
+            ($root) = /root on\s*([^\s]*)/;
+            print CONFH "#define MOUNT_ROOT \"$root\"\n" if $root;
+
+            ($start) = /startup in\s*([^\s]*)/;
+            print CONFH "#define STARTUPFILE \"$start\"\n" if $start;
+
+            my($console) = /console on\s+([^\s]*)/;
+            print CONFH "#define CONSOLE_ON \"$console\"\n" if $console;
+        }
+
+        elsif( $cmd eq "flashdev" ){
+    	$nflashdev ++;
+    	my( $addr, $size, $blk, $flg, $type ) = (0,0,0,0);
+
+    	($addr) = /@\s*([^\s]*)/     if /@/;
+    	($size) = /size\s*([^\s]*)/  if /size/;
+    	($blk)  = /block\s*([^\s]*)/ if /block/;
+    	($flg)  = /flags\s*([^\s]*)/ if /flags/;
+    	($type) = /type\s*([^\s]*)/  if /type/;
+
+
+    	$flashdev .= "\t{ (void*)$addr, $size, $flg, $blk, \"$f[1]\", \"$type\" },\n";
+        }
+
+        elsif( $cmd eq "disk" ){
+    	$ndisk ++;
+    	my( $cont, $unit, $part, $flags, $type ) = (0,0,0,0,0);
+
+    	($cont)   = /on\s*([^\s]*)/ if /on/;
+    	($unit)   = /unit\s*([^\s]*)/ if /unit/;
+    	($part)   = /partition\s*([^\s]*)/ if /partition/;
+    	($flags)  = /flags\s*([^\s]*)/ if /flags/;
+    	($type)   = /type\s*([^\s]*)/  if /type/;
+
+    	$diskdev .= "\t{ \"$f[1]\", \"$type\", \"$cont\", $unit, $part, $flags },\n";
+        }
+
+        elsif( $cmd eq "filesys" ){
+
+    	my $type = $f[1];
+
+    	$nfsys ++;
+    	print CONFC "extern int ${type}_init(struct MountEntry *);\n";
+    	print CONFC "extern int ${type}_ops(int, struct MountEntry *, ...);\n";
+    	print CONFC "extern FILE* ${type}_open(struct MountEntry *, const char*, const char*);\n";
+    	$fsys .= "\t{ \"$type\", ${type}_init, ${type}_open, ${type}_ops },\n";
+
+            feature( $type, 'filesystem' );
+        }
+
+        elsif( $cmd eq "device" ){
+    	my $name = $f[1];
+    	my( $port, $addr, $irq, $flags, $baud, $init ) = (0,0,0,0,0,0);
+            my $type = '';
+            my $args = '';
+            my $unit;
+
+    	my ($dev, $n) = $name =~ /(\S*\D+)(\d*)$/;
+
+    	($port) = /port\s*([^\s]*)/   if /port/;
+    	($baud) = /baud\s*([^\s]*)/   if /baud/;
+    	($irq) = /irq\s*([^\s]*)/     if /irq/;
+    	($flags) = /flags\s*([^\s]*)/ if /flags/;
+    	($addr) = /addr\s*([^\s]*)/   if /addr/;
+    	($init) = /init\s*([^\s]*)/   if /init/;
+    	($type) = /type\s*([^\s]*)/   if /type/;
+    	($unit) = /unit\s*([^\s]*)/   if /unit/;
+            ($args) = /args\s+([0-9a-fx, ]+)/i if /args/;
+
+            $type ||= $dev;
+            $unit = $n unless defined $unit;
+
+    	print CONFH "#define USE_\U$type\E\n" unless $devs{$type};
+
+            $devs{ $type } = $unit if $unit > $devs{$type};
+    	$devs{ $type } ++;
+            feature( $type, 'device' );
+
+    	$init = $init || "${type}_init";
+
+    	print CONFC "extern int $init(struct Device_Conf *);\n";
+
+            if( $n ne "" ){
+    	    $devs .= "\t{ $unit, $port, $addr, $irq, $baud, $flags, { $args }, $init, ";
+    	}else{
+    	    $devs .= "\t{ 0, 0, 0, 0, 0, 0, { $args }, $init, ";
+    	}
+    	if( /nodev/ ){
+    	    $devs .= "0 },\n";
+    	}else{
+    	    $devs .= "\"$name\" },\n";
+    	}
+    	$ndevs ++;
+
+        }
+
+        elsif( $cmd eq "ident" ){
+    	$ident = $f[1];
+        }
+
+        elsif( $cmd eq 'arch' ){
+            $arch = $f[1];
+            print CONFH "#define PLATFORM_", uc($arch), "\n";
+            print CONFM "CONF_ARCH = $arch\n";
+
+            conf_files( "../src/machdep/$arch/common/etc/files", 2 );
+        }
+        elsif( $cmd eq 'variant' ){
+            $variant = $f[1];
+            print CONFH "#define PLATFORM_", uc($variant), "\n";
+            print CONFM "CONF_VARIANT = $variant\n";
+
+            conf_files( "../src/machdep/$arch/$variant/etc/files", 3 );
+        }
+        elsif( $cmd eq 'compile-prefix' ){
+            print CONFM "CONF_PREFIX = $f[1]\n";
+        }
+        elsif( $cmd eq 'compile-flags' ){
+            shift @f;
+            print CONFM "CONF_FLAGS = @f\n";
+        }
+
+        else{
+    	print STDERR "unrecognized config: $_\n";
+    	exit -1;
+        }
+    }
+}
 
 ################################################################
 
@@ -443,4 +454,3 @@ sub use_files {
         $_->{file};
     } values %file;
 }
-

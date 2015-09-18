@@ -17,9 +17,21 @@ struct Font {
     char  numcol;	// width in columns
     short startchar;
     short lastchar;
-    const unsigned char data[];
+    unsigned char data[];
 };
+// type=1 => fixed length encodingf, monospaced fonts
 
+// for type=2 variable length encoded proportional fonts
+// NB - cursor will advance by xoff+xpad+numcol
+struct FontGlyph {
+    char  reclen;	// glyph size not including this field (0 => empty glyph)
+    char  xoff     : 4;
+    char  xpad     : 4;
+    char  yoff     : 4;
+    char  bytescol : 4;
+    char  numcol;
+    unsigned char data[];
+};
 
 
 #endif /* __font_h__ */

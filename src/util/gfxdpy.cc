@@ -672,6 +672,84 @@ GFXdpy::triangle_filled(int x0, int y0, int x1, int y1, int x2, int y2, int colo
     }
 }
 
+// based on:
+//   https://en.wikipedia.org/wiki/Midpoint_circle_algorithm
+void
+GFXdpy::circle(int x0, int y0, int r, int color){
+    short x = r;
+    short y = 0;
+    short d2 = 1 - x;
+
+    while( y <= x ){
+
+        set_pixel( x + x0,  y + y0, color);
+        set_pixel( y + x0,  x + y0, color);
+        set_pixel(-x + x0,  y + y0, color);
+        set_pixel(-y + x0,  x + y0, color);
+        set_pixel(-x + x0, -y + y0, color);
+        set_pixel(-y + x0, -x + y0, color);
+        set_pixel( x + x0, -y + y0, color);
+        set_pixel( y + x0, -x + y0, color);
+
+        y++;
+
+        if( d2 <= 0 ){
+            d2 += 2 * y + 1;
+        }else{
+            x --;
+            d2 += 2 * (y - x) + 1;
+        }
+    }
+}
+
+void
+GFXdpy::circle_filled(int x0, int y0, int r, int color){
+    short x = r;
+    short y = 0;
+    short d2 = 1 - x;
+
+    while( y <= x ){
+        hline( -x + x0,  y + y0, x + x0,  y + y0, color );
+        hline( -x + x0, -y + y0, x + x0, -y + y0, color );
+        hline( -y + x0,  x + y0, y + x0,  x + y0, color );
+        hline( -y + x0, -x + y0, y + x0, -x + y0, color );
+
+        y++;
+
+        if( d2 <= 0 ){
+            d2 += 2 * y + 1;
+        }else{
+            x --;
+            d2 += 2 * (y - x) + 1;
+        }
+    }
+}
+
+void
+GFXdpy::bitblit(u_char *img, int x0, int y0, int w, int h, int color){
+    short i,j;
+    char b=0;
+
+    for(j=0; j<h; j++){
+        if( b ){
+            // skip padding
+            img ++;
+            b = 0;
+        }
+        for(i=0; i<w; i++){
+            int c = (*img & (1<<b)) ? color : 0;
+            set_pixel(x0+i, y0+j, c);
+            b ++;
+            if( b > 7 ){
+                img ++;
+                b = 0;
+            }
+        }
+    }
+}
+
+
+
 /****************************************************************/
 
 void

@@ -96,8 +96,10 @@ public:
     void rect_filled(int,int, int,int, int);
     void triangle(int,int, int,int, int,int, int, unsigned p=0xFFFFFFFF);
     void triangle_filled(int,int, int,int, int,int, int);
+    void circle(int,int,int,int);
+    void circle_filled(int,int,int,int);
+    void bitblit(u_char *, int, int, int, int, int);
 
-    // RSN: drawing: arc, circle, ellipse, ...
 };
 
 #endif /* __gfxdpy_h__ */
