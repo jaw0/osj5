@@ -92,6 +92,29 @@ console_init(struct Device_Conf *dev){
     return 0;
 }
 
+int
+set_console(const char *file){
+    FILE *f;
+
+    f = fopen(file, "w");
+    if( !f ){
+        kprintf("console: cannot attach %s\n", file);
+        return -1;
+    }
+
+    int plx = splhigh();
+    fclose( console_port );
+    fclose( kconsole_port );
+
+    console_port = f;
+    kconsole_port = dup(f);
+    kconsole_port->flags |= F_NONBLOCK;
+    splx(plx);
+
+    kprintf("console installed on %s\n", file);
+
+    return 0;
+}
 
 
 
