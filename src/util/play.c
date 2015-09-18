@@ -21,7 +21,7 @@ extern int  volume;
 void
 play(int vol, const char *tune){
     short freq=0, bpm=120, dur=4, pdur=4;
-    int8_t octave=4, poctave=4, sharp=0, ratio=8, pratio=8, barct=0, dots=0;
+    int8_t octave=4, poctave=4, sharp=0, ratio=8, pratio=8, barct=0, dots=0, voladj=0, vsign=0;
     const char *bar=0;
 
     // note: [A-GZ][+-#_~.<>][0-8]
@@ -97,6 +97,23 @@ play(int vol, const char *tune){
             }
             break;
 
+        case 'v': // volume adjust : log scale [+- 7]
+            voladj = 0;
+            vsign  = 0;
+            freq = -1;
+            if( tune[1] == '-' ){
+                vsign = 1;
+                tune ++;
+            }
+            while( tune[1] && isdigit(tune[1]) ){
+                voladj *= 10;
+                voladj += tune[1] - '0';
+                tune ++;
+            }
+            voladj = 1 << voladj;
+            if( vsign ) voladj = - voladj;
+            break;
+
         case 'm':
             tune++;
             switch(tolower(*tune)){
@@ -150,8 +167,8 @@ play(int vol, const char *tune){
             if( dots ){
                 tb = (tb * ((2<<dots) - 1)) >> dots;
             }
-            if( freq && vol )
-                beep(freq, vol, tb * ratio / db );
+            if( freq && (vol + voladj) )
+                beep(freq, vol + voladj, tb * ratio / db );
             else
                 usleep( tb * ratio / db );
 
