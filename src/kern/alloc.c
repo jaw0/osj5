@@ -84,7 +84,8 @@
 #if 0
 #define DEBUG
 #define ALLOC_TRACE
-#define xprintf	kprintf
+int alloc_trace = 0;
+#define xprintf	if(alloc_trace) ktprintf
 #endif
 
 #ifdef PLATFORM_X86
@@ -95,7 +96,6 @@ extern u_long k_paddr;
 #endif
 
 char *_heap_limit = 0;
-
 
 /*
  *      ALLOC_FIRST_FIT use a first-fit allocation algorithm, rather than
@@ -339,6 +339,12 @@ free(ptr, size)
     splx(plx);
 }
 
+void
+zfree(void *p, unsigned sz){
+    bzero(p, sz);
+    free(p, sz);
+
+}
 
 void *
 malloc(int size){ return alloc(size); }
