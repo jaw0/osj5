@@ -44,6 +44,63 @@
 #  define TIMESLICE	5
 #endif
 
+/****************************************************************/
+
+#ifdef PROCTRACE
+struct crumb {
+    const char *event;
+    int when;
+    const struct Proc *p;
+    int arg1;
+};
+#define NR_CRUMBS       128
+static struct crumb crumbs[NR_CRUMBS];
+static u_long cur_crumb = 0;
+static int    trace_enabled = 0;
+
+static inline void
+TRACE(const char *event, const struct Proc *p , u_long arg1) {
+    if( ! trace_enabled ) return;
+    struct crumb *crumb = &crumbs[cur_crumb % NR_CRUMBS];
+    crumb->event = event;
+    crumb->when  = get_hrtime();
+    crumb->p     = p;
+    crumb->arg1  = arg1;
+    cur_crumb++;
+}
+
+void
+proc_trace_log(void){
+    int st = (cur_crumb > NR_CRUMBS) ? cur_crumb - NR_CRUMBS : 0;
+    int wh = crumbs[st].when;
+    short i;
+
+    for(i=st; i<cur_crumb; i++){
+        int n  = i % NR_CRUMBS;
+        int dt = crumbs[n].when - wh;
+        const struct Proc *p = crumbs[n].p;
+
+        //syslog("[PTRACE] %d\t%s\t%x/%s %x\n", dt, crumbs[n].event, p, p?p->name:"*", crumbs[n].arg1);
+        printf("[PTRACE] %d\t%d\t%s\t%x/%s %x\n", dt, crumbs[n].when, crumbs[n].event, p, p?p->name:"*", crumbs[n].arg1);
+    }
+}
+
+void proc_trace_enable(void){  cur_crumb = 0; trace_enabled = 1; }
+void proc_trace_disable(void){ trace_enabled = 0; }
+
+void proc_trace_add(const char *event, u_long arg1){
+    TRACE(event, currproc, arg1);
+}
+
+#else
+#  define TRACE(a,b,c)
+void proc_trace_enable(void){}
+void proc_trace_disable(void){}
+void proc_trace_log(void){}
+void proc_trace_add(void){}
+#endif
+/****************************************************************/
+
 
 struct ReadyList {
     struct Proc *head;
@@ -320,13 +377,15 @@ proc_detach(proc_t pid){
 static int
 dispose_of_cadaver(proc_t pid){
     struct Proc *p;
-    int plx, i;
+    int plx, i, m;
 
     PROCOK(pid);
 
     if( ! (pid->state & PRS_DEAD) )
         /* attempt to dispose of the living */
         return -1;
+
+    m = (int) pid->mommy;
 
     sigunblock(pid);
 
@@ -364,16 +423,15 @@ dispose_of_cadaver(proc_t pid){
         pid->rprev->rnext = pid->rnext;
 
     splx(plx);
-    bzero(pid, sizeof(struct Proc));
 
-    if( pid->mommy )
+    if( m ){
         /* initial process was not alloc()ed */
 #ifdef PROC_SMALL
-        free(pid->stack_start, 0);
+        zfree(pid->stack_start, 0);
 #else
-        free(pid->stack_start, pid->alloc_size);
+        zfree(pid->stack_start, pid->alloc_size);
 #endif
-
+    }
     return 0;
 }
 
@@ -390,6 +448,7 @@ idleloop(void){
     while(1){
         currproc->state = PRS_BLOCKED;
         currproc->wmsg  = "idle";
+        TRACE("idle", currproc, 0);
         idle();
         yield();
     }
@@ -615,8 +674,17 @@ sigunblock(proc_t proc){
 
         if( proc->state == PRS_RUNNABLE ){
             readylist_add(proc);
-            if( proc->flags & PRF_REALTIME ) sched_yield();
+            if( proc->flags & PRF_REALTIME ){
+                TRACE("unbl/rt", proc, 0);
+                sched_yield();
+            }else{
+                TRACE("unbl/r", proc, 0);
+            }
+        }else{
+            TRACE("unbl/nr", proc, 0);
         }
+    }else{
+        TRACE("unbl/nb", proc, 0);
     }
 
     splx(plx);
@@ -720,10 +788,12 @@ await(int prio, int timo){
         return;
     }
 
-    if( !currproc->wmsg ) return;
-
     if( prio < 0 ) prio = currproc->prio;
     int oprio = currproc->prio;
+
+    int plx = splhigh();
+    if( !currproc->wmsg ) return;
+
     currproc->prio = prio;
 
     currproc->timeout = timo ? get_time() + timo : 0;
@@ -764,6 +834,8 @@ wakeup(void *wchan){
     int plx;
     int w, r=0;
 
+    TRACE("wake", 0, (int)wchan);
+
     w = _wait_hash( (int)wchan );
 
     plx = splhigh();
@@ -772,11 +844,15 @@ wakeup(void *wchan){
         if( p == n ) PANIC("waitlist loop!");
         if( p->wchan == wchan ){
             sigunblock(p);
-            r = 1;
+            r ++;
         }
     }
 
     splx(plx);
+
+    TRACE("woke", 0, plx);
+    extern int logger_state;
+    TRACE("woke", 0, logger_state);
 
     /* return bool - did we wake something? */
     return r;
@@ -802,6 +878,8 @@ readylist_add(proc_t proc){
         splx(plx);
         return;
     }
+
+    TRACE("rladd", proc, proc->prio);
 
     proc->rnext = 0;
 
@@ -881,6 +959,7 @@ readylist_next(void){
 void
 yield(void){
 
+    TRACE("yield", currproc, 0);
     if( !currproc )
         return;
     md_yield();
@@ -894,13 +973,16 @@ _yield_next_proc(void){
     //kprintf("ynp sp %x, psp %x, msp %x, control %x\n",
     //        get_sp(), get_psp(), get_msp(), get_control());
 
+    TRACE("ynp", currproc, currproc->state);
 #ifdef PROC_HIRES
     utime_t now = get_hrtime();
 #endif
 
     int plx = splhigh();
-    if( currproc && currproc->state == PRS_RUNNABLE )
+    if( currproc && currproc->state == PRS_RUNNABLE ){
+        TRACE("ynp/rl+", currproc, 0);
         readylist_add( (proc_t)currproc );
+    }
 
     splx(plx);
 
@@ -910,6 +992,9 @@ _yield_next_proc(void){
     if( ! nextproc ){
         PANIC("no nextproc!");
     }
+
+    if( currproc ){ TRACE("y/prev", currproc, 0); }
+    TRACE("y/next", nextproc, 0 );
 
 #ifndef PROC_SMALL
     /* stats */
@@ -941,6 +1026,7 @@ _yield_next_proc(void){
 #endif
     timeremain = nextproc->timeslice;
 
+    TRACE("/ynp", currproc, nextproc);
     return nextproc;
 }
 
