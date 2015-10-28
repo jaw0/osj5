@@ -71,21 +71,43 @@ rtc_init(void){
     rtc_pre_s = 0;
     rtc_pre_a = 128;
 
-#ifdef LSECLOCK
+// F4, L1 - same except for the RCC register
+#ifdef PLATFORM_STM32L1
+#  ifdef LSECLOCK
+    RCC->CSR |= 1<<8;			// enable LSE
+    while( (RCC->CSR & (1<<9)) == 0 ){} // wait for it
+    RCC->CSR |= 1<<16;			// src = lse
+    rtc_pre_s = 256;
+    const char *info = "LSE 32768Hz";
+#  else
+    // QQQ - are all chips 32kHz?
+    RCC->CSR  |= 1;			// enable LSI
+    while( (RCC->CSR & 2) == 0 ){}	// wait for it
+    RCC->CSR |= 2<<16;			// src = lsi
+    rtc_pre_s = 250;
+    const char *info = "LSI 32kHz";
+#  endif
+    RCC->CSR |= 1<<22;			// enable rtc
+
+#else
+#  ifdef LSECLOCK
     // QQQ - support other frequencies?
     RCC->BDCR |= 1;			// enable LSE
     while( (RCC->BDCR & 2) == 0 ) {}	// wait for it
     RCC->BDCR |= 1<<8;			// src = lse
     rtc_pre_s = 256;
     const char *info = "LSE 32768Hz";
-#else
+#  else
     // QQQ - are all chips 32kHz?
     RCC->CSR  |= 1;			// enable LSI
     while( (RCC->CSR & 2) == 0 ) {}	// wait for it
     RCC->BDCR |= 2<<8;			// src = lsi
     rtc_pre_s = 250;
     const char *info = "LSI 32kHz";
+#  endif
+    RCC->BDCR |= 1<<15;			// enable rtc
 #endif
+
 
 #ifdef RTC_SYNC_RTC_FROM_CLOCK
     // so we can tweak it more precisely
@@ -93,7 +115,6 @@ rtc_init(void){
     rtc_pre_s <<= 4;
 #endif
 
-    RCC->BDCR |= 1<<15;			// enable rtc
     rtc_unlock();
     init_enable();
 

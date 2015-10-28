@@ -48,6 +48,7 @@
 
 /* NB: stm32f1 + f4 are compat, but at different addrs */
 #include <stm32.h>
+#include <i2c_impl.h>
 
 #define CFFLAGS_ALTPINS	3	// 2 bits of flags - alt set of pins
 
@@ -129,74 +130,26 @@ i2c_init(struct Device_Conf *dev){
     bzero(i2cinfo+i, sizeof(struct I2CInfo));
     int altpins = dev->flags & CFFLAGS_ALTPINS;
 
-#if defined(PLATFORM_STM32F1)
-    switch(i){
-    case 0:
-        // CL=B6, DA=B7
-        i2cinfo[i].addr = addr = I2C1;
-        i2cinfo[i].irq  = IRQ_I2C1_EV;
-
-        RCC->APB2ENR |= 1;		// AFI
-        RCC->APB1ENR |= 0x200000;	// i2c1
-        gpio_init( GPIO_B6, GPIO_AF_OUTPUT_OD | GPIO_OUTPUT_10MHZ );
-        gpio_init( GPIO_B7, GPIO_AF_OUTPUT_OD | GPIO_OUTPUT_10MHZ );
-
-        break;
-    case 1:
-        // CL=B10, DA=B11
-        i2cinfo[i].addr = addr = I2C2;
-        i2cinfo[i].irq  = IRQ_I2C2_EV;
-
-        RCC->APB2ENR |= 1;		// AFI
-        RCC->APB1ENR |= 0x400000;	// i2c2
-        gpio_init( GPIO_B10, GPIO_AF_OUTPUT_OD | GPIO_OUTPUT_10MHZ );
-        gpio_init( GPIO_B11, GPIO_AF_OUTPUT_OD | GPIO_OUTPUT_10MHZ );
-
-        break;
-    default:
-        PANIC("invalid i2c device");
-    }
-#elif defined(PLATFORM_STM32F4)
-
-    int mode = GPIO_AF(4) | GPIO_OPEN_DRAIN | GPIO_SPEED_25MHZ ;
-#  ifdef I2C_PULLUPS
-    mode |= GPIO_PULL_UP;
-#  endif
+    i2c_pins_init( i, altpins );
 
     switch(i){
     case 0:
-        // CL=B6, DA=B7 or CL=B8, DA=B9
         i2cinfo[i].addr = addr = I2C1;
         i2cinfo[i].irq  = IRQ_I2C1_EV;
-        RCC->APB1ENR   |= 1<<21;
-        if( altpins ){
-            gpio_init( GPIO_B8, mode );
-            gpio_init( GPIO_B9, mode );
-        }else{
-            gpio_init( GPIO_B6, mode );
-            gpio_init( GPIO_B7, mode );
-        }
         break;
     case 1:
-        // CL=B10, DA=B11
         i2cinfo[i].addr = addr = I2C2;
         i2cinfo[i].irq  = IRQ_I2C2_EV;
-        RCC->APB1ENR   |= 1<<22;
-        gpio_init( GPIO_B10, mode );
-        gpio_init( GPIO_B11, mode );
         break;
+#ifdef I2C3
     case 2:
-        // CL=A8, DA=C9
         i2cinfo[i].addr = addr = I2C3;
         i2cinfo[i].irq  = IRQ_I2C3_EV;
-        RCC->APB1ENR   |= 1<<23;
-        gpio_init( GPIO_A8, mode );
-        gpio_init( GPIO_C9, mode );
         break;
+#endif
     default:
         PANIC("invalid i2c device");
     }
-#endif
     int speed = dev->baud;
     if( !speed ) speed = 100000;
     int fastmode = 0;

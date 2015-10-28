@@ -26,14 +26,17 @@ typedef TIM_TypeDef TIM_T;
 static inline TIM_T *
 _timer_addr(int tim){
     switch(tim >> 4){
+#ifdef TIM1
+    /* Timer 1,8 not available on L1 */
     case 1:	return (TIM_T*)TIM1;
+    case 8:	return (TIM_T*)TIM8;
+#endif
     case 2:	return (TIM_T*)TIM2;
     case 3:	return (TIM_T*)TIM3;
     case 4:	return (TIM_T*)TIM4;
     case 5:	return (TIM_T*)TIM5;
     case 6:	return (TIM_T*)TIM6;
     case 7:	return (TIM_T*)TIM7;
-    case 8:	return (TIM_T*)TIM8;
         // ...
     default:
         PANIC("invalid basic timer");
@@ -68,25 +71,27 @@ pwm_init(int timer, int freq, int maxval){
 
     switch( t ){
     case 1:
+#ifdef TIM1
         // timer1
-#ifdef PLATFORM_STM32F1
+#  ifdef PLATFORM_STM32F1
         RCC->APB2ENR |= 1 << 11;
-#else
+#  else
         RCC->APB2ENR |= 1;
-#endif
+#  endif
         clock = APB2CLOCK;
         tim->BDTR  |= 0x8000;	// MOE
         break;
     case 8:
         // timer 8
-#ifdef PLATFORM_STM32F1
+#  ifdef PLATFORM_STM32F1
         RCC->APB2ENR |= 1 << 13;
-#else
+#  else
         RCC->APB2ENR |= 2;
-#endif
+#  endif
         clock = APB2CLOCK;
         tim->BDTR  |= 0x8000;	// MOE
         break;
+#endif /* TIM1 */
     default:
         RCC->APB1ENR |= 1 << (t - 2);
         clock = APB1CLOCK;

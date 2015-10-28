@@ -94,7 +94,7 @@ _spi_drop_crumb(const char *event, u_long arg0, u_long arg1) {
 #define SPI_CRUMB(event, arg0, arg1)
 #endif
 
-#if defined(PLATFORM_STM32F1)
+#if defined(PLATFORM_STM32F1) || defined(PLATFORM_STM32L1)
 typedef DMA_Channel_TypeDef DMAC_T;
 #elif defined(PLATFORM_STM32F4)
 typedef DMA_Stream_TypeDef DMAC_T;
@@ -105,10 +105,10 @@ struct SPIInfo {
     const char		*name;
     SPI_TypeDef 	*addr;
     DMAC_T 		*rxdma, *txdma;
-#ifdef PLATFORM_STM32F4
+
     DMA_TypeDef		*dma;
     u_char		dmachan;
-#endif
+
     u_char		dmanrx, dmantx;
     u_char 	  	irq;
     int			clock;
@@ -147,6 +147,7 @@ spi_init(struct Device_Conf *dev){
         // CLK = A5, MISO = A6, MOSI = A7
         ii->addr      = addr = SPI1;
         ii->irq       = IRQ_SPI1;
+        ii->dma       = DMA;
         ii->rxdma     = DMA_Channel2;
         ii->txdma     = DMA_Channel3;
         ii->clock     = APB2CLOCK;
@@ -165,6 +166,7 @@ spi_init(struct Device_Conf *dev){
         // CLK = B13, MISO = B14, MOSI = B15
         ii->addr      = addr = SPI2;
         ii->irq       = IRQ_SPI2;
+        ii->dma       = DMA;
         ii->rxdma     = DMA_Channel4;
         ii->txdma     = DMA_Channel5;
         ii->clock     = APB1CLOCK;
@@ -243,6 +245,69 @@ spi_init(struct Device_Conf *dev){
         ii->dmachan   = 0;
         RCC->APB1ENR |= 1<<15;	// spi
         RCC->AHB1ENR |= 1<<21;	// DMA1
+        gpio_init( GPIO_B3, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
+        gpio_init( GPIO_B4, GPIO_AF(6) | GPIO_PULL_UP );
+        gpio_init( GPIO_B5, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
+        break;
+    default:
+        // ...
+        PANIC("invalid spi device");
+    }
+#elif defined(PLATFORM_STM32L1)
+    switch(unit){
+    case 0:
+        // on ahb2, dma1 chan2+3
+        // CLK = A5, MISO = A6, MOSI = A7
+        ii->addr      = addr = SPI1;
+        ii->irq       = IRQ_SPI1;
+        ii->rxdma     = DMA1_Channel2;
+        ii->txdma     = DMA1_Channel3;
+        ii->dma       = DMA1;
+        ii->clock     = APB2CLOCK;
+        dmairqrx      = IRQ_DMA1_CHANNEL2;
+        dmairqtx      = IRQ_DMA1_CHANNEL3;
+        ii->dmanrx    = 2;
+        ii->dmantx    = 3;
+        RCC->APB2ENR |= 1<<12;	// spi
+        RCC->AHBENR  |= 1<<24;	// DMA1
+        gpio_init( GPIO_A5, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
+        gpio_init( GPIO_A6, GPIO_AF(5) | GPIO_PULL_UP );
+        gpio_init( GPIO_A7, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
+        break;
+    case 1:
+        // on ahb1, dma1 chan 3+4
+        // CLK = B13, MISO = B14, MOSI = B15
+        ii->addr      = addr = SPI2;
+        ii->irq       = IRQ_SPI2;
+        ii->rxdma     = DMA1_Channel4;
+        ii->txdma     = DMA1_Channel5;
+        ii->dma       = DMA1;
+        ii->clock     = APB1CLOCK;
+        dmairqrx      = IRQ_DMA1_CHANNEL4;
+        dmairqtx      = IRQ_DMA1_CHANNEL5;
+        ii->dmanrx    = 4;
+        ii->dmantx    = 5;
+        RCC->APB1ENR |= 1<<14;	// spi
+        RCC->AHBENR  |= 1<<24;	// DMA1
+        gpio_init( GPIO_B13, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
+        gpio_init( GPIO_B14, GPIO_AF(5) | GPIO_PULL_UP );
+        gpio_init( GPIO_B15, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
+        break;
+    case 2:
+        // on ahb1, dma2 chan 1+2
+        // CLK = B3, MISO = B4, MOSI = B5
+        ii->addr      = addr = SPI3;
+        ii->irq       = IRQ_SPI3;
+        ii->rxdma     = DMA2_Channel1;
+        ii->txdma     = DMA2_Channel2;
+        ii->dma       = DMA2;
+        ii->clock     = APB1CLOCK;
+        dmairqrx      = IRQ_DMA2_CHANNEL1;
+        dmairqtx      = IRQ_DMA2_CHANNEL2;
+        ii->dmanrx    = 1;
+        ii->dmantx    = 2;
+        RCC->APB1ENR |= 1<<15;	// spi
+        RCC->AHBENR  |= 1<<25;	// DMA2
         gpio_init( GPIO_B3, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         gpio_init( GPIO_B4, GPIO_AF(6) | GPIO_PULL_UP );
         gpio_init( GPIO_B5, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
@@ -358,7 +423,7 @@ _spi_rxtx1(SPI_TypeDef *dev, int val){
 
 /****************************************************************/
 
-#if defined(PLATFORM_STM32F1)
+#if defined(PLATFORM_STM32F1) || defined(PLATFORM_STM32L1)
 
 static inline void
 _disable_irq_dma(struct SPIInfo *ii){
@@ -668,15 +733,15 @@ _irq_spidma_handler(int unit, int dman, DMAC_T *dmac){
     SPI_TypeDef *dev   = ii->addr;
     spi_msg *m = ii->msg;
 
-#if defined(PLATFORM_STM32F1)
+#if defined(PLATFORM_STM32F1) || defined(PLATFORM_STM32L1)
     // get status, clear irq
     int pos = 4 * (dman - 1);
-    int isr = (DMA->ISR >> pos) & 0xF;
+    int isr = (ii->dma->ISR >> pos) & 0xF;
 
     SPI_CRUMB("dma-irq", dman, isr);
 
     // clear irq
-    DMA->IFCR |= (0xF<<pos);
+    ii->dma->IFCR |= (0xF<<pos);
 
     if( isr & 8 ){
         // error - done
@@ -852,6 +917,13 @@ void DMA1_Stream1_IRQHandler(void){ _irq_spidma_handler(0, 2, DMA_Channel2); }
 void DMA1_Stream2_IRQHandler(void){ _irq_spidma_handler(0, 3, DMA_Channel3); }
 void DMA1_Stream3_IRQHandler(void){ _irq_spidma_handler(1, 4, DMA_Channel4); }
 void DMA1_Stream4_IRQHandler(void){ _irq_spidma_handler(1, 5, DMA_Channel5); }
+#elif defined(PLATFORM_STM32L1)
+void DMA1_Stream1_IRQHandler(void){ _irq_spidma_handler(0, 2, DMA1_Channel2); }
+void DMA1_Stream2_IRQHandler(void){ _irq_spidma_handler(0, 3, DMA1_Channel3); }
+void DMA1_Stream3_IRQHandler(void){ _irq_spidma_handler(1, 4, DMA1_Channel4); }
+void DMA1_Stream4_IRQHandler(void){ _irq_spidma_handler(1, 5, DMA1_Channel5); }
+void DMA2_Stream1_IRQHandler(void){ _irq_spidma_handler(2, 1, DMA2_Channel1); }
+void DMA2_Stream2_IRQHandler(void){ _irq_spidma_handler(2, 2, DMA2_Channel2); }
 #elif defined(PLATFORM_STM32F4)
 void DMA1_Stream2_IRQHandler(void){ _irq_spidma_handler(2, 2, DMA1_Stream2); }
 void DMA1_Stream3_IRQHandler(void){ _irq_spidma_handler(1, 3, DMA1_Stream3); }

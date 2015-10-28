@@ -18,6 +18,7 @@
 #include <nvic.h>
 #include <gpio.h>
 #include <stm32.h>
+#include <serial_impl.h>
 
 #define SR_TXE	0x80
 #define SR_RXNE 0x20
@@ -87,95 +88,66 @@ serial_init(struct Device_Conf *dev){
     com[i].file.d  = (void*)&com[i];
 
     // enable gpio clock, usart clock, configure pins
-#if defined(PLATFORM_STM32F1)
+    serial_pins_init( i, altpins );
+
     switch(i){
     case 0:
         addr = USART1;
-        RCC->APB2ENR |= 0x4005;		// usart1+gpioA+afi
-        GPIOA->CRH   |= 0x4b0;
         com[i].baudclock = apb2_clock_freq();
         irq           = (int) IRQ_USART1;
         break;
     case 1:
         addr = USART2;
-        RCC->APB2ENR |= 0x5;
-        RCC->APB1ENR |= 0x20000;
-        GPIOA->CRL    = 0x4b00;
-        com[i].baudclock = abp1_clock_freq();
+        com[i].baudclock = apb1_clock_freq();
         irq           = (int) IRQ_USART2;
         break;
     case 2:
         addr = USART3;
-        RCC->APB2ENR |= 0x9;
-        RCC->APB1ENR |= 0x40000;
-        GPIOB->CRH    = 0x4b00;
         com[i].baudclock = apb1_clock_freq();
         irq           = (int) IRQ_USART3;
         break;
-    }
-#elif defined(PLATFORM_STM32F4)
-    switch(i){
-    case 0:
-        addr = USART1;
-        irq  = (int) IRQ_USART1;
-        if( altpins ){
-            gpio_init( GPIO_B6, GPIO_AF(7) | GPIO_PUSH_PULL );
-            gpio_init( GPIO_B7, GPIO_AF(7) | GPIO_PUSH_PULL );
-        }else{
-            gpio_init( GPIO_A9,  GPIO_AF(7) | GPIO_PUSH_PULL );
-            gpio_init( GPIO_A10, GPIO_AF(7) | GPIO_PUSH_PULL );
-        }
-        RCC->APB2ENR |= 1<<4;
-        com[i].baudclock = apb2_clock_freq();
-        break;
-    case 1:
-        addr = USART2;
-        irq  = (int) IRQ_USART2;
-        if( altpins ){
-            gpio_init( GPIO_D5, GPIO_AF(7) | GPIO_PUSH_PULL );
-            gpio_init( GPIO_D6, GPIO_AF(7) | GPIO_PUSH_PULL );
-        }else{
-            gpio_init( GPIO_A2, GPIO_AF(7) | GPIO_PUSH_PULL );
-            gpio_init( GPIO_A3, GPIO_AF(7) | GPIO_PUSH_PULL );
-        }
-        RCC->APB1ENR |= 1<<17;
-        com[i].baudclock = apb1_clock_freq();
-        break;
-    case 2:
-        addr = USART3;
-        irq  = (int) IRQ_USART3;
-
-        if( altpins ){
-            gpio_init( GPIO_C10, GPIO_AF(7) | GPIO_PUSH_PULL );
-            gpio_init( GPIO_C11, GPIO_AF(7) | GPIO_PUSH_PULL );
-        }else{
-            gpio_init( GPIO_B10, GPIO_AF(7) | GPIO_PUSH_PULL );
-            gpio_init( GPIO_B11, GPIO_AF(7) | GPIO_PUSH_PULL );
-        }
-        // alt: d8, d9
-        RCC->APB1ENR |= 1<<18;
-        com[i].baudclock = apb1_clock_freq();
-        break;
+#ifdef UART4
     case 3:
         addr = UART4;
         irq  = (int) IRQ_UART4;
-        if( altpins ){
-            gpio_init( GPIO_C10, GPIO_AF(8) | GPIO_PUSH_PULL );
-            gpio_init( GPIO_C11, GPIO_AF(8) | GPIO_PUSH_PULL );
-        }else{
-            gpio_init( GPIO_A0, GPIO_AF(8) | GPIO_PUSH_PULL );
-            gpio_init( GPIO_A1, GPIO_AF(8) | GPIO_PUSH_PULL );
-        }
-        RCC->APB1ENR |= 1<<19;
         com[i].baudclock = apb1_clock_freq();
         break;
-
-        // case 4:
-        // c12, d2
-        // case 5:
-        // c6,c7; g14, g9
-    }
 #endif
+#ifdef UART5
+    case 4:
+        addr = UART5;
+        irq  = (int) IRQ_UART5;
+        com[i].baudclock = apb1_clock_freq();
+        break;
+#endif
+#ifdef USART6
+    case 5:
+        addr = USART6;
+        irq  = (int) IRQ_USART6;
+        com[i].baudclock = apb2_clock_freq();
+        break;
+#endif
+#ifdef UART7
+    case 6:
+        addr = UART7;
+        irq  = (int) IRQ_UART7;
+        com[i].baudclock = apb1_clock_freq();
+        break;
+#endif
+#ifdef UART8
+    case 7:
+        addr = UART8;
+        irq  = (int) IRQ_UART8;
+        com[i].baudclock = apb1_clock_freq();
+        break;
+#endif
+
+    default:
+        PANIC("invalid serial");
+        break;
+
+    }
+
     com[i].addr   = addr;
 
     if( dev->baud )
@@ -364,4 +336,23 @@ void
 USART3_IRQHandler(void){
     serial_irq(2);
 }
-
+void
+UART4_IRQHandler(void){
+    serial_irq(3);
+}
+void
+UART5_IRQHandler(void){
+    serial_irq(4);
+}
+void
+USART6_IRQHandler(void){
+    serial_irq(5);
+}
+void
+UART7_IRQHandler(void){
+    serial_irq(6);
+}
+void
+UART8_IRQHandler(void){
+    serial_irq(7);
+}

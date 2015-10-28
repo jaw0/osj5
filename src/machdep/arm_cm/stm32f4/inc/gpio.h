@@ -7,8 +7,8 @@
 */
 
 
-#ifndef __gpio_h__
-#define __gpio_h__
+#ifndef __stm32f4_gpio_h__
+#define __stm32f4_gpio_h__
 
 #include <stm32.h>
 
@@ -98,38 +98,91 @@
 #define GPIO_E15        0x4f
 
 
-#if defined(PLATFORM_STM32F1)
-#  define GPIO_INPUT_ANALOG       (0x0 << 2)
-#  define GPIO_INPUT_FLOATING     (0x1 << 2)
-#  define GPIO_INPUT_PU_PD        (0x2 << 2)
-#  define GPIO_OUTPUT_PP          (0x0 << 2)
-#  define GPIO_OUTPUT_OD          (0x1 << 2)
-#  define GPIO_AF_OUTPUT_PP       (0x2 << 2)
-#  define GPIO_AF_OUTPUT_OD       (0x3 << 2)
-#  define GPIO_INPUT              0x0
-#  define GPIO_OUTPUT_10MHZ       0x1
-#  define GPIO_OUTPUT_2MHZ        0x2
-#  define GPIO_OUTPUT_50MHZ       0x3
+#define GPIO_F0         0x50
+#define GPIO_F1         0x51
+#define GPIO_F2         0x52
+#define GPIO_F3         0x53
+#define GPIO_F4         0x54
+#define GPIO_F5         0x55
+#define GPIO_F6         0x56
+#define GPIO_F7         0x57
+#define GPIO_F8         0x58
+#define GPIO_F9         0x59
+#define GPIO_F10        0x5a
+#define GPIO_F11        0x5b
+#define GPIO_F12        0x5c
+#define GPIO_F13        0x5d
+#define GPIO_F14        0x5e
+#define GPIO_F15        0x5f
 
-#elif defined(PLATFORM_STM32F4)
+#define GPIO_G0         0x60
+#define GPIO_G1         0x61
+#define GPIO_G2         0x62
+#define GPIO_G3         0x63
+#define GPIO_G4         0x64
+#define GPIO_G5         0x65
+#define GPIO_G6         0x66
+#define GPIO_G7         0x67
+#define GPIO_G8         0x68
+#define GPIO_G9         0x69
+#define GPIO_G10        0x6a
+#define GPIO_G11        0x6b
+#define GPIO_G12        0x6c
+#define GPIO_G13        0x6d
+#define GPIO_G14        0x6e
+#define GPIO_G15        0x6f
+
+#define GPIO_H0         0x70
+#define GPIO_H1         0x71
+#define GPIO_H2         0x72
+#define GPIO_H3         0x73
+#define GPIO_H4         0x74
+#define GPIO_H5         0x75
+#define GPIO_H6         0x76
+#define GPIO_H7         0x77
+#define GPIO_H8         0x78
+#define GPIO_H9         0x79
+#define GPIO_H10        0x7a
+#define GPIO_H11        0x7b
+#define GPIO_H12        0x7c
+#define GPIO_H13        0x7d
+#define GPIO_H14        0x7e
+#define GPIO_H15        0x7f
+
+#define GPIO_I0         0x80
+#define GPIO_I1         0x81
+#define GPIO_I2         0x82
+#define GPIO_I3         0x83
+#define GPIO_I4         0x84
+#define GPIO_I5         0x85
+#define GPIO_I6         0x86
+#define GPIO_I7         0x87
+#define GPIO_I8         0x88
+#define GPIO_I9         0x89
+#define GPIO_I10        0x8a
+#define GPIO_I11        0x8b
+#define GPIO_I12        0x8c
+#define GPIO_I13        0x8d
+#define GPIO_I14        0x8e
+#define GPIO_I15        0x8f
+
+
 //  (4:af) (1:x) (2:pull up/down) (2:ospeed) (1:push-pull,open-drain) (2:mode)
-#  define GPIO_INPUT		0
-#  define GPIO_OUTPUT		1
-#  define GPIO_AF(n)		(2 | ((n)<<8))
-#  define GPIO_ANALOG		3
+#define GPIO_INPUT		0
+#define GPIO_OUTPUT		1
+#define GPIO_AF(n)		(2 | ((n)<<8))
+#define GPIO_ANALOG		3
 
-#  define GPIO_PUSH_PULL	0
-#  define GPIO_OPEN_DRAIN	(1<<2)
+#define GPIO_PUSH_PULL	0
+#define GPIO_OPEN_DRAIN	(1<<2)
 
-#  define GPIO_SPEED_2MHZ	0
-#  define GPIO_SPEED_25MHZ	(1<<3)
-#  define GPIO_SPEED_50MHZ	(2<<3)
-#  define GPIO_SPEED_100MHZ	(3<<3)
+#define GPIO_SPEED_2MHZ		0
+#define GPIO_SPEED_25MHZ	(1<<3)
+#define GPIO_SPEED_50MHZ	(2<<3)
+#define GPIO_SPEED_100MHZ	(3<<3)
 
-#  define GPIO_PULL_UP		(1<<5)
-#  define GPIO_PULL_DN		(2<<5)
-
-#endif
+#define GPIO_PULL_UP		(1<<5)
+#define GPIO_PULL_DN		(2<<5)
 
 
 extern void gpio_init(int, int);
@@ -143,6 +196,12 @@ _gpio_addr(int pin){
     case 2:	return GPIOC;
     case 3:	return GPIOD;
     case 4:	return GPIOE;
+    case 5:	return GPIOF;
+    case 6:	return GPIOG;
+    case 7:	return GPIOH;
+#ifdef GPIOI
+    case 8:	return GPIOI;
+#endif
     default:
         return 0;
     }
@@ -164,4 +223,4 @@ gpio_get(int pin){
 }
 
 
-#endif /* __gpio_h__ */
+#endif /* __stm32f4_gpio_h__ */

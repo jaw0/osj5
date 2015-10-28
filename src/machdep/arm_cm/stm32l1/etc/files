@@ -1,12 +1,15 @@
 
 kern:   machdep/arm_cm/stm32/src/startup.S
 kern:   machdep/arm_cm/stm32/src/stm32_init.c
-kern:   machdep/arm_cm/stm32f1/src/stm32f1_init.c
+kern:   machdep/arm_cm/stm32l1/src/stm32l1_init.c
 
-gpio:   machdep/arm_cm/stm32f1/src/gpio.c
 pwm:    machdep/arm_cm/stm32/src/pwm.c
 serial: machdep/arm_cm/stm32/src/serial.c
 i2c:    machdep/arm_cm/stm32/src/i2c.c
 spi:    machdep/arm_cm/stm32/src/spi.c
-adc:    machdep/arm_cm/stm32f1/src/adc.c
+
+adc:    machdep/arm_cm/stm32l1/src/adc.c
+
+gpio:   machdep/arm_cm/stm32f4/src/gpio.c
+rtc:    machdep/arm_cm/stm32f4/src/rtc.c
 

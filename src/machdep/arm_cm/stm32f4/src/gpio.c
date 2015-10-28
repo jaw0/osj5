@@ -25,20 +25,23 @@ gpio_init(int pin, int mode){
     pin &= 0xF;
     int pos = (pin & 0x7) << 2;
 
-#if defined(PLATFORM_STM32F1)
 
-    RCC->APB2ENR |= 1 << (io + 2);
-
-    if( pin >= 8 ){
-        addr->CRH &= ~(0xF << pos);
-        addr->CRH |= mode << pos;
-    }else{
-        addr->CRL &= ~(0xF << pos);
-        addr->CRL |= mode << pos;
-    }
-#elif defined(PLATFORM_STM32F4)
-
+#if defined(PLATFORM_STM32F4)
     RCC->AHB1ENR |= 1 << io;
+#elif defined(PLATFORM_STM32L1)
+
+    // F,G,H are mixed-up on the L1
+    switch( io ){
+    case 5:	RCC->AHBENR  |= 1 << 6;	break;
+    case 6:	RCC->AHBENR  |= 1 << 7;	break;
+    case 7:	RCC->AHBENR  |= 1 << 5;	break;
+    default:
+        RCC->AHBENR  |= 1 << io;
+        break;
+    }
+#else
+#  error "unknown platform"
+#endif
 
     addr->MODER   &= ~( 3 << (pin*2) );
     addr->PUPDR   &= ~( 3 << (pin*2) );
@@ -58,10 +61,6 @@ gpio_init(int pin, int mode){
         addr->AFRL &= ~(0xF << pos);
         addr->AFRL |= ((mode>>8) & 0xF) << pos;
     }
-
-#else
-#  error "cannot init gpio on this platform"
-#endif
 
     addr->BSRR = 0x10000 << pin;	// off
     splx(plx);
