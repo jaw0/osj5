@@ -253,7 +253,7 @@ serial_getchar(FILE *f){
             /* wait until something is available */
             do {
                 i = addr->SR;
-            }while( !(i & SR_TXE) );
+            }while( !(i & SR_RXNE) );
             ch = addr->DR;
             splx(plx);
             return ch;
