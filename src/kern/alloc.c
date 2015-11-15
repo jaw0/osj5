@@ -144,6 +144,8 @@ extern char _end[];
 #endif
 
 static char *top = 0;
+static int total_alloc = 0;
+static int curr_alloc  = 0;
 
 
 void *
@@ -261,6 +263,9 @@ alloc(size)
             currproc->memused += size + OVRHD;
 #endif
 
+        total_alloc += size + OVRHD;
+        curr_alloc  += size + OVRHD;
+
         splx(plx);
         return(help + OVRHD);
     }
@@ -281,6 +286,8 @@ found:
     if( currproc )
         currproc->memused += *(unsigned *)help + OVRHD;
 #endif
+    total_alloc += *(unsigned *)help + OVRHD;
+    curr_alloc  += *(unsigned *)help + OVRHD;
 
     /* re-size if too big */
     bestsize = *(unsigned *)help;
@@ -333,6 +340,8 @@ free(ptr, size)
     if( currproc )
         currproc->memused -= f->size + OVRHD;
 #endif
+    curr_alloc -= f->size + OVRHD;
+
     /* put into freelist */
     f->next = freelist;
     freelist = f;
@@ -343,7 +352,6 @@ void
 zfree(void *p, unsigned sz){
     bzero(p, sz);
     free(p, sz);
-
 }
 
 void *
@@ -351,3 +359,10 @@ malloc(int size){ return alloc(size); }
 
 void *
 calloc(int size, int len){ return alloc(size * len); }
+
+void
+alloc_stats(void){
+    printf("alloc top %x\n", top);
+    printf("tot alloc %d\n", total_alloc);
+    printf("cur alloc %d\n", curr_alloc);
+}

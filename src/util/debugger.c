@@ -256,4 +256,8 @@ DEFUN(dfile, "dump FILE*")
 }
 #endif
 
-
+DEFUN(memstat, "memory stats")
+{
+    alloc_stats();
+    return 0;
+}
