@@ -40,7 +40,7 @@ void
 tick_init(void){
 
     // systick @ PROC_TIME usec
-    int counter = (SYSCLOCK / 1000000) * PROC_TIME / 8;
+    int counter = (sys_clock_freq() / 1000000) * PROC_TIME / 8;
     SysTick->LOAD = counter;
     SysTick->CTRL = 3;
 

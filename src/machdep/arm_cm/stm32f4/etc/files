@@ -2,6 +2,7 @@
 kern:   machdep/arm_cm/stm32/src/startup.S
 kern:   machdep/arm_cm/stm32/src/stm32_init.c
 kern:   machdep/arm_cm/stm32f4/src/stm32f4_init.c
+kern:   machdep/arm_cm/stm32f4/src/stm32f4_asm.S
 
 gpio:   machdep/arm_cm/stm32f4/src/gpio.c
 pwm:    machdep/arm_cm/stm32/src/pwm.c

@@ -2,7 +2,7 @@
   Copyright (c) 2013
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 2013-Mar-24 21:07 (EDT)
-  Function: stm32 spi using dma + sd card
+  Function: stm32 spi using dma
 
 */
 
@@ -270,9 +270,9 @@ spi_init(struct Device_Conf *dev){
         ii->dmantx    = 3;
         RCC->APB2ENR |= 1<<12;	// spi
         RCC->AHBENR  |= 1<<24;	// DMA1
-        gpio_init( GPIO_A5, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
+        gpio_init( GPIO_A5, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
         gpio_init( GPIO_A6, GPIO_AF(5) | GPIO_PULL_UP );
-        gpio_init( GPIO_A7, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
+        gpio_init( GPIO_A7, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
         break;
     case 1:
         // on ahb1, dma1 chan 3+4
@@ -289,9 +289,9 @@ spi_init(struct Device_Conf *dev){
         ii->dmantx    = 5;
         RCC->APB1ENR |= 1<<14;	// spi
         RCC->AHBENR  |= 1<<24;	// DMA1
-        gpio_init( GPIO_B13, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
+        gpio_init( GPIO_B13, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
         gpio_init( GPIO_B14, GPIO_AF(5) | GPIO_PULL_UP );
-        gpio_init( GPIO_B15, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
+        gpio_init( GPIO_B15, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
         break;
     case 2:
         // on ahb1, dma2 chan 1+2
@@ -308,9 +308,9 @@ spi_init(struct Device_Conf *dev){
         ii->dmantx    = 2;
         RCC->APB1ENR |= 1<<15;	// spi
         RCC->AHBENR  |= 1<<25;	// DMA2
-        gpio_init( GPIO_B3, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
+        gpio_init( GPIO_B3, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
         gpio_init( GPIO_B4, GPIO_AF(6) | GPIO_PULL_UP );
-        gpio_init( GPIO_B5, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
+        gpio_init( GPIO_B5, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
         break;
     default:
         // ...

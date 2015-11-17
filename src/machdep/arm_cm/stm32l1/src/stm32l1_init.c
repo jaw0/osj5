@@ -41,7 +41,7 @@
 unsigned long bootflags = 0;
 void stm32_putchar(int);
 
-int freq_sys=HSICLOCK;
+int freq_sys=MSIDEFAULT;
 
 int sys_clock_freq(void){  return freq_sys;  }
 int ahb_clock_freq(void){  return freq_sys;  }
@@ -66,6 +66,12 @@ also_adc_hsi(void){
 #endif
 }
 
+static void inline
+set_clocksrc(int src){
+    RCC->CFGR |= src;
+    while( RCC->CFGR & 0xC == 0 ){} /* wait for it */
+}
+
 static const int  msifreq[] = { 65536, 131072, 262144, 524288, 1048000, 2097000, 4194000 };
 static const char pllm[] = { 3, 4, 6, 8, 12, 16, 24, 32, 48 };
 
@@ -85,12 +91,14 @@ clock_init(void){
     return;
 #endif
 
-#if !defined(HSECLOCK) && (SYSCLOCK == HSICLOCK)
+#if !defined(HSECLOCK)
     RCC->CR	|= 1;	// HSI_ON
     while( RCC->CR & (1<<1) == 0 ) {}	// wait until ready
-    clocksrc = 1;
+# if (SYSCLOCK == HSICLOCK)
+    set_clocksrc(1);
     freq_sys = HSICLOCK;
     return;
+# endif
 #endif
 
 #ifdef HSECLOCK
@@ -109,10 +117,13 @@ clock_init(void){
 
     /* flash wait states */
     if( SYSCLOCK > FLASHMAX ){
-        int fws = (SYSCLOCK + FLASHMAX - 1) / FLASHMAX - 1;
+        RCC->APB1ENR |= 1<<28;	// pwr enable
+        PWR->CR = 1<<11;	// "range 1" (1V8)
+        FLASH->ACR |= 4;	// 64bit
+        FLASH->ACR |= 1;	// wait-state
+        FLASH->ACR |= 2;	// prefetch
 
-        FLASH->ACR &= 7;
-        FLASH->ACR |= fws;
+        while( PWR->CSR & (1<<4) ){}	// wait for voltage
     }
 
     /****************************************************************/
@@ -132,7 +143,7 @@ clock_init(void){
 #    error "cannot configure pll. hseclock should be 1MHz - 24MHz"
 #  endif
 
-#  define PLLFVIN	(SRCCLOCK / PLLM)
+#  define PLLFVIN	(SRCCLOCK * PLLM)
 #  define PLLDIV	((PLLFVIN + SYSCLOCK - 1) / SYSCLOCK)
 #  define PLLFOUT	(PLLFVIN / PLLDIV)
 
@@ -145,7 +156,7 @@ clock_init(void){
         if( pllm[m] >= PLLM ) break;
 
     RCC->CFGR |= ((PLLDIV - 1) << 22)
-        | (pllm[m] << 18)
+        | (m << 18)
         | (PLLSRC << 16);
 
     RCC->CR |= (1<<24);               /* enable pll */
@@ -157,13 +168,9 @@ clock_init(void){
     /****************************************************************/
 
     /* set sysclock */
-    if( clksrc ){
-        RCC->CFGR |= clksrc;
-        while( RCC->CFGR & 0xC == 0 ){} /* wait for it */
-    }
-
+    set_clocksrc( clksrc );
+    also_adc_hsi();
 }
-
 
 /****************************************************************/
 void
@@ -192,7 +199,7 @@ init_hw2(void){
     int i;
 
     int ram = (&_estack - &_sdata)/1024;
-    int id  = DBGMCU->IDCODE;
+    int id  = DBGMCU->IDCODE & 0xFFF;
     unsigned short *fl=0;
     unsigned long  *uid=0;
 

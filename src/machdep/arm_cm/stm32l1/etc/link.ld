@@ -51,10 +51,6 @@ MEMORY
   EXTMEMB3 (rx) : ORIGIN = 0x00000000, LENGTH = 0
 }
 
-/* higher address of the user mode stack */
-_estack = 0x20004000;
-
-
 
 /* include the sections management sub-script for FLASH mode */
 

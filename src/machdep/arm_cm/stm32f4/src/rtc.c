@@ -71,7 +71,7 @@ rtc_init(void){
     rtc_pre_s = 0;
     rtc_pre_a = 128;
 
-// F4, L1 - same except for the RCC register
+// F4, L1 - same except for the RCC register and lsi freq
 #ifdef PLATFORM_STM32L1
 #  ifdef LSECLOCK
     RCC->CSR |= 1<<8;			// enable LSE
@@ -84,8 +84,9 @@ rtc_init(void){
     RCC->CSR  |= 1;			// enable LSI
     while( (RCC->CSR & 2) == 0 ){}	// wait for it
     RCC->CSR |= 2<<16;			// src = lsi
-    rtc_pre_s = 250;
-    const char *info = "LSI 32kHz";
+    rtc_pre_s = 296;
+    rtc_pre_a = 125;
+    const char *info = "LSI 37kHz";	// wtf?
 #  endif
     RCC->CSR |= 1<<22;			// enable rtc
 
@@ -111,10 +112,11 @@ rtc_init(void){
 
 #ifdef RTC_SYNC_RTC_FROM_CLOCK
     // so we can tweak it more precisely
-    rtc_pre_a >>= 4;
-    rtc_pre_s <<= 4;
+    if( rtc_pre_a & 0xF == 0 ){
+        rtc_pre_a >>= 4;
+        rtc_pre_s <<= 4;
+    }
 #endif
-
     rtc_unlock();
     init_enable();
 

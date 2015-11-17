@@ -52,13 +52,6 @@ MEMORY
   CCM(rw) : ORIGIN = 0x10000000, LENGTH = 64K
 }
 
-/* higher address of the user mode stack */
-_estack = 0x20020000;
-
-/* core coupled memory */
-_ccmem = 0x10000000;
-
-
 
 /* include the sections management sub-script for FLASH mode */
 
