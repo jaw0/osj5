@@ -9,6 +9,7 @@
 #include <conf.h>
 #include <proc.h>
 
+#ifndef STANDALONE
 void
 start(void){
     struct Proc proc0;
@@ -32,3 +33,4 @@ start(void){
 
     while(1) yield();
 }
+#endif
