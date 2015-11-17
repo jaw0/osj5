@@ -237,9 +237,11 @@ DEFALIAS(show, sh)
     i = interp_var(env, argv[1], buf, sizeof(buf));
     if( !i ){
         printf("%s = %s\n", argv[1], buf);
+#ifdef USE_FILESYS
     }else if( !strcmp(argv[1], "run") ){
         // show run
         ui_f_config(0, 0, env);
+#endif
     }else{
         f_error("show: no such var");
         return -1;
