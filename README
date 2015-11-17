@@ -4,8 +4,7 @@ OS/J5 - small real-time operating system
 
 current ports:
     i386
-    stm32f1
-    stm32f4
+    stm32F1, stm32F4, stm32L1
 
 current device support i386:
     serial, video, keyboard, ide, rtc
