@@ -130,6 +130,11 @@ if( -f "../src/machdep/$arch/$variant/etc/makefile.inc" ){
     print CONFM qq(.include "../../src/machdep/$arch/common/etc/makefile.inc"\n);
 }
 
+# add srcdirs to include path
+for my $dir (@appdirs){
+    print CONFM "INCL_FLAGS += -I$dir\n";
+}
+
 
 my @objs;
 my @srcs;
@@ -223,7 +228,7 @@ sub process_file {
 
     open(my $fd, '<', $file) || die "cannot open '$file': $!\n";
 
-    while( <> ){
+    while( <$fd> ){
         chop;
         s/#.*//;
         next if /^\s*$/;
