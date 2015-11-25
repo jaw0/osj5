@@ -1,0 +1,15 @@
+
+kern:   machdep/arm_cm/stm32/src/startup.S
+kern:   machdep/arm_cm/stm32/src/stm32_init.c
+kern:   machdep/arm_cm/stm32f0/src/vectors.S
+kern:   machdep/arm_cm/stm32f0/src/stm32f0_init.c
+kern:   machdep/arm_cm/stm32f0/src/stm32f0_asm.S
+
+pwm:    machdep/arm_cm/stm32/src/pwm.c
+
+serial: machdep/arm_cm/stm32f0/src/serial.c
+adc:    machdep/arm_cm/stm32f0/src/adc.c
+
+gpio:   machdep/arm_cm/stm32f4/src/gpio.c
+rtc:    machdep/arm_cm/stm32f4/src/rtc.c
+

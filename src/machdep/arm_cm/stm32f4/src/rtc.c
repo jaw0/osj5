@@ -90,6 +90,26 @@ rtc_init(void){
 #  endif
     RCC->CSR |= 1<<22;			// enable rtc
 
+//################
+#elif defined(PLATFORM_STM32F0)
+#  ifdef LSECLOCK
+    RCC->BDCR |= 1;			// enable LSE
+    while( (RCC->BDCR & 2) == 0 ) {}	// wait for it
+    RCC->BDCR |= 1<<8;			// src = lse
+    rtc_pre_s = 256;
+    const char *info = "LSE 32768Hz";
+#  else
+    RCC->CSR  |= 1;			// enable LSI
+    while( (RCC->CSR & 2) == 0 ) {}	// wait for it
+    RCC->BDCR |= 2<<8;			// src = lsi
+    rtc_pre_s = 320;
+    rtc_pre_a = 125;
+    const char *info = "LSI 40kHz";
+#  endif
+    RCC->BDCR |= 1<<15;			// enable rtc
+
+
+//################
 #else
 #  ifdef LSECLOCK
     // QQQ - support other frequencies?
