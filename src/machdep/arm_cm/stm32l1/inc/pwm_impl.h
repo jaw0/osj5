@@ -33,7 +33,6 @@ timer_rcc_init(int t){
 
     default: // 2-7
         RCC->APB1ENR |= 1 << (t - 2);
-        clock = APB1CLOCK;
         break;
     }
 }
