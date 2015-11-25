@@ -27,10 +27,10 @@
   */
 
   .syntax unified
+  .cpu cortex-m0
   .fpu softvfp
   .thumb
 
-.global  g_pfnVectors
 .global  Default_Handler
 
 /* start address for the initialization values of the .data section.
@@ -106,30 +106,5 @@ LoopInitZ:
   bx  lr
 .size  Reset_Handler, .-Reset_Handler
 
-/**
- * @brief  This is the code that gets called when the processor receives an
- *         unexpected interrupt.  This simply enters an infinite loop, preserving
- *         the system state for examination by a debugger.
- * @param  None
- * @retval None
-*/
-    .section  .text.Default_Handler,"ax",%progbits
-irqmsg:
-        .asciz "irq default handler\n"
-Default_Handler:
-        ldr r0, =irqmsg
-        bl kprintf
-Infinite_Loop:
-  b  Infinite_Loop
-  .size  Default_Handler, .-Default_Handler
-
-/****************************************************************/
-/* default app main */
-    .section  .text._app_main,"ax",%progbits
-_app_main:
-        bx lr
-
-   .weak      main
-   .thumb_set main,_app_main
 
 /*******************   (C)   COPYRIGHT   2011   STMicroelectronics   *****END   OF   FILE****/

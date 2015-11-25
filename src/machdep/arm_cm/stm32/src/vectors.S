@@ -1,4 +1,23 @@
+/*
+  Copyright (c) 2015
+  Author: Jeff Weisberg <jaw @ tcp4me.com>
+  Created: 2015-Nov-25 15:01 (EST)
+  Function: interrupt vector table
 
+*/
+
+  .syntax unified
+  .thumb
+  .global  Default_Handler
+  .section  .text.Default_Handler,"ax",%progbits
+irqmsg:
+        .asciz "irq default handler\n"
+Default_Handler:
+        ldr r0, =irqmsg
+        bl kprintf
+Infinite_Loop:
+  b  Infinite_Loop
+  .size  Default_Handler, .-Default_Handler
 
 /******************************************************************************
 *
@@ -7,9 +26,12 @@
 * 0x0000.0000.
 *
 *******************************************************************************/
+
+  .global  Default_Handler
+
+  .global  g_pfnVectors
   .section  .isr_vector,"a",%progbits
   .type  g_pfnVectors, %object
-  .size  g_pfnVectors, .-g_pfnVectors
 
 
 g_pfnVectors:
@@ -119,6 +141,7 @@ g_pfnVectors:
   .word     SPI5_IRQHandler                   /* SPI5                         */
   .word     SPI6_IRQHandler                   /* SPI6                         */
 
+  .size  g_pfnVectors, .-g_pfnVectors
 /*******************************************************************************
 *
 * Provide weak aliases for each Exception handler to the Default_Handler.
@@ -126,6 +149,7 @@ g_pfnVectors:
 * this definition.
 *
 *******************************************************************************/
+
    .weak      NMI_Handler
    .thumb_set NMI_Handler,Default_Handler
 
