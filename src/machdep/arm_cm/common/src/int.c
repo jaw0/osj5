@@ -56,6 +56,11 @@ CHardFault_Handler(unsigned long *sp){
     kprintf("\n* * * * * HARD FAULT * * * * *\n");
     kprintf("r0   %08x  r1   %08x  r2   %08x  r3   %08x\n", sp[0], sp[1], sp[2], sp[3]);
     kprintf("r12  %08x  LR   %08x  PC   %08x  PSR  %08x\n", sp[4], sp[5], sp[6], sp[7]);
+
+#if __CORTEX_M == 0
+    kprintf("sp   %08x\n", sp);
+
+#else
     kprintf("sp   %08x  BFAR %08x  CFSR %08x  HFSR %08x\n", sp, SCB->BFAR, SCB->CFSR, SCB->HFSR);
     kprintf("AFSR %08x  DFSR %08x  SHCSR %08x\n", SCB->AFSR, SCB->DFSR, SCB->SHCSR);
 
@@ -94,9 +99,9 @@ CHardFault_Handler(unsigned long *sp){
         if( cfsr & 0x01 ) kprintf("<Instr>");
         kprintf("\n");
     }
+#endif
 
     kprintf("  currproc %x\n", currproc);
-
     PANIC("hard fault");
 }
 

@@ -13,7 +13,7 @@
 @ int _setjmp( r0 = jmpbuf )
 
 ENTRY(_setjmp)
-        add r0, #16	@ skip space for r0-3, but don't bother saving them
+        adds r0, #16	@ skip space for r0-3, but don't bother saving them
         stmia r0!, { r4-r7 }
         mov r1, r8
         mov r2, r9
@@ -31,13 +31,13 @@ ENTRY(_setjmp)
         @ QQQ - floats?
 
         @ return 0
-        mov r0, #0
+        movs r0, #0
         bx lr
 
 @ int _longjmp( r0 = jmpbuf, r1 = retval )
 ENTRY(_longjmp)
         mov r2, r0
-        add r2, #32
+        adds r2, #32
         ldmia r2!, { r3-r7 }
         mov r8,  r3
         mov r9,  r4
@@ -49,7 +49,7 @@ ENTRY(_longjmp)
         mov r13, r3
         mov r14, r4
 
-        add r0, #16
+        adds r0, #16
         ldmia r0!, { r4-r7 }
 
         mov r0, r1
