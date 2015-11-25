@@ -110,9 +110,11 @@ pwm_init(int timer, int freq, int maxval){
     timer_rcc_init( t );
     clock = timer_clockspeed( t );
 
+#if defined(TIM1) || defined(TIM8) || defined(TIM16) || defined(TIM17)
     if( t == 1 || t == 8 || t == 16 || t == 17 ){
         tim->BDTR  |= 0x8000;	// MOE
     }
+#endif
 
     tim->CCMR1 |= 0x6868;       // chan1+2 pwm, CCR changes are buffered
     tim->CCMR2 |= 0x6868;       // chan3+4 pwm
