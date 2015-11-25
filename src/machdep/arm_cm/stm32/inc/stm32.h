@@ -17,6 +17,10 @@
 # include <stm32f4xx.h>
 #endif
 
+#ifdef PLATFORM_STM32F0
+# include <stm32f0xx.h>
+#endif
+
 #ifdef PLATFORM_STM32L1
 # include <stm32l1xx.h>
 #endif

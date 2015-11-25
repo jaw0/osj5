@@ -12,6 +12,8 @@
 #include <proc.h>
 #include <gpio.h>
 #include <stm32.h>
+#include <pwm_impl.h>
+
 
 
 // NB: the registers for timer1/8 + 2-5 are the same
@@ -27,19 +29,58 @@ static inline TIM_T *
 _timer_addr(int tim){
     switch(tim >> 4){
 #ifdef TIM1
-    /* Timer 1,8 not available on L1 */
     case 1:	return (TIM_T*)TIM1;
+#endif
+#ifdef TIM2
+    case 2:	return (TIM_T*)TIM2;
+#endif
+#ifdef TIM3
+    case 3:	return (TIM_T*)TIM3;
+#endif
+#ifdef TIM4
+    case 4:	return (TIM_T*)TIM4;
+#endif
+#ifdef TIM5
+    case 5:	return (TIM_T*)TIM5;
+#endif
+#ifdef TIM6
+    case 6:	return (TIM_T*)TIM6;
+#endif
+#ifdef TIM7
+    case 7:	return (TIM_T*)TIM7;
+#endif
+#ifdef TIM8
     case 8:	return (TIM_T*)TIM8;
 #endif
-    case 2:	return (TIM_T*)TIM2;
-    case 3:	return (TIM_T*)TIM3;
-    case 4:	return (TIM_T*)TIM4;
-    case 5:	return (TIM_T*)TIM5;
-    case 6:	return (TIM_T*)TIM6;
-    case 7:	return (TIM_T*)TIM7;
-        // ...
+#ifdef TIM9
+    case 9:	return (TIM_T*)TIM9;
+#endif
+#ifdef TIM10
+    case 10:	return (TIM_T*)TIM10;
+#endif
+#ifdef TIM11
+    case 11:	return (TIM_T*)TIM11;
+#endif
+#ifdef TIM12
+    case 12:	return (TIM_T*)TIM12;
+#endif
+#ifdef TIM13
+    case 13:	return (TIM_T*)TIM13;
+#endif
+#ifdef TIM14
+    case 14:	return (TIM_T*)TIM14;
+#endif
+#ifdef TIM15
+    case 15:	return (TIM_T*)TIM15;
+#endif
+#ifdef TIM16
+    case 16:	return (TIM_T*)TIM16;
+#endif
+#ifdef TIM17
+    case 17:	return (TIM_T*)TIM17;
+#endif
     default:
-        PANIC("invalid basic timer");
+        PANIC("invalid timer");
     }
 }
 
@@ -51,7 +92,7 @@ _freq_set(int timer, int clock, int maxval, int freq){
     psc --;
 
     if( psc < 0 ) psc = 0;
-    if( psc > 0xFFFF ) 0xFFFF;
+    if( psc > 0xFFFF ) psc = 0xFFFF;
 
     tim->PSC = psc;
 }
@@ -65,39 +106,13 @@ pwm_init(int timer, int freq, int maxval){
 
     int plx = splhigh();
     int t = timer >> 4;
-#ifdef PLATFORM_STM32F1
-    RCC->APB2ENR |= 1;	// AFIO
-#endif
 
-    switch( t ){
-    case 1:
-#ifdef TIM1
-        // timer1
-#  ifdef PLATFORM_STM32F1
-        RCC->APB2ENR |= 1 << 11;
-#  else
-        RCC->APB2ENR |= 1;
-#  endif
-        clock = APB2CLOCK;
+    timer_rcc_init( t );
+    clock = timer_clockspeed( t );
+
+    if( t == 1 || t == 8 || t == 16 || t == 17 ){
         tim->BDTR  |= 0x8000;	// MOE
-        break;
-    case 8:
-        // timer 8
-#  ifdef PLATFORM_STM32F1
-        RCC->APB2ENR |= 1 << 13;
-#  else
-        RCC->APB2ENR |= 2;
-#  endif
-        clock = APB2CLOCK;
-        tim->BDTR  |= 0x8000;	// MOE
-        break;
-#endif /* TIM1 */
-    default:
-        RCC->APB1ENR |= 1 << (t - 2);
-        clock = APB1CLOCK;
-        break;
     }
-
 
     tim->CCMR1 |= 0x6868;       // chan1+2 pwm, CCR changes are buffered
     tim->CCMR2 |= 0x6868;       // chan3+4 pwm
@@ -127,7 +142,7 @@ freq_set(int timer, int freq){
     TIM_T *tim = _timer_addr(timer);
 
     int maxval = tim->ARR;
-    int clock = ( (timer>>4) & 0xF == 1) ? APB2CLOCK : APB1CLOCK;
+    int clock  = timer_clockspeed( timer >> 4 );
 
     _freq_set(timer, clock, maxval, freq);
 }

@@ -197,8 +197,12 @@ _gpio_addr(int pin){
     case 3:	return GPIOD;
     case 4:	return GPIOE;
     case 5:	return GPIOF;
+#ifdef GPIOG
     case 6:	return GPIOG;
+#endif
+#ifdef GPIOH
     case 7:	return GPIOH;
+#endif
 #ifdef GPIOI
     case 8:	return GPIOI;
 #endif
