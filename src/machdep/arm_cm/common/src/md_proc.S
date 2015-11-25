@@ -36,11 +36,11 @@ ENTRY(PendSV_Handler)
         mrs r0, psp
         mov sp, r0	@ sp = psp
         push {r4-r7}
-        mov r1, r8
-        mov r2, r9
-        mov r3, r10
-        mov r4, r11
-        push {r1-r4}
+        mov r2, r8
+        mov r3, r9
+        mov r4, r10
+        mov r5, r11
+        push {r2-r5}
         push {lr}
         mov r0, sp
         msr psp, r0
