@@ -21,7 +21,8 @@ static int crypto_inbuf;
 static int crypto_bufsz;
 static int crypto_insz;
 
-#define DMASTR	DMA2_Stream5
+#define DMASTRO	DMA2_Stream5
+#define DMASTRI	DMA2_Stream6
 #define DMACHAN	2
 
 int
@@ -115,32 +116,66 @@ _start_crypto(int alg){
 }
 
 static void
-_start_dma(u_char *out, int outlen){
+_wait_for_indma(void){
+    if( DMASTRI->CR & 1 )
+        while( !(DMA2->HISR & (1<<21)) ){}
+}
+
+static void
+_start_in_dma(u_char *in, int inlen){
+
+    CRYP->DMACR |= 1;	// dma in
+
+    DMASTRI->CR  &= (0xF<<28) | (1<<20);	// zero CR
+    DMA2->HIFCR  |= 0x3D << 16;			// clear ints
+
+    DMASTRI->PAR   = & CRYP->DR;
+    DMASTRI->M0AR  = in;
+    DMASTRI->NDTR  = inlen >> 2;
+
+    DMASTRI->CR   |= (DMACHAN << 25)
+        | (2<<16)		// high prio
+        | (2<<13) | (2<<11)	// 32 bit->32 bit
+        | (1<<10)		// inc mem
+        | (1<<6)		// mem->dev
+        ;
+
+    DMASTRI->CR   |= 1;		// enable
+}
+
+static void
+_start_out_dma(u_char *out, int outlen){
 
     CRYP->DMACR &= 3;
     CRYP->DMACR |= 2;	// dma out
 
-    DMASTR->CR   &= (0xF<<28) | (1<<20);	// zero CR
-    DMA2->HIFCR  |= 0xF<<8;			// clear ints
+    DMASTRO->CR   &= (0xF<<28) | (1<<20);	// zero CR
+    DMA2->HIFCR  |= 0xF<<8;			// clear ints	// XXX 3d<<6
 
-    DMASTR->PAR   = & CRYP->DOUT;
-    DMASTR->M0AR  = out;
-    DMASTR->NDTR  = outlen >> 2;
+    DMASTRO->PAR   = & CRYP->DOUT;
+    DMASTRO->M0AR  = out;
+    DMASTRO->NDTR  = outlen >> 2;
 
-    DMASTR->CR   |= (DMACHAN << 25)
-        | (2<<16)		// high prio
+    DMASTRO->CR   |= (DMACHAN << 25)
+        | (3<<16)		// highest prio
         | (2<<13) | (2<<11)	// 32 bit->32 bit
         | (1<<10)		// inc mem
         ;
 
-    DMASTR->CR   |= 1;		// enable
+    DMASTRO->CR   |= 1;		// enable
 
 }
 
 static void
-_stop_dma(void){
+_stop_out_dma(void){
 
-    DMASTR->CR   &= ~1;
+    DMASTRO->CR   &= ~1;
+}
+
+static void
+_stop_in_dma(void){
+
+    DMASTRI->CR   &= ~1;
 }
 
 void
@@ -149,7 +184,7 @@ crypto_encrypt_start(int alg, const u_char *key, int keylen, const u_char *iv, i
     _reset_crypto();
     _set_key(key, keylen);
     _set_iv(iv, ivlen);
-    _start_dma(out, outlen);
+    _start_out_dma(out, outlen);
     _start_crypto(alg);
 }
 
@@ -163,7 +198,7 @@ crypto_decrypt_start(int alg, const u_char *key, int keylen, const u_char *iv, i
     }
     _set_iv(iv, ivlen);
     CRYP->CR |= 1<<2;	// decrypt mode
-    _start_dma(out, outlen);
+    _start_out_dma(out, outlen);
     _start_crypto(alg);
 }
 
@@ -189,6 +224,8 @@ _wait_for_infifo(void){
 int
 crypto_add(const u_char *in, int inlen){
 
+    _wait_for_indma();
+
     // finish any buffered input
     if( crypto_bufsz ){
         u_char *buf = (u_char*)&crypto_inbuf + crypto_bufsz;
@@ -211,12 +248,7 @@ crypto_add(const u_char *in, int inlen){
         }
     }
 
-    int n = inlen >> 2;
-    int *src = (int*)in;
-    for( ; n; n-- ){
-        while( !(CRYP->SR & SR_IFNF) ){}
-        CRYP->DR = *src ++;
-    }
+    _start_in_dma(in, inlen & ~3);
     crypto_insz += inlen & ~3;
     inlen &= 3;
 
@@ -236,6 +268,8 @@ crypto_add(const u_char *in, int inlen){
 
 int
 crypto_final(void){
+
+    _wait_for_indma();
 
     // apply pkcs7 padding only if padding is needed
     // (caller should pad if they care)
@@ -268,7 +302,8 @@ crypto_final(void){
     while( CRYP->SR & SR_BUSY ){}
 
     CRYP->CR &= ~(1<<15);	// disable
-    _stop_dma();
+    _stop_in_dma();
+    _stop_out_dma();
     return 0;
 }
 
@@ -279,7 +314,7 @@ static const u_char azero256[32] = { 'a',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,
 static const u_char azero[32]    = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
                                    'a',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 
-// 14usec
+// 11usec
 static u_char crbuf[512];
 DEFUN(cryptotiming, "test crypto timing")
 {
