@@ -115,7 +115,7 @@ _start_crypto(int alg){
     }
 }
 
-static void
+static inline void
 _wait_for_indma(void){
     if( DMASTRI->CR & 1 )
         while( !(DMA2->HISR & (1<<21)) ){}
@@ -150,7 +150,7 @@ _start_out_dma(u_char *out, int outlen){
     CRYP->DMACR |= 2;	// dma out
 
     DMASTRO->CR   &= (0xF<<28) | (1<<20);	// zero CR
-    DMA2->HIFCR  |= 0xF<<8;			// clear ints	// XXX 3d<<6
+    DMA2->HIFCR  |= 0x3D<<6;			// clear ints
 
     DMASTRO->PAR   = & CRYP->DOUT;
     DMASTRO->M0AR  = out;
@@ -166,13 +166,13 @@ _start_out_dma(u_char *out, int outlen){
 
 }
 
-static void
+static inline void
 _stop_out_dma(void){
 
     DMASTRO->CR   &= ~1;
 }
 
-static void
+static inline void
 _stop_in_dma(void){
 
     DMASTRI->CR   &= ~1;
@@ -209,19 +209,7 @@ _wait_for_infifo(void){
 }
 
 
-// append any reults to output
-#define PROCESS_RESULTS()	\
-    while( CRYP->SR & SR_OFNE ){	\
-        int c = CRYP->DOUT;		\
-        if( outlen ){			\
-            *dst++ = c;			\
-            outlen -= 4;		\
-            nout += 4;			\
-        }				\
-    }
-
-
-int
+void
 crypto_add(const u_char *in, int inlen){
 
     _wait_for_indma();
@@ -261,9 +249,6 @@ crypto_add(const u_char *in, int inlen){
             *buf++ = *in++;
         }
     }
-
-
-    return 0;
 }
 
 int
@@ -304,7 +289,8 @@ crypto_final(void){
     CRYP->CR &= ~(1<<15);	// disable
     _stop_in_dma();
     _stop_out_dma();
-    return 0;
+
+    return crypto_insz;
 }
 
 #ifdef KTESTING
@@ -318,14 +304,13 @@ static const u_char azero[32]    = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 static u_char crbuf[512];
 DEFUN(cryptotiming, "test crypto timing")
 {
-    int n = 0;
 
     yield();
     int t0 = get_hrtime();
 
     crypto_encrypt_start( CRYPTO_ALG_AES_CBC, azero256, 32, azero128, 16, crbuf, sizeof(crbuf));
-    n += crypto_add(crbuf, 512);
-    n += crypto_final( );
+    crypto_add(crbuf, 512);
+    crypto_final( );
 
     utime_t t1 = get_hrtime();
     printf("aes256 %d usec\n", (int)(t1-t0));
@@ -362,8 +347,9 @@ DEFUN(cryptotest, "crypto test")
     // 8a 18 2a dc  e7 d1 80 72  ed 6a 21 5e  4c 85 eb 4b
     crypto_encrypt_start( CRYPTO_ALG_AES_CBC, azero256, 32, azero128, 16, buf, sizeof(buf));
     crypto_add(zero128, 16 );
+    crypto_add(zero128, 16 );
     crypto_final( );
-    hexdump( buf, 16 );
+    hexdump( buf, 32 );
 
     return 0;
 }
