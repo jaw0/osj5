@@ -21,9 +21,13 @@ static int crypto_inbuf;
 static int crypto_bufsz;
 static int crypto_insz;
 
+#define DMASTR	DMA2_Stream5
+#define DMACHAN	2
+
 int
 crypto_init(void){
     RCC->AHB2ENR |= 1<<4;
+    RCC->AHB1ENR |= 1<<22;	// DMA2
     return 0;
 }
 
@@ -79,7 +83,7 @@ _prepare_key(void){
     while( CRYP->SR & 0x10 ){}
 }
 
-static void
+static inline void
 _set_iv(const u_char *iv, int ivlen){
     int *v = (int*)iv;
 
@@ -92,7 +96,8 @@ _set_iv(const u_char *iv, int ivlen){
     }
 }
 
-static void _start_crypto(int alg){
+static void
+_start_crypto(int alg){
 
     CRYP->CR |= alg << 3;
     CRYP->CR |= 1<<14;	// flush fifo
@@ -109,17 +114,47 @@ static void _start_crypto(int alg){
     }
 }
 
+static void
+_start_dma(u_char *out, int outlen){
+
+    CRYP->DMACR &= 3;
+    CRYP->DMACR |= 2;	// dma out
+
+    DMASTR->CR   &= (0xF<<28) | (1<<20);	// zero CR
+    DMA2->HIFCR  |= 0xF<<8;			// clear ints
+
+    DMASTR->PAR   = & CRYP->DOUT;
+    DMASTR->M0AR  = out;
+    DMASTR->NDTR  = outlen >> 2;
+
+    DMASTR->CR   |= (DMACHAN << 25)
+        | (2<<16)		// high prio
+        | (2<<13) | (2<<11)	// 32 bit->32 bit
+        | (1<<10)		// inc mem
+        ;
+
+    DMASTR->CR   |= 1;		// enable
+
+}
+
+static void
+_stop_dma(void){
+
+    DMASTR->CR   &= ~1;
+}
+
 void
-crypto_encrypt_start(int alg, const u_char *key, int keylen, const u_char *iv, int ivlen){
+crypto_encrypt_start(int alg, const u_char *key, int keylen, const u_char *iv, int ivlen, u_char *out, int outlen){
 
     _reset_crypto();
     _set_key(key, keylen);
     _set_iv(iv, ivlen);
+    _start_dma(out, outlen);
     _start_crypto(alg);
 }
 
 void
-crypto_decrypt_start(int alg, const u_char *key, int keylen, const u_char *iv, int ivlen){
+crypto_decrypt_start(int alg, const u_char *key, int keylen, const u_char *iv, int ivlen, u_char *out, int outlen){
 
     _reset_crypto();
     _set_key(key, keylen);
@@ -128,6 +163,7 @@ crypto_decrypt_start(int alg, const u_char *key, int keylen, const u_char *iv, i
     }
     _set_iv(iv, ivlen);
     CRYP->CR |= 1<<2;	// decrypt mode
+    _start_dma(out, outlen);
     _start_crypto(alg);
 }
 
@@ -151,11 +187,7 @@ _wait_for_infifo(void){
 
 
 int
-crypto_add(const u_char *in, int inlen, u_char *out, int outlen){
-    short nout = 0;
-    int *dst   = (int*)out;
-
-    PROCESS_RESULTS();
+crypto_add(const u_char *in, int inlen){
 
     // finish any buffered input
     if( crypto_bufsz ){
@@ -179,22 +211,14 @@ crypto_add(const u_char *in, int inlen, u_char *out, int outlen){
         }
     }
 
-    while(inlen >= 4){
-        if( CRYP->SR & SR_OFNE ){
-            int c = CRYP->DOUT;
-            if( outlen ){
-                *dst++ = c;
-                outlen -= 4;
-                nout += 4;
-            }
-        }
-        if( !(CRYP->SR & SR_IFNF) ) continue;
-
-        CRYP->DR = *(int*)in;
-        in    += 4;
-        inlen -= 4;
-        crypto_insz += 4;
+    int n = inlen >> 2;
+    int *src = (int*)in;
+    for( ; n; n-- ){
+        while( !(CRYP->SR & SR_IFNF) ){}
+        CRYP->DR = *src ++;
     }
+    crypto_insz += inlen & ~3;
+    inlen &= 3;
 
     // save remaining partial
     if( inlen ){
@@ -206,17 +230,12 @@ crypto_add(const u_char *in, int inlen, u_char *out, int outlen){
         }
     }
 
-    PROCESS_RESULTS();
 
-    return nout;
+    return 0;
 }
 
 int
-crypto_final(u_char *out, int outlen){
-    short nout = 0;
-    int *dst   = (int*)out;
-
-    PROCESS_RESULTS();
+crypto_final(void){
 
     // apply pkcs7 padding only if padding is needed
     // (caller should pad if they care)
@@ -241,18 +260,16 @@ crypto_final(u_char *out, int outlen){
     if( len ){
         crypto_inbuf = 0x01010101 * pl;
         for( ; len > 0; len -= 4 ){
-            PROCESS_RESULTS();
             _wait_for_infifo();
             CRYP->DR  = crypto_inbuf;
         }
     }
 
-    PROCESS_RESULTS();
     while( CRYP->SR & SR_BUSY ){}
-    PROCESS_RESULTS();
 
     CRYP->CR &= ~(1<<15);	// disable
-    return nout;
+    _stop_dma();
+    return 0;
 }
 
 #ifdef KTESTING
@@ -262,7 +279,7 @@ static const u_char azero256[32] = { 'a',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,
 static const u_char azero[32]    = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
                                    'a',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 
-// 24usec
+// 14usec
 static u_char crbuf[512];
 DEFUN(cryptotiming, "test crypto timing")
 {
@@ -271,14 +288,12 @@ DEFUN(cryptotiming, "test crypto timing")
     yield();
     int t0 = get_hrtime();
 
-    crypto_encrypt_start( CRYPTO_ALG_AES_CBC, azero256, 32, azero128, 16);
-    utime_t t1 = get_hrtime();
-    n += crypto_add(crbuf, 512, crbuf, 512);
-    utime_t t2 = get_hrtime();
-    n += crypto_final(crbuf + n, sizeof(crbuf) - n );
+    crypto_encrypt_start( CRYPTO_ALG_AES_CBC, azero256, 32, azero128, 16, crbuf, sizeof(crbuf));
+    n += crypto_add(crbuf, 512);
+    n += crypto_final( );
 
-    utime_t t3 = get_hrtime();
-    printf("aes256 %d %d %d usec\n", (int)(t1-t0), (int)(t2-t1), (int)(t3-t2));
+    utime_t t1 = get_hrtime();
+    printf("aes256 %d usec\n", (int)(t1-t0));
 
     return 0;
 }
@@ -287,6 +302,8 @@ DEFUN(cryptotest, "crypto test")
 {
     char buf[32];
     int n,i;
+
+    bzero(buf, sizeof(buf));
 
 #if 0 //ok
     crypto_encrypt_start( CRYPTO_ALG_AES_CBC, azero128, 16, azero128, 16);
@@ -307,10 +324,11 @@ DEFUN(cryptotest, "crypto test")
 
 #endif
 
-    crypto_encrypt_start( CRYPTO_ALG_AES_CBC, azero256, 32, azero128, 16);
-    n = crypto_add(zero128, 16, buf,   sizeof(buf) );
-    n += crypto_final(buf + n, sizeof(buf) - n );
-    hexdump( buf, n );
+    // 8a 18 2a dc  e7 d1 80 72  ed 6a 21 5e  4c 85 eb 4b
+    crypto_encrypt_start( CRYPTO_ALG_AES_CBC, azero256, 32, azero128, 16, buf, sizeof(buf));
+    crypto_add(zero128, 16 );
+    crypto_final( );
+    hexdump( buf, 16 );
 
     return 0;
 }
