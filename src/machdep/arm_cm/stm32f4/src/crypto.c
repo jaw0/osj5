@@ -301,20 +301,20 @@ static const u_char azero[32]    = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
                                    'a',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 
 // 11usec
-static u_char crbuf[512];
 DEFUN(cryptotiming, "test crypto timing")
 {
-
+    u_char *crbuf = alloc(512);
     yield();
     int t0 = get_hrtime();
 
-    crypto_encrypt_start( CRYPTO_ALG_AES_CBC, azero256, 32, azero128, 16, crbuf, sizeof(crbuf));
+    crypto_encrypt_start( CRYPTO_ALG_AES_CBC, azero256, 32, azero128, 16, crbuf, 512);
     crypto_add(crbuf, 512);
     crypto_final( );
 
     utime_t t1 = get_hrtime();
     printf("aes256 %d usec\n", (int)(t1-t0));
 
+    free(crbuf, 512);
     return 0;
 }
 
