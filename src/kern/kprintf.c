@@ -49,7 +49,9 @@ extern void blinky(void);
 #endif
 #define WHT	"\e[0m"
 
-#define KBUF_MAX	2048	/* no more than this much if the console is up */
+#ifndef KBUF_MAX
+#  define KBUF_MAX	2048	/* no more than this much if the console is up */
+#endif
 
 static void
 red_on(){
@@ -120,7 +122,6 @@ kprintffnc_buf(char c){
 
 static int
 kprintffnc(void *a, char c){
-
     if(kconsole_port
 #ifdef N_LCD
         && klcd_port
@@ -199,8 +200,6 @@ hexdump(const unsigned char *d, int len){
     char txt[17];
     txt[16] = 0;
 
-    kprintf("\n");
-
     for(i=0; i<len; i++){
         if( !col )       kprintf("%08.8X:", d + i);
         if(! (col % 4 )) kprintf(" ");
@@ -214,8 +213,7 @@ hexdump(const unsigned char *d, int len){
         }
     }
 
-    // ...
-    kprintf("\n");
+    if( col ) kprintf("\n");
 }
 
 void
