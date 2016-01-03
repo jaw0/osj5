@@ -18,6 +18,7 @@ rtc:    machdep/arm_cm/stm32f4/src/rtc.c
 hash:   machdep/arm_cm/stm32f4/src/hash.c
 crypto: machdep/arm_cm/stm32f4/src/crypto.c
 stflash:        machdep/arm_cm/stm32f4/src/stflash.c
+sdio:   machdep/arm_cm/stm32f4/src/sdio.c
 
 usb:    machdep/arm_cm/stm32/usb/usb_bsp.c
 usb:    machdep/arm_cm/stm32/usb/usb_core.c
