@@ -31,6 +31,7 @@
 #define CMD_WAIT_SHORT	(1<<6)
 #define CMD_WAIT_LONG	(3<<6)
 
+#define SR_DATAEND	(1<<8)
 #define SR_CMDSENT	(1<<7)
 #define SR_CMDREND	(1<<6)
 #define SR_DTIMEOUT	(1<<3)
@@ -142,6 +143,8 @@ sdio_init(struct Device_Conf *dev){
         | (120)		// 400kHz at start
         ;
 
+    nvic_enable( SDIO_IRQn, IPL_DISK );
+
     // RSN - card detect
 
     int r = initialize_card(ii);
@@ -191,11 +194,11 @@ sdio_init(struct Device_Conf *dev){
 #else
     // or:
 
-    snprintf(info, sizeof(info), "%s:", ii->name);
+    snprintf(info, sizeof(info), "%s:", /*ii->name*/ "sd");
     fmount( & ii->file, info, "fatfs" );
 
-    //bootmsg( "sdcard %s speed %dkHz mounted on %s type %s\n",
-    // ii->name, actspeed/1000, info, "fatfs" );
+    bootmsg( "sdcard %s mounted on %s type %s\n",
+             ii->name, info, "fatfs" );
 #endif
 
     return (int)& ii->file;
@@ -405,13 +408,18 @@ static int
 dma_wait_complete(void){
     utime_t t1 = get_hrtime() + 1000000;
 
+    SDIO->MASK |= SR_DATAEND;
+
     while( 1 ){
-        //if( (DMA->LISR & ((1<<27) | (1<<25) | (1<<22))) ) break;
+        asleep( SDIO, "sdio" );
         if( !(DMASTR->CR & 1) ) break;
-        if( get_hrtime() > t1 ) return -1;
+        await( -1, 1000000 );
+        if( !(DMASTR->CR & 1) ) break;
+        if( get_hrtime() > t1 ) break;
     }
 
-
+    aunsleep();
+    SDIO->MASK &= ~SR_DATAEND;
     return DMA->LISR & ((1<<25) | (1<<22));
 }
 
@@ -478,7 +486,8 @@ sdio_wait_tx_complete(void){
     utime_t t1 = get_hrtime() + 100000;
 
     while(1){
-        if( !(SDIO->STA & (1<<12)) ) return;
+//        if( !(SDIO->STA & (1<<12)) ) return;	// rxact
+        if( !(SDIO->STA & SR_DATAEND) ) return;	// dataend
         if( get_hrtime() > t1 )      return;
     }
 }
@@ -496,7 +505,7 @@ sdio_write_wait(int rca){
         r = SDIO->RESP1;
         if( ((r >> 9) & 7) < 5 ) return 0;
         if( get_hrtime() > t1 )  return -1;
-        usleep(10000);
+        usleep(1000);
     }
 }
 int
@@ -536,9 +545,9 @@ sdio_bwrite(FILE*f, const char*d, int len, offset_t pos){
                 | 1		// enable data mode
                 ;
 
+            // wait for dma complete, and xfer complete
             dma_wait_complete();
             // QQQ - there is always a fifo error
-            sdio_wait_tx_complete();
 
             if( r )
                 kprintf("dma err %x, %x\n", r, DMA->LISR >> 22 );
@@ -579,6 +588,18 @@ sdio_stat(FILE *f, struct stat *s){
     return 0;
 }
 
+void
+SDIO_IRQHandler(void){
+
+    if( SDIO->STA & SR_DATAEND ){
+        wakeup( SDIO );
+        SDIO->ICR |= SR_DATAEND;
+    }
+
+}
+
+#ifdef KTESTING
+
 DEFUN(sdtest, "sd card test")
 {
     char *buf = alloc(1024);
@@ -603,7 +624,6 @@ DEFUN(sdtest, "sd card test")
     return 0;
 }
 
-#ifdef KTESTING
 
 DEFUN(wrfile, "test file write timing")
 {
