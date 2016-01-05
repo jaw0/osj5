@@ -2,7 +2,7 @@
   Copyright (c) 2015
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 2015-Dec-13 18:27 (EST)
-  Function: dma
+  Function: sdio
 
 */
 
@@ -80,33 +80,6 @@ struct SDIOinfo {
     u_char		ishc;
 
 } sdcinfo[ N_SDIO ];
-
-
-#ifdef SDIOVERBOSE
-struct crumb {
-    const char *event;
-    int when;
-    int arg0;
-    int arg1;
-};
-
-#define NR_CRUMBS       128
-static struct crumb crumbs[NR_CRUMBS];
-
-static inline void
-_sdio_drop_crumb(const char *event, u_long arg0, u_long arg1) {
-    struct crumb *crumb = &crumbs[cur_crumb % NR_CRUMBS];
-    crumb->event = event;
-    crumb->when  = get_hrtime();
-    crumb->arg0  = arg0;
-    crumb->arg1  = arg1;
-    cur_crumb++;
-}
-#define SDIO_CRUMB(event, arg0, arg1) _spi_drop_crumb(event, (u_long)arg0, (u_long)arg1)
-#else
-#define SDIO_CRUMB(event, arg0, arg1)
-#endif
-
 
 
 
@@ -194,7 +167,7 @@ sdio_init(struct Device_Conf *dev){
 #else
     // or:
 
-    snprintf(info, sizeof(info), "%s:", /*ii->name*/ "sd");
+    snprintf(info, sizeof(info), "%s:", ii->name);
     fmount( & ii->file, info, "fatfs" );
 
     bootmsg( "sdcard %s mounted on %s type %s\n",
@@ -233,7 +206,7 @@ _sdio_cmd(u_long cmd){
     cmd |= (SDIO->CMD & ~0x3FFF ) | CMD_CPSMEN | cmd;
     SDIO->CMD = cmd;
 
-    while( !(SDIO->STA & (SR_CMDREND | SR_CCRCFAIL | SR_CTIMEOUT)) ) {
+    while( !(SDIO->STA & (SR_CMDREND | SR_CCRCFAIL | SR_CTIMEOUT)) ){
     }
 
     return SDIO->STA & (SR_CCRCFAIL | SR_CTIMEOUT);
@@ -279,6 +252,12 @@ sdio_cmd_long(u_long cmd, u_long arg, u_long *dst){
     return r;
 }
 
+#ifdef SDIO_INIT_VERBOSE
+#  define IDBGRESP(x)    kprintf("sdio cmd %d->%d r %x sr %x res %08.8x %08.8x %08.8x %08.8x\n", x, SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1, SDIO->RESP2, SDIO->RESP3, SDIO->RESP4)
+#else
+#  define IDBGRESP(x)
+#endif
+
 static int
 initialize_card(struct SDIOinfo *ii){
 
@@ -286,57 +265,60 @@ initialize_card(struct SDIOinfo *ii){
     int isv2 = 0;
     int ishc = 0;
 
+    // 400kHz, 1 bit mode
+    SDIO->CLKCR = (1<<8) | 120;
+
     for(i=0; i<5; i++){
         r = sdio_cmd_none(0, 0);
-        // kprintf("sdio cmd %d r %x sr %x res %x\n", SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1);
-        if( !r ) break;
+        // if( !r ) break;
     }
     if( r ) return 0;
 
     // cmd8 - required to enable v2/HC features (>2GB)
     r = sdio_cmd_short( 8, 0x01AA );
-    //kprintf("sdio cmd %d r %x sr %x res %x\n", SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1);
+    IDBGRESP(8);
     if( r ) return 0;
     r = SDIO->RESP1;
     if( (r & 0xFF) == 0xAA && (r & 0x7E00) == 0 ) isv2 = 1;	// 2.0 yay!
 
     // loop until ready
     //  cmd 55/41 => R1
-    int max = 100000;
-    while( max-- > 0 ){
+    for(i=0; i<10000; i++){
         r = sdio_cmd_short( 55, 0 );
-        //kprintf("sdio cmd %d r %x sr %x res %x\n", SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1);
         r = sdio_cmd_r3( 41, 0x80100000 | (isv2 ? (1<<30) : 0) );
-        //kprintf("sdio cmd %d r %x sr %x res %x\n", SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1);
         if( !r && (SDIO->RESP1 & (1<<31)) ) break;
     }
-    //kprintf("sdio41 cmd %d r %x sr %x res %08.8x\n", SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1);
+
+    IDBGRESP(41);
 
     if( isv2 && (SDIO->RESP1 & 0x40000000) ) ishc = 1;	// HC yay!
 
+    // read CID
     r = sdio_cmd_long( 2, 0,  (u_long*)ii->sdcid );
-    //kprintf("sdio2 r %x sr %x res %08.8x %08.8x %08.8x %08.8x\n", r, SDIO->STA, SDIO->RESP1, SDIO->RESP2, SDIO->RESP3, SDIO->RESP4);
-
-    r = sdio_cmd_short( 3, 0 );
+    IDBGRESP(2);
     if( r ) return 0;
-    //kprintf("sdio cmd %d r %x sr %x res %x\n", SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1);
+
+    // set RCA
+    r = sdio_cmd_short( 3, 0 );
+    IDBGRESP(3);
+    if( r ) return 0;
     ii->rca = SDIO->RESP1 >> 16;
 
+    // read CSD
     r = sdio_cmd_long( 9, ii->rca << 16,  (u_long*)ii->sdcsd );
+    IDBGRESP(9);
     if( r ) return 0;
-    //kprintf("sdio3 r %x sr %x res %08.8x %08.8x %08.8x %08.8x\n", r, SDIO->STA, SDIO->RESP1, SDIO->RESP2, SDIO->RESP3, SDIO->RESP4);
 
     // select card
     r = sdio_cmd_short( 7, ii->rca << 16 );
-    //kprintf("sdio cmd %d r %x sr %x res %x\n", SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1);
+    IDBGRESP(7);
+    if( r ) return 0;
 
-#if 1
     // 4 bit mode
     r = sdio_cmd_short( 55, ii->rca << 16 );
-    //kprintf("sdio cmd %d r %x sr %x res %x\n", SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1);
-
     r = sdio_cmd_short( 6, 2 );
-    //kprintf("sdio cmd %d r %x sr %x res %x\n", SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1);
+    IDBGRESP(6);
+
     if( !r )
         SDIO->CLKCR |= 1 << 11;
 
@@ -347,14 +329,10 @@ initialize_card(struct SDIOinfo *ii){
         // 48MHz / 2 => 24MHz
         SDIO->CLKCR &= ~0xFF;
     }
-#endif
+
     return 1;
 
 }
-
-
-int
-sdio_ioctl(FILE*f, int s, void*d){}
 
 static void
 sdio_clear(struct SDIOinfo *ii){
@@ -364,7 +342,6 @@ sdio_clear(struct SDIOinfo *ii){
 static void
 sdio_stop(void){
     int r = sdio_cmd_short( 12, 0 );
-    //kprintf("sdio. cmd %d r %x sr %x res %x\n", SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1);
 }
 
 
@@ -413,7 +390,7 @@ dma_wait_complete(void){
     while( 1 ){
         asleep( SDIO, "sdio" );
         if( !(DMASTR->CR & 1) ) break;
-        await( -1, 1000000 );
+        await( 0x80, 1000000 );
         if( !(DMASTR->CR & 1) ) break;
         if( get_hrtime() > t1 ) break;
     }
@@ -455,6 +432,7 @@ sdio_bread(FILE*f, char*d, int len, offset_t pos){
 
         if( !r ){
             r = dma_wait_complete();
+            if( SDIO->STA & SR_DTIMEOUT ) r = -1;
 
             if( r )
                 kprintf("dma err %x, %x\n", r, DMA->LISR >> 22 );
@@ -470,6 +448,10 @@ sdio_bread(FILE*f, char*d, int len, offset_t pos){
             ret = len;
             break;
         }
+
+        kcprintf("sd read error %qx, %d => %x, %x\n", pos, len, r, SDIO->RESP1);
+        usleep(10000);
+        if( tries > 2 ) sdio_clear( ii );
     }
 
     sync_unlock(& ii->lock );
@@ -505,7 +487,7 @@ sdio_write_wait(int rca){
         r = SDIO->RESP1;
         if( ((r >> 9) & 7) < 5 ) return 0;
         if( get_hrtime() > t1 )  return -1;
-        usleep(1000);
+        yield();
     }
 }
 int
@@ -535,6 +517,7 @@ sdio_bwrite(FILE*f, const char*d, int len, offset_t pos){
             sdio_cmd_short( 23, len >> 9 );	// pre-erase (slight speed improvement)
             r = sdio_cmd_r1( 25, pos );		// multi block
         }
+
         if(r) kprintf("sdio25 cmd %d r %x sr %x res %x\n", SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1);
 
         if( !r ){
@@ -548,6 +531,7 @@ sdio_bwrite(FILE*f, const char*d, int len, offset_t pos){
             // wait for dma complete, and xfer complete
             dma_wait_complete();
             // QQQ - there is always a fifo error
+            if( SDIO->STA & SR_DTIMEOUT ) r = -1;
 
             if( r )
                 kprintf("dma err %x, %x\n", r, DMA->LISR >> 22 );
@@ -565,6 +549,11 @@ sdio_bwrite(FILE*f, const char*d, int len, offset_t pos){
             ret = len;
             break;
         }
+
+        kcprintf("sd write error %qx, %d => %x, %x\n", pos, len, r, SDIO->RESP1);
+        usleep(10000);
+        if( tries > 2 ) sdio_clear( ii );
+
     }
 
     sync_unlock(& ii->lock );
@@ -573,6 +562,11 @@ sdio_bwrite(FILE*f, const char*d, int len, offset_t pos){
     return ret;
 
 }
+
+
+int
+sdio_ioctl(FILE*f, int s, void*d){}
+
 
 int
 sdio_stat(FILE *f, struct stat *s){
@@ -639,6 +633,7 @@ DEFUN(wrfile, "test file write timing")
 
     int t0 = get_hrtime();
     f = fopen( argv[1], "w!" );
+
     if( f ){
         // start of RAM
         while(len){
