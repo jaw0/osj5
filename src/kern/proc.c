@@ -789,12 +789,14 @@ await(int prio, int timo){
     }
 
     if( prio < 0 ) prio = currproc->prio;
-    int oprio = currproc->prio;
+    u_char oprio = currproc->prio;
+    u_char ofrt  = currproc->flags & PRF_REALTIME;
 
     int plx = splhigh();
     if( !currproc->wmsg ) return;
 
-    currproc->prio = prio;
+    currproc->prio = prio & 0x7F;
+    if( prio & 0x80 ) currproc->flags |= PRF_REALTIME;
 
     currproc->timeout = timo ? get_time() + timo : 0;
     utime_t to = currproc->timeout;
@@ -806,6 +808,8 @@ await(int prio, int timo){
     yield();
 
     currproc->prio = oprio;
+    if( !ofrt ) currproc->flags &= ~PRF_REALTIME;
+
     return to ? to <= get_time() : 0;
 }
 
