@@ -795,6 +795,7 @@ await(int prio, int timo){
     int plx = splhigh();
     if( !currproc->wmsg ) return;
 
+    // prio | 0x80 => realtime
     currproc->prio = prio & 0x7F;
     if( prio & 0x80 ) currproc->flags |= PRF_REALTIME;
 
