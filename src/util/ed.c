@@ -325,7 +325,7 @@ DEFALIAS(ed, vi)
 
         /* get command */
         printf("ed: ");
-        getline2(buf, BUFSIZ, 0, 0);
+        getline2(buf, BUFSIZ, 0 );
         /* \n -> repeat previous */
         if( !*buf ){
             strcpy(buf, pbuf);
@@ -404,7 +404,7 @@ DEFALIAS(ed, vi)
             l->next = l->prev = 0;
 
             printf("ed(a): ");
-            getline2(l->line, sizeof(l->line), 0, 0);
+            getline2(l->line, sizeof(l->line), 0 );
             if( !strcmp(l->line, ".") ){
                 free(l, sizeof(struct Line) );
                 break;
@@ -462,7 +462,7 @@ DEFALIAS(ed, vi)
                 puts("\a?\n");
                 break;
             }
-            getline2(adr1->line, sizeof(adr1->line), -1, 0);
+            getline2(adr1->line, sizeof(adr1->line), GLF_USEBUF | GLF_LEFT );
             file.currline = adr1;
             file.currno   = adrn1;
             delta = 1;

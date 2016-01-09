@@ -135,6 +135,11 @@ extern void kprintf(const char *, ...);
 #  define STDERR	kconsole_port
 #endif
 
+/* flags for getline2 */
+#define GLF_USEBUF	1
+#define GLF_HIST	2
+#define GLF_LEFT	4
+#define GLF_STARS	8
 
 /* #define bootmsg(f, args...)	fprintf(kconsole_port, f , ## args ) */
 #define bootmsg	kprintf

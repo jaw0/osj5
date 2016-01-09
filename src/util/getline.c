@@ -77,7 +77,7 @@ move(const char *s, int max, int *i, int from, int to, int beepp){
 
 /* insert char */
 static void
-insert(char *s, int max, int *i, char c){
+insert(char *s, int max, int *i, char c, u_long flags){
     int j, x;
 
     j = *i;
@@ -88,7 +88,7 @@ insert(char *s, int max, int *i, char c){
     do{
         x = s[j];
         s[j] = c;
-        putchar(c);
+        putchar( (flags & GLF_STARS) ? '*' : c);
         c = x;
         j++;
     }while(c && j<max-1);
@@ -432,7 +432,7 @@ void getline_cleanup(void){
 }
 
 char *
-getline2(char *s, int max, int usep, int histp){
+getline2(char *s, int max, u_long flags ){
     int i=0;
     int c, n, r;
 
@@ -440,7 +440,7 @@ getline2(char *s, int max, int usep, int histp){
     int hc;
     struct History *hist;
 
-    if( histp ){
+    if( flags & GLF_HIST ){
 #ifdef USE_PROC
         hist = (struct History*)currproc->getlinedata;
         if( !hist ){
@@ -462,15 +462,14 @@ getline2(char *s, int max, int usep, int histp){
     system("stty raw -echo");
 #endif
 
-    if( usep ){
-        /* usep = 0 => clear buffer
-           1 => reuse buffer, cursor at right
-           -1 => reuse buffer, cursor at left
+    if( flags & GLF_USEBUF ){
+        /* usep = 0 => clear buffer (else reuse buffer)
+           left => cursor at left (else at right)
         */
         fputs(s, STDOUT);
         for(i=0; s[i]; i++)
             ;
-        if( usep == -1 ){
+        if( flags & GLF_LEFT ){
             move(s, max, &i, i, 0, 0);
         }
     }else{
@@ -493,14 +492,14 @@ getline2(char *s, int max, int usep, int histp){
         if( keymap[n].f ){
             r = (keymap[n].f)(s, max, &i, c);
         }else{
-            insert(s, max, &i, c);
+            insert(s, max, &i, c, flags);
             r = 0;
         }
 
         switch(r){
         case G_DONE:
 #ifdef GETLINEHIST
-            if( histp && *s ){
+            if( (flags & GLF_HIST) && *s ){
                 if( hist->n == NHISTORY )
                     free( hist->lines[hist->p], 0 );
 
@@ -522,7 +521,7 @@ getline2(char *s, int max, int usep, int histp){
 #ifdef GETLINEHIST
         case G_PREV:
         case G_NEXT:
-            if( histp ){
+            if( flags & GLF_HIST ){
                 if( hist->n ){
                     if( r == G_PREV )
                         hc --;
@@ -561,7 +560,12 @@ getline2(char *s, int max, int usep, int histp){
 
 char *
 getline(char *s, int max, int usep){
-    return getline2(s, max, usep, 1);
+    return getline2(s, max, (usep ? GLF_USEBUF : 0) | GLF_HIST );
+}
+
+char *
+getpass(char *s, int max){
+    return getline2(s, max, GLF_STARS);
 }
 
 #ifdef TESTING
