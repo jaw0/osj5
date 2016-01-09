@@ -85,7 +85,7 @@ sdcard_init(struct Device_Conf *dev){
     // XXX - this doesn't really belong here
 #if defined(PLATFORM_STM32F1)
     gpio_init( dev->arg[0], GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
-    gpio_set( dev->arg[0] );
+    gpio_set(  dev->arg[0] );
     if( dev->arg[1] ){
         // card present? arg[1] is card detect io
         gpio_init( dev->arg[1], GPIO_INPUT_FLOATING );
@@ -93,7 +93,15 @@ sdcard_init(struct Device_Conf *dev){
     }
 #elif defined(PLATFORM_STM32F4)
     gpio_init( dev->arg[0], GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_25MHZ );
-    gpio_set( dev->arg[0] );
+    gpio_set(  dev->arg[0] );
+    if( dev->arg[1] ){
+        // card present? arg[1] is card detect io
+        gpio_init( dev->arg[1], GPIO_INPUT );
+        if( !gpio_get( dev->arg[1] ) ) return 0;
+    }
+#elif defined(PLATFORM_STM32L1)
+    gpio_init( dev->arg[0], GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
+    gpio_set(  dev->arg[0] );
     if( dev->arg[1] ){
         // card present? arg[1] is card detect io
         gpio_init( dev->arg[1], GPIO_INPUT );
@@ -152,11 +160,14 @@ sdcard_init(struct Device_Conf *dev){
 #else
     // or:
 
-    snprintf(info, sizeof(info), "%s:", ii->name);
-    fmount( & ii->file, info, "fatfs" );
+    // set flags=1 to not automount
+    if( ! dev->flags ){
+        snprintf(info, sizeof(info), "%s:", ii->name);
+        fmount( & ii->file, info, "fatfs" );
 
-    bootmsg( "sdcard %s speed %dkHz mounted on %s type %s\n",
-	     ii->name, actspeed/1000, info, "fatfs" );
+        bootmsg( "sdcard %s speed %dkHz mounted on %s type %s\n",
+                 ii->name, actspeed/1000, info, "fatfs" );
+    }
 #endif
 
     return (int)& ii->file;
@@ -291,9 +302,10 @@ initialize_card(struct SDCinfo *ii){
     while( max-- > 0 ){
         r = _sd_cmd_r1(ii, m, cmd55);
         r = _sd_cmd_r1(ii, m, isv2 ? cmd41v2 : cmd41);
-        //kprintf("cmd41 %x %x\n", r, m[1].response);
+        //kprintf("cmd41 %x %x\n", r, m[1].response);	=> 0 1
         if( !(m[1].response & 1) ) break;	// ready
     }
+    //kprintf("cmd41 %x %x\n", r, m[1].response);
 
     // cmd 58 => R3
     int ocr;

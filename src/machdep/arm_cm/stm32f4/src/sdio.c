@@ -21,7 +21,7 @@
 #define DMASTR	DMA2_Stream3
 #define DMACHAN	4
 
-#define MAXTRY 		3
+#define MAXTRY 		5
 #define RTIMEOUT	4800000		// 100 ms
 #define WTIMEOUT	12000000	// 250 ms
 
@@ -167,11 +167,14 @@ sdio_init(struct Device_Conf *dev){
 #else
     // or:
 
-    snprintf(info, sizeof(info), "%s:", ii->name);
-    fmount( & ii->file, info, "fatfs" );
+    // set flags=1 to not automount
+    if( ! dev->flags ){
+        snprintf(info, sizeof(info), "%s:", ii->name);
+        fmount( & ii->file, info, "fatfs" );
 
-    bootmsg( "sdcard %s mounted on %s type %s\n",
-             ii->name, info, "fatfs" );
+        bootmsg( "sdcard %s mounted on %s type %s\n",
+                 ii->name, info, "fatfs" );
+    }
 #endif
 
     return (int)& ii->file;
@@ -390,7 +393,7 @@ dma_wait_complete(void){
     while( 1 ){
         asleep( SDIO, "sdio" );
         if( !(DMASTR->CR & 1) ) break;
-        await( 0x80, 1000000 );
+        await( 0x81, 1000000 );
         if( !(DMASTR->CR & 1) ) break;
         if( get_hrtime() > t1 ) break;
     }
