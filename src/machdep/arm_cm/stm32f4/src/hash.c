@@ -58,7 +58,6 @@ _hmac_add_key(void){
     int *k     = (int*)hmac_key;
 
     HASH->STR &= ~0x11F;
-    kprintf("key len %d\n", klen);
     while(klen >= 4){
         HASH->DIN = *k;
         k ++;
@@ -113,7 +112,6 @@ hash_add(const u_char *in, int inlen){
         u_char *buf = (u_char*)&hash_inbuf + hash_bufsz;
         short add  = 4 - hash_bufsz;
         if( add > inlen ) add = inlen;
-        kprintf("add to buf %d\n", add);
 
         for( ; add; add--){
             *buf++ = *in++;
@@ -219,10 +217,16 @@ DEFUN(hashtest, "test")
     hash_finish(buf, sizeof(buf));
     hexdump(buf, 16);
 
+    // test vectors from RFC 2202
     hmac_md5_start("Jefe", 4);
-    hash_add("what do ya want for nothing?", 28); // 0x750c783e6ab0b503eaa86e310a5db738
+    hash_add("what do ya want for nothing?", 28); // 750c783e6ab0b503eaa86e310a5db738
     hmac_finish(buf, sizeof(buf));
     hexdump(buf, 16);
+
+    hmac_sha1_start("Jefe", 4);
+    hash_add("what do ya want for nothing?", 28); // effcdf6ae5eb2fa2d27416d5f184df9c259a7c79
+    hmac_finish(buf, sizeof(buf));
+    hexdump(buf, 20);
 
     return 0;
 }
