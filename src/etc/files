@@ -30,7 +30,8 @@ fatfs:          fs/fatfs.c
 fatfs:          fs/fatfs/ff.c
 
 ed:             util/ed.c
-cli:            util/cli.c util/debugger.c
+cli:            util/cli.c
+debugger:       util/debugger.c
 play:           util/play.c
 
 
