@@ -78,10 +78,14 @@ static inline void
 _prepare_key(void){
 
     CRYP->CR |= 7<<3;	// key prepare mode
+    CRYP->CR |= 1<<14;	// flush fifo
+    CRYP->CR |= 1<<2;	// decrypt mode
     CRYP->CR |= 1<<15;	// enable
 
     // wait for ready
     while( CRYP->SR & 0x10 ){}
+
+    CRYP->CR &= ~(7<<3);
 }
 
 static inline void
@@ -193,11 +197,13 @@ crypto_decrypt_start(int alg, const u_char *key, int keylen, const u_char *iv, i
 
     _reset_crypto();
     _set_key(key, keylen);
+
     if( alg == CRYPTO_ALG_AES_ECB || alg == CRYPTO_ALG_AES_CBC ){
         _prepare_key();
     }
-    _set_iv(iv, ivlen);
+
     CRYP->CR |= 1<<2;	// decrypt mode
+    _set_iv(iv, ivlen);
     _start_out_dma(out, outlen);
     _start_crypto(alg);
 }
@@ -236,9 +242,11 @@ crypto_add(const u_char *in, int inlen){
         }
     }
 
-    _start_in_dma(in, inlen & ~3);
-    crypto_insz += inlen & ~3;
-    inlen &= 3;
+    if( inlen > 3 ){
+        _start_in_dma(in, inlen & ~3);
+        crypto_insz += inlen & ~3;
+        inlen &= 3;
+    }
 
     // save remaining partial
     if( inlen ){
@@ -299,6 +307,9 @@ static const u_char azero128[16] = { 'a',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 static const u_char azero256[32] = { 'a',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 static const u_char azero[32]    = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
                                    'a',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+static const u_char test1[32]    = {
+    0x8a, 0x18, 0x2a, 0xdc,  0xe7, 0xd1, 0x80, 0x72,  0xed, 0x6a, 0x21, 0x5e,  0x4c, 0x85, 0xeb, 0x4b,
+    0x0d, 0xae, 0x2e, 0xcd,  0x9b, 0x59, 0x01, 0xbc,  0xc2, 0x8b, 0x9c, 0x7a,  0x15, 0x2b, 0xab, 0xe4 };
 
 // 11usec
 DEFUN(cryptotiming, "test crypto timing")
@@ -350,6 +361,17 @@ DEFUN(cryptotest, "crypto test")
     crypto_add(zero128, 16 );
     crypto_final( );
     hexdump( buf, 32 );
+
+    memset(buf, 0xAA, 32);
+    crypto_decrypt_start( CRYPTO_ALG_AES_CBC, azero256, 32, azero128, 16, buf, sizeof(buf));
+
+    //for(i=0; i<32; i++) crypto_add(test1 + i, 1);
+
+    crypto_add(test1, 32 );
+
+    crypto_final( );
+    hexdump( buf, 32 );
+
 
     return 0;
 }
