@@ -6,6 +6,19 @@
 
 */
 
+  .syntax unified
+  .thumb
+  .global  Default_Handler
+  .section  .text.Default_Handler,"ax",%progbits
+irqmsg:
+        .asciz "irq default handler\n"
+Default_Handler:
+        ldr r0, =irqmsg
+        bl kprintf
+Infinite_Loop:
+  b  Infinite_Loop
+  .size  Default_Handler, .-Default_Handler
+
 
 /******************************************************************************
 *
