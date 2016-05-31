@@ -45,6 +45,11 @@ fault(const char *name){
 }
 
 void
+Default_Handler(void){
+    PANIC("default handler");
+}
+
+void
 NMI_Handler(void){
     // RSN - enter debugger
     PANIC("NMI");
