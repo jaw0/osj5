@@ -123,7 +123,6 @@ clock_init(void){
 /****************************************************************/
 void
 init_ints(void){
-    SCB->SHPR[1]  = (IPL_PROC  << 24); /* SVC */
 }
 
 void

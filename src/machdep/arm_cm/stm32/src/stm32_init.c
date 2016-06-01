@@ -14,24 +14,13 @@
 // NB: nvic handles external interrupts only, not internal exceptions
 void
 nvic_enable(int irq, int prio){
-
-    int bi = irq / 32;
-    int bb = irq & 31;
-
-    int oi = irq / 4;
-    int ob = irq & 3;
-
-    NVIC->IPR[irq] |= prio;
-    NVIC->ISER[bi] |= 1<<bb;	// enable
+    NVIC_EnableIRQ(irq);
+    NVIC_SetPriority(irq, prio);
 }
 
 void
 nvic_clearpending(int irq){
-
-    int bi = irq / 32;
-    int bb = irq & 31;
-
-    NVIC->ICPR[bi] |= 1<<bb;
+    NVIC_ClearPendingIRQ(irq);
 }
 
 /****************************************************************/
@@ -44,7 +33,9 @@ tick_init(void){
     SysTick->LOAD = counter;
     SysTick->CTRL = 3;
 
-    SCB->SHPR[2]  = (IPL_CLOCK << 24) | (IPL_PROC << 16);
+    NVIC_SetPriority(-1, IPL_CLOCK); /* systick */
+    NVIC_SetPriority(-2, IPL_PROC);  /* pendsv */
+    NVIC_SetPriority(-5, IPL_PROC);  /* svcall */
 }
 
 utime_t
