@@ -33,9 +33,9 @@ tick_init(void){
     SysTick->LOAD = counter;
     SysTick->CTRL = 3;
 
-    NVIC_SetPriority(-1, IPL_CLOCK); /* systick */
-    NVIC_SetPriority(-2, IPL_PROC);  /* pendsv */
-    NVIC_SetPriority(-5, IPL_PROC);  /* svcall */
+    NVIC_SetPriority(SysTick_IRQn, IPL_CLOCK);
+    NVIC_SetPriority(PendSV_IRQn,  IPL_PROC);
+    NVIC_SetPriority(SVCall_IRQn,  IPL_PROC);
 }
 
 utime_t
