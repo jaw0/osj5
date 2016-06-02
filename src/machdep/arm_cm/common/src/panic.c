@@ -8,6 +8,7 @@
 
 */
 
+#include <conf.h>
 #include <sys/types.h>
 #include <sys/param.h>
 #include <nstdio.h>

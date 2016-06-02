@@ -129,6 +129,7 @@ void
 init_hw(void){
     clock_init();
     tick_init();
+    stm32_init();
 
 #ifdef KSTACK_SIZE
     extern void _switch_kstack(char*);

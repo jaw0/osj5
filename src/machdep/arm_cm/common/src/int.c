@@ -12,8 +12,7 @@
 #include <proc.h>
 #include <time.h>
 #include <error.h>
-
-#include <stm32.h>
+#include <chip.h>
 
 
 void
