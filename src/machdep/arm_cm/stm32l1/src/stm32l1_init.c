@@ -175,13 +175,13 @@ clock_init(void){
 /****************************************************************/
 void
 init_ints(void){
-    SCB->SHPR[1]  = (IPL_PROC  << 24); /* SVC */
 }
 
 void
 init_hw(void){
     clock_init();
     tick_init();
+    stm32_init();
 
 #ifdef KSTACK_SIZE
     extern void _switch_kstack(char*);
