@@ -160,20 +160,22 @@ SECTIONS
     It is one task of the startup to copy the initial values from FLASH to RAM. */
     .data  : AT ( _sidata )
     {
-	    . = ALIGN(4);
+	. = ALIGN(4);
         /* This is used by the startup in order to initialize the .data secion */
         _sdata = . ;
 
+        /* code that needs to run from RAM: */
+        *(.ramfunc .ramfunc.*);
+
         KEEP(*(.jcr))
-		*(.got.plt) *(.got)
-		*(.shdata)
-		*(.data .data.* .gnu.linkonce.d.*)
+	*(.got.plt) *(.got)
+	*(.shdata)
+	*(.data .data.* .gnu.linkonce.d.*)
 
-	    . = ALIGN(4);
-	    /* This is used by the startup in order to initialize the .data secion */
-   	 	_edata = . ;
+	. = ALIGN(4);
+	/* This is used by the startup in order to initialize the .data secion */
+   	_edata = . ;
     } >RAM
-
 
 
     /* This is the uninitialized data section */
