@@ -1,0 +1,77 @@
+#
+#
+
+ident	ATSAMS70TEST
+
+arch    arm_cm
+variant atsams70
+
+option  SYSCLOCK        300000000
+option  HSECLOCK         12000000
+option  LSECLOCK
+
+option  PROC_TIME       1000
+option  KSTACK_SIZE     2048
+option  PROC_HIRES
+
+feature PROC
+feature NSTDIO
+feature ED			# text editor
+feature CLI			# command line interface
+
+option KDEBUG                  # kernel debugging
+
+
+option DEVPREFIX	"dev:"	# prefix for naming device files
+option CHECKPROC		# additional error checking in proc
+
+option GETLINEHIST
+
+option FATFS_RENAMEFILE_ON_CREAT
+option FLFS_DELETEFILE_ON_CREAT
+
+################################################################
+
+option PROJECT_MAIN     main
+
+srcdir          /home/athena/jaw/projects/src/os_j5/src/app
+
+srcfile         atblinky.c
+
+################################################################
+
+# filesys fatfs
+
+################################################################
+
+feature gpio
+# feature adc
+# feature pwm
+# device  ccm
+# device  rng
+# device  rtc
+
+option  RTC_SYNC_CLOCK_FROM_RTC
+
+################################################################
+
+
+# device name type xxx port xxx addr xxx irq xxx baud xxx flags xxx init xxx args x,x,x,x
+
+device serial0 	baud 57600
+# 1212
+
+# virtual comm port over usb
+# feature usb
+# device  vcp0 type usbvcp
+
+################################################################
+
+device console
+
+################################################################
+
+
+################################################################
+# config  root on sd0:  startup in startup.rc console on vcp0
+
