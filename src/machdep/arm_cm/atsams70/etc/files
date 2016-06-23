@@ -1,0 +1,11 @@
+
+kern:   machdep/arm_cm/atsams70/src/vectors.S
+kern:   machdep/arm_cm/atsam/src/atsam_init.c
+kern:   machdep/arm_cm/atsams70/src/atsams70_init.c
+kern:   machdep/arm_cm/atsams70/src/atsams70_asm.S
+
+gpio:   machdep/arm_cm/atsam/src/gpio.c
+serial: machdep/arm_cm/atsam/src/serial.c
+
+# pwm:    machdep/arm_cm/atsams70/src/pwm.c
+# ...
