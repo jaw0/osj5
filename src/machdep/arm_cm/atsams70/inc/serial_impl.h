@@ -6,8 +6,8 @@
 
 */
 
-#ifndef __stm32f4_serial_impl_h__
-#define __stm32f4_serial_impl_h__
+#ifndef __atsams70_serial_impl_h__
+#define __atsams70_serial_impl_h__
 
 static inline void serial_pins_init(int i, int altpins){
 
@@ -24,5 +24,5 @@ static inline void serial_pins_init(int i, int altpins){
     }
 }
 
-#endif /* __stm32f4_serial_impl_h__ */
+#endif /* __stsams70_serial_impl_h__ */
 
