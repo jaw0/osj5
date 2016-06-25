@@ -37,13 +37,13 @@ armcm_init(void){
 /****************************************************************/
 
 void
-tick_init(int freq){
+tick_init(int freq, int ext){
 
     // systick @ PROC_TIME usec
     int counter = (freq / 1000000) * PROC_TIME - 1;
     tick_base = freq / 1000000;
     SysTick->LOAD = counter;
-    SysTick->CTRL = 3;
+    SysTick->CTRL = ext ? 3 : 7;
 
     NVIC_SetPriority(SysTick_IRQn, IPL_CLOCK);
 }
@@ -71,9 +71,6 @@ reboot(void){
 
 void
 idle(void){
-    // QQQ - at sam wfi wtf?
-#ifndef PLATFORM_ATSAM
     __asm__("wfi");
-#endif
 
 }

@@ -74,7 +74,7 @@ static uint32_t uniqueid[4];
 int sys_clock_freq(void){     return freq_hclk; }	// HCLK = FCLK = processor clock = 8*systick
 int mck_clock_freq(void){     return freq_mck;  }	// MCK = peripheral clock = HCLK/n
 int periph_clock_freq(void){  return freq_mck;  }
-#define SYSTICK_FREQ	(freq_hclk / 2)			// docs say /8. wtf?
+#define SYSTICK_FREQ	(freq_hclk)			// use internal clock
 
 static inline void
 enable_external_slow(void){
@@ -322,7 +322,7 @@ init_ints(void){
 void
 init_hw(void){
     clock_init();
-    tick_init( SYSTICK_FREQ );
+    tick_init( SYSTICK_FREQ, 0 );
     // init_uniqueid();
     atsam_init();
 
