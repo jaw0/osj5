@@ -24,5 +24,5 @@ static inline void serial_pins_init(int i, int altpins){
     }
 }
 
-#endif /* __stsams70_serial_impl_h__ */
+#endif /* __atsams70_serial_impl_h__ */
 
