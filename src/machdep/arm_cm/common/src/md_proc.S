@@ -222,11 +222,6 @@ ENTRY(_yield_bottom_trampoline)
 #endif
 
 
-ENTRY(idle)
-        wfi
-        bx lr
-
-
 ENTRY(HardFault_Handler)
         /* pass SP to handler */
 #ifdef KSTACK_SIZE

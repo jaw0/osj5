@@ -37,11 +37,11 @@ armcm_init(void){
 /****************************************************************/
 
 void
-tick_init(void){
+tick_init(int freq){
 
     // systick @ PROC_TIME usec
-    int counter = (sys_clock_freq() / 1000000) * PROC_TIME / 8;
-    tick_base = sys_clock_freq() / 1000000 / 8;
+    int counter = (freq / 1000000) * PROC_TIME - 1;
+    tick_base = freq / 1000000;
     SysTick->LOAD = counter;
     SysTick->CTRL = 3;
 
@@ -68,3 +68,12 @@ reboot(void){
     SCB->AIRCR = (SCB->AIRCR & (0x700)) | (0x5FA << 16) | (1<<2);
 }
 /****************************************************************/
+
+void
+idle(void){
+    // QQQ - at sam wfi wtf?
+#ifndef PLATFORM_ATSAM
+    __asm__("wfi");
+#endif
+
+}

@@ -128,7 +128,7 @@ init_ints(void){
 void
 init_hw(void){
     clock_init();
-    tick_init();
+    tick_init( freq_sys / 8 );
     stm32_init();
 
 #ifdef KSTACK_SIZE
