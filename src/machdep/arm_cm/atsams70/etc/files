@@ -6,6 +6,9 @@ kern:   machdep/arm_cm/atsams70/src/atsams70_asm.S
 
 gpio:   machdep/arm_cm/atsam/src/gpio.c
 serial: machdep/arm_cm/atsam/src/serial.c
+trng:   machdep/arm_cm/atsam/src/trng.c
 
-# pwm:    machdep/arm_cm/atsams70/src/pwm.c
+pwm:    machdep/arm_cm/atsam/src/tcount.c
+# pwm:    machdep/arm_cm/atsam/src/pwm.c
+
 # ...
