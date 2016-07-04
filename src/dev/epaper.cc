@@ -88,13 +88,7 @@ epaper_init(struct Device_Conf *dev){
     // CS is active high
     ii->spicf_dpy.ss[0] = dev->arg[0] | 0x80;	// arg[0] = CS
 
-
-#if defined(PLATFORM_STM32F1)
-    gpio_init( dev->arg[0], GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
-#elif defined(PLATFORM_STM32F4)
-    gpio_init( dev->arg[0], GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_25MHZ );
-#endif
-    gpio_clear( dev->arg[0] );
+    spi_cf_init( & ii->spicf_dpy );
 
     // allocate extra space per row to store addr + trailers
     ii->bufsize = ii->_width * ii->_height / 8 + 2 * ii->_height + 2;

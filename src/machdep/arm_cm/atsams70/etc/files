@@ -4,11 +4,16 @@ kern:   machdep/arm_cm/atsam/src/atsam_init.c
 kern:   machdep/arm_cm/atsams70/src/atsams70_init.c
 kern:   machdep/arm_cm/atsams70/src/atsams70_asm.S
 
+xdma:   machdep/arm_cm/atsams70/src/xdma.c
+
+adc:    machdep/arm_cm/atsams70/src/adc.c
+spi:    machdep/arm_cm/atsams70/src/spi.c
 gpio:   machdep/arm_cm/atsam/src/gpio.c
 serial: machdep/arm_cm/atsam/src/serial.c
 trng:   machdep/arm_cm/atsam/src/trng.c
+pwm:    machdep/arm_cm/atsam/src/pwm.c
+hsmci:  machdep/arm_cm/atsams70/src/hsmci.c
+atflash:  machdep/arm_cm/atsams70/src/atflash.c
 
-pwm:    machdep/arm_cm/atsam/src/tcount.c
-# pwm:    machdep/arm_cm/atsam/src/pwm.c
 
 # ...

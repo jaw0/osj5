@@ -97,19 +97,11 @@ ssd1331_init(struct Device_Conf *dev){
     ii->spicf_cmd.ss[1] = ii->spicf_dpy.ss[1] = dev->arg[1];
     ii->spicf_dpy.ss[1] |= 0x80;
 
-# if defined(PLATFORM_STM32F1)
-    gpio_init( dev->arg[0], GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
-    gpio_init( dev->arg[1], GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
-# elif defined(PLATFORM_STM32F4)
-    gpio_init( dev->arg[0], GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_25MHZ );
-    gpio_init( dev->arg[1], GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_25MHZ );
-# else
-#  error "unknown platform"
-# endif
+    spi_cf_init( & ii->spicf_cmd );
+    spi_cf_init( & ii->spicf_dpy );
 
-    gpio_set( dev->arg[0] );
 #else
-    PANIC("spi cot configured");
+    PANIC("spi not configured");
 #endif
 
 

@@ -379,6 +379,29 @@ _spi_dump_crumb(void){
 
 void spi_dump_crumb(){_spi_dump_crumb();}
 
+// init CS pins
+int
+spi_cf_init(const struct SPIConf *cf){
+    int i;
+
+    for(i=0; i<cf->nss; i++){
+#if defined(PLATFORM_STM32F1)
+        gpio_init( cf->ss[i], GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
+#elif defined(PLATFORM_STM32F4)
+        gpio_init( cf->ss[i], GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_25MHZ );
+#elif defined(PLATFORM_STM32L1)
+        gpio_init( cf->ss[i], GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
+#else
+# error "unknown platform"
+#endif
+    }
+
+    gpio_set( cf->ss[0] );
+
+    return 0;
+}
+
+
 // set/clear cs pins
 static void
 _spi_cspins(const struct SPIConf *cf, int on){

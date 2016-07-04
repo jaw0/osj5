@@ -1,8 +1,9 @@
 /*
-  Copyright (c) 2013
+  Copyright (c) 2016
   Author: Jeff Weisberg <jaw @ tcp4me.com>
-  Created: 2013-Mar-25 17:29 (EDT)
-  Function: spi
+  Created: 2016-Jul-03 11:28 (EDT)
+  Function: atsam spi
+
 */
 
 #ifndef __spi_h__
@@ -15,6 +16,7 @@ struct SPIConf {
     int		speed;
     int		nss;
     char	ss[8];
+    int		_ss;
 };
 
 
@@ -38,7 +40,7 @@ typedef struct spi_msg {
 } spi_msg;
 
 extern int spi_xfer(const struct SPIConf *, int, spi_msg*, int);
-extern int spi_cf_init(const struct SPIConf *);
+extern int spi_cf_init(struct SPIConf *);
 
 #define SPI_XFER_OK		0
 #define SPI_XFER_TIMEOUT	-1

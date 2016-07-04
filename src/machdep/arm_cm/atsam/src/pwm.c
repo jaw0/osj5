@@ -58,14 +58,18 @@ _tc_freq_set(int timer, int freq){
 
     if( psc == 0 ) psc = 1;
 
+    int afrq = clock / 8 / psc;
+
     if( psc > 0x3FFFF ){
         psc >>= 4;
         ccs = TC_CMR_TCCLKS_TIMER_CLOCK4;	// MCLK/128
         if( psc > 0xFFFF ) psc = 0xFFFF;
+        afrq = clock / 128 / psc;
     }
     else if( psc > 0xFFFF ){
         psc >>= 2;
         ccs = TC_CMR_TCCLKS_TIMER_CLOCK3;	// MCLK/32
+        afrq = clock / 32 / psc;
     }
 
     r |= ccs;
