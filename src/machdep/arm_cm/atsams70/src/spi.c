@@ -20,7 +20,7 @@
 #include <pmc.h>
 #include <xdma.h>
 
-#define SPIVERBOSE
+//#define SPIVERBOSE
 
 #ifdef SPIVERBOSE
 #  define CRUMBS	"spi"
@@ -173,7 +173,9 @@ spi_cf_init(struct SPIConf *cf){
         if( scbr > 255 ) scbr = 255;
         if( scbr < 1  )  scbr = 1;
         spiinfo[ cf->unit ].addr->SPI_CSR[ cf->_ss ] = (scbr << 8) | SPI_CSR_CSAAT | SPI_CSR_NCPHA;
-        kprintf("spi%d/ss%d speed %d\n", cf->unit, cf->_ss, periph_clock_freq() / scbr);
+#ifdef SPIVERBOSE
+        bootmsg("spi%d/ss%d speed %d\n", cf->unit, cf->_ss, periph_clock_freq() / scbr);
+#endif
         ok = 1;
     }
 
@@ -244,30 +246,15 @@ _spi_rxtx1(Spi *dev, int val, int lastp){
 
 /****************************************************************/
 
-static inline void
-_spi_conf_enable(const struct SPIConf *cf, struct SPIInfo *ii){
-    Spi *dev   = ii->addr;
-
-}
-
-static inline void
-_spi_conf_disable(const struct SPIConf *cf, struct SPIInfo *ii){
-    Spi *dev   = ii->addr;
-
-    DROP_CRUMB("spi-off", dev->SPI_SR, 0);
-}
-
 static void
 _spi_conf_start(const struct SPIConf *cf, struct SPIInfo *ii){
 
     _spi_cspins(cf, 1);
-    _spi_conf_enable(cf, ii);
 }
 
 static void
 _spi_conf_done(const struct SPIConf *cf, struct SPIInfo *ii){
 
-    _spi_conf_disable(cf, ii);
     _spi_cspins(cf, 0);
 }
 
@@ -308,7 +295,7 @@ _msg_until(struct SPIInfo *ii){
     }
 
     // failed
-    DROP_CRUMB("until-fail", ii->addr->SPI_SR, 0); // m->response, count);
+    DROP_CRUMB("until-fail", ii->addr->SPI_SR, 0);
     ii->state = SPI_STATE_ERROR;
     return 1;
 }
@@ -329,8 +316,8 @@ _dma_write(struct SPIInfo *ii){
 
     dma_stop(ii->dmactx);
     dma_stop(ii->dmacrx);
-    if( r ) ii->state = SPI_STATE_ERROR;
 
+    if( r ) ii->state = SPI_STATE_ERROR;
 }
 
 static void
@@ -345,10 +332,11 @@ _dma_read(struct SPIInfo *ii){
 
     DROP_CRUMB("msg-dma-wait", 0, 0 );
     int r = dma_wait_complete(ii->dmacrx, ii, -1, wto);
-    DROP_CRUMB("msg-dma-woke", r, 0);
+    DROP_CRUMB("msg-dma-woke", r, ii->addr->SPI_SR);
 
     dma_stop(ii->dmacrx);
     dma_stop(ii->dmactx);
+
     if( r ) ii->state = SPI_STATE_ERROR;
 }
 
@@ -376,7 +364,6 @@ _msg_write(struct SPIInfo *ii){
     DROP_CRUMB("write", m->dlen, ii->addr->SPI_SR);
     if( m->dlen >= DMA_MIN_SIZE ){
         _dma_write(ii);
-        m->response = dma_idle_sink;
     }else{
         for(i=0; i<m->dlen; i++)
             _spi_rxtx1( ii->addr, m->data[i], (ii->num_msg == 1) && (i == m->dlen-1) );
@@ -445,7 +432,9 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
         msgs[0].mode &= ~0x80;
     }
 
+#ifdef SPIVERBOSE
     kprintf("spi xfer: unit %d, speed %d, nss %d, _ss %d, to %d\n", cf->unit, cf->speed, cf->nss, cf->_ss, timeout);
+#endif
 
     if( currproc ){
         int r = sync_tlock(&ii->lock, "spi.L", timeout);
@@ -454,16 +443,12 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
 
     RESET_CRUMBS();
 
-#ifdef SPIVERBOSE
-    //kprintf("spi xfer2 starting, %d msgs\n", nmsg);
-#endif
 
     ii->cf        = cf;
     ii->msg       = msgs;
     ii->num_msg   = nmsg;
     ii->state     = SPI_STATE_BUSY;
     ii->timeout   = timeout ? get_time() + timeout : 0;
-    kprintf("spi to %d, now %d => %qd\n", timeout, get_time(), ii->timeout);
 
     // enable device, pins
     _spi_conf_start(cf, ii);
@@ -485,7 +470,6 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
         ii->state = SPI_STATE_XFER_DONE;
 
     // probably finished during the time it took to get here
-    // ii->addr->SPI_CR = SPI_CR_LASTXFER;
     DROP_CRUMB("spi-wait!busy", dev->SPI_SR, 0);
     while( 0 ){
         int x;
@@ -501,7 +485,7 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
     DROP_CRUMB("done", ii->state, 0);
 
 #ifdef SPIVERBOSE
-    if( 1 || verbose || (ii->state != SPI_STATE_XFER_DONE) ){
+    if( verbose || (ii->state != SPI_STATE_XFER_DONE) ){
         kprintf("spi xfer\n");
         _spi_dump_crumb();
     }

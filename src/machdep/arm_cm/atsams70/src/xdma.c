@@ -27,11 +27,12 @@ static struct {
 } xdmacf[MAXCHAN];
 
 
-void
+int
 xdma_init(void){
 
     nvic_enable( XDMAC_IRQn, IPL_DISK );
     pmc_enable( ID_XDMAC  );
+    return 0;
 }
 
 
