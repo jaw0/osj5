@@ -108,6 +108,11 @@ GFXdpy::set_font(const char *name){
 }
 
 void
+GFXdpy::_set_pos(int x, int y){
+    cx = x;
+    cy = y;
+}
+void
 GFXdpy::set_pos(int x, int y){
     cx = x;
     cy = y;

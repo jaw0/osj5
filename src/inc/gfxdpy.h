@@ -83,6 +83,7 @@ public:
     void putchar(int);
     void puts(const char *);
     void get_pos(int*, int*);
+    void _set_pos(int, int);
     void set_pos(int, int);
     void set_font(int);
     void set_font(const Font*);

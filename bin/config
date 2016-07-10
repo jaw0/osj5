@@ -112,7 +112,7 @@ const char ident[]   = "$ident";
 const char archid[]  = "$archid";
 const char version[] =
 	"OS/J5 ($ident) $archid Release $version($number)\\n"
-	"Copyright (c) 1999-2015 Jeff Weisberg\\n"
+	"Copyright (c) 1999-2016 Jeff Weisberg\\n"
 	"Built on $date by $whoami\@$host\\n"
 	"Built in $pwd\\n";
 
@@ -274,93 +274,92 @@ sub process_file {
         }
 
         elsif( $cmd eq "flashdev" ){
-    	$nflashdev ++;
-    	my( $addr, $size, $blk, $flg, $type ) = (0,0,0,0);
+            $nflashdev ++;
+            my( $addr, $size, $blk, $flg, $type ) = (0,0,0,0);
 
-    	($addr) = /@\s*([^\s]*)/     if /@/;
-    	($size) = /size\s*([^\s]*)/  if /size/;
-    	($blk)  = /block\s*([^\s]*)/ if /block/;
-    	($flg)  = /flags\s*([^\s]*)/ if /flags/;
-    	($type) = /type\s*([^\s]*)/  if /type/;
+            ($addr) = /@\s*([^\s]*)/     if /@/;
+            ($size) = /size\s*([^\s]*)/  if /size/;
+            ($blk)  = /block\s*([^\s]*)/ if /block/;
+            ($flg)  = /flags\s*([^\s]*)/ if /flags/;
+            ($type) = /type\s*([^\s]*)/  if /type/;
 
-
-    	$flashdev .= "\t{ (void*)$addr, $size, $flg, $blk, \"$f[1]\", \"$type\" },\n";
+            $flashdev .= "\t{ (void*)$addr, $size, $flg, $blk, \"$f[1]\", \"$type\" },\n";
         }
 
         elsif( $cmd eq "disk" ){
-    	$ndisk ++;
-    	my( $cont, $unit, $part, $flags, $type ) = (0,0,0,0,0);
+            $ndisk ++;
+            my( $cont, $unit, $part, $flags, $type ) = (0,0,0,0,0);
 
-    	($cont)   = /on\s*([^\s]*)/ if /on/;
-    	($unit)   = /unit\s*([^\s]*)/ if /unit/;
-    	($part)   = /partition\s*([^\s]*)/ if /partition/;
-    	($flags)  = /flags\s*([^\s]*)/ if /flags/;
-    	($type)   = /type\s*([^\s]*)/  if /type/;
+            ($cont)   = /on\s*([^\s]*)/ if /on/;
+            ($unit)   = /unit\s*([^\s]*)/ if /unit/;
+            ($part)   = /partition\s*([^\s]*)/ if /partition/;
+            ($flags)  = /flags\s*([^\s]*)/ if /flags/;
+            ($type)   = /type\s*([^\s]*)/  if /type/;
 
-    	$diskdev .= "\t{ \"$f[1]\", \"$type\", \"$cont\", $unit, $part, $flags },\n";
+            $diskdev .= "\t{ \"$f[1]\", \"$type\", \"$cont\", $unit, $part, $flags },\n";
         }
 
         elsif( $cmd eq "filesys" ){
 
-    	my $type = $f[1];
+            my $type = $f[1];
 
-    	$nfsys ++;
-    	print CONFC "extern int ${type}_init(struct MountEntry *);\n";
-    	print CONFC "extern int ${type}_ops(int, struct MountEntry *, ...);\n";
-    	print CONFC "extern FILE* ${type}_open(struct MountEntry *, const char*, const char*);\n";
-    	$fsys .= "\t{ \"$type\", ${type}_init, ${type}_open, ${type}_ops },\n";
+            $nfsys ++;
+            print CONFC "extern int ${type}_init(struct MountEntry *);\n";
+            print CONFC "extern int ${type}_ops(int, struct MountEntry *, ...);\n";
+            print CONFC "extern FILE* ${type}_open(struct MountEntry *, const char*, const char*);\n";
+            $fsys .= "\t{ \"$type\", ${type}_init, ${type}_open, ${type}_ops },\n";
 
             feature( $type, 'filesystem' );
         }
 
         elsif( $cmd eq "device" ){
-    	my $name = $f[1];
-    	my( $port, $addr, $irq, $flags, $baud, $init ) = (0,0,0,0,0,0);
+            my $name = $f[1];
+            my( $port, $addr, $irq, $flags, $baud, $init ) = (0,0,0,0,0,0);
             my $type = '';
             my $args = '';
             my $unit;
 
-    	my ($dev, $n) = $name =~ /(\S*\D+)(\d*)$/;
+            my ($dev, $n) = $name =~ /(\S*\D+)(\d*)$/;
 
-    	($port) = /port\s*([^\s]*)/   if /port/;
-    	($baud) = /baud\s*([^\s]*)/   if /baud/;
-    	($irq) = /irq\s*([^\s]*)/     if /irq/;
-    	($flags) = /flags\s*([^\s]*)/ if /flags/;
-    	($addr) = /addr\s*([^\s]*)/   if /addr/;
-    	($init) = /init\s*([^\s]*)/   if /init/;
-    	($type) = /type\s*([^\s]*)/   if /type/;
-    	($unit) = /unit\s*([^\s]*)/   if /unit/;
+            ($port) = /port\s*([^\s]*)/   if /port/;
+            ($baud) = /baud\s*([^\s]*)/   if /baud/;
+            ($irq) = /irq\s*([^\s]*)/     if /irq/;
+            ($flags) = /flags\s*([^\s]*)/ if /flags/;
+            ($addr) = /addr\s*([^\s]*)/   if /addr/;
+            ($init) = /init\s*([^\s]*)/   if /init/;
+            ($type) = /type\s*([^\s]*)/   if /type/;
+            ($unit) = /unit\s*([^\s]*)/   if /unit/;
             ($args) = /args\s+([0-9a-fx, ]+)/i if /args/;
 
             $type ||= $dev;
             $unit = $n unless defined $unit;
 
-    	print CONFH "#define USE_\U$type\E\n" unless $devs{$type};
+            print CONFH "#define USE_\U$type\E\n" unless $devs{$type};
 
             $devs{ $type } = $unit if $unit > $devs{$type};
-    	$devs{ $type } ++;
+            $devs{ $type } ++;
             feature( $type, 'device' );
 
-    	$init = $init || "${type}_init";
+            $init = $init || "${type}_init";
 
-    	print CONFC "extern int $init(struct Device_Conf *);\n";
+            print CONFC "extern int $init(struct Device_Conf *);\n";
 
             if( $n ne "" ){
-    	    $devs .= "\t{ $unit, $port, $addr, $irq, $baud, $flags, { $args }, $init, ";
-    	}else{
-    	    $devs .= "\t{ 0, 0, 0, 0, 0, 0, { $args }, $init, ";
-    	}
-    	if( /nodev/ ){
-    	    $devs .= "0 },\n";
-    	}else{
-    	    $devs .= "\"$name\" },\n";
-    	}
-    	$ndevs ++;
+                $devs .= "\t{ $unit, $port, $addr, $irq, $baud, $flags, { $args }, $init, ";
+            }else{
+                $devs .= "\t{ 0, 0, 0, 0, 0, 0, { $args }, $init, ";
+            }
+            if( /nodev/ ){
+                $devs .= "0 },\n";
+            }else{
+                $devs .= "\"$name\" },\n";
+            }
+            $ndevs ++;
 
         }
 
         elsif( $cmd eq "ident" ){
-    	$ident = $f[1];
+            $ident = $f[1];
         }
 
         elsif( $cmd eq 'arch' ){
@@ -386,8 +385,8 @@ sub process_file {
         }
 
         else{
-    	print STDERR "unrecognized config: $_\n";
-    	exit -1;
+            print STDERR "unrecognized config: $_\n";
+            exit -1;
         }
     }
 }

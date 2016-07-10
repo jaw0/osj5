@@ -155,6 +155,41 @@ DEFALIAS(editmem, e)
     return 0;
 }
 
+DEFUN(dumpw, "dump memory (by word)")
+{
+    int len, i;
+    u_long *addr;
+    int col = 0;
+
+    if( argc < 2 ){
+        f_error("dumpw addr [len]");
+        return -1;
+    }
+
+    addr = (u_long*)atoi_base(16, argv[1] );
+
+    if( argc > 2 )
+        len = atoi_base(16, argv[2] );
+    else
+        len = 16;
+
+
+    for(i=0; i<len/4; i++){
+        if( !(i % 4) )
+            printf("%08.8X: ", addr + i);
+
+        printf(" %08.8x", addr[i]);
+
+        if( (i%4) == 3 )
+            printf("\n");
+    }
+    if( i % 4 ){
+        printf("\n");
+    }
+
+    return 0;
+}
+
 #ifdef PLATFORM_I386
 DEFUN(inb, "read a byte from io")
 {

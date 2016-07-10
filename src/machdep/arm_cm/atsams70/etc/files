@@ -8,6 +8,7 @@ xdma:   machdep/arm_cm/atsams70/src/xdma.c
 
 adc:    machdep/arm_cm/atsams70/src/adc.c
 spi:    machdep/arm_cm/atsams70/src/spi.c
+i2c:    machdep/arm_cm/atsams70/src/i2c.c
 gpio:   machdep/arm_cm/atsam/src/gpio.c
 serial: machdep/arm_cm/atsam/src/serial.c
 trng:   machdep/arm_cm/atsam/src/trng.c

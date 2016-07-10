@@ -14,13 +14,15 @@ option  PROC_TIME       1000
 option  KSTACK_SIZE     2048
 option  PROC_HIRES
 
-feature PROC
-feature NSTDIO
-feature ED			# text editor
-feature CLI			# command line interface
+feature proc
+feature nstdio
+feature ed			# text editor
+feature cli			# command line interface
+feature debugger
+feature play
 
 option KDEBUG                  # kernel debugging
-
+option KTESTING
 
 option DEVPREFIX	"dev:"	# prefix for naming device files
 option CHECKPROC		# additional error checking in proc
@@ -33,10 +35,16 @@ option FLFS_DELETEFILE_ON_CREAT
 ################################################################
 
 option PROJECT_MAIN     main
+option PROJECT_SPLASH   splash
+option PROJECT_HWINIT   hwinit
 
-srcdir          /home/athena/jaw/projects/src/os_j5/src/app
+srcdir          /home/athena/jaw/projects/hardware/atsam-mini/src
 
 srcfile         atblinky.c
+srcfile         gfx.cc
+srcfile         badge.cc
+srcfile         board.c
+srcfile         main.c
 
 ################################################################
 
@@ -45,16 +53,20 @@ srcfile         atblinky.c
 ################################################################
 
 feature gpio
+feature pwm
+feature adc
+
+device  xdma
+device  trng
+device  i2c0     baud 400000
+
 # feature adc
-# feature pwm
 # device  ccm
-# device  rng
 # device  rtc
 
 option  RTC_SYNC_CLOCK_FROM_RTC
 
 ################################################################
-
 
 # device name type xxx port xxx addr xxx irq xxx baud xxx flags xxx init xxx args x,x,x,x
 
@@ -71,7 +83,21 @@ device console
 
 ################################################################
 
+device spi0   baud 400000
+# pins: D12, D17
+device oled0  type ssd1306 unit 0 port 0x80 baud 1000000 flags 1 args 0x6C, 0x71
 
 ################################################################
-# config  root on sd0:  startup in startup.rc console on vcp0
+
+
+device sd0 type hsmci
+
+filesys         fatfs
+
+device  atflash
+filesys         flfs
+flashdev fl0:   type flfs  block 512 @ 0x580000 size 524288
+
+################################################################
+config  root on sd0:  startup in startup.rc     # console on vcp0
 

@@ -107,7 +107,7 @@ spi_init(struct Device_Conf *dev){
 
     addr->SPI_CR = SPI_CR_SWRST;
     addr->SPI_MR = SPI_MR_MSTR | (0xFF<<24); // maximum dlybcs
-    // addr->SPI_CR = 1<<30;	// FIFO enable?
+    addr->SPI_CR = 1<<30;	// FIFO enable?
     addr->SPI_CR = SPI_CR_SPIEN;
 
     nvic_enable( ii->irq,  IPL_DISK );
