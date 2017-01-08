@@ -35,6 +35,7 @@ struct FSType_Conf {
 #define LSHOW_LONG	4
 #define LSHOW_FSYS	8
 #define LSHOW_DEVS	16
+#define LSHOW_SHORT	32
 
 /* file attr */
 #define FFA_READONLY	1	/* cannot be deleted */

@@ -295,6 +295,7 @@ renamefile(const char *oname, const char *nname){
 #ifdef USE_CLI
 
 DEFUN(dir, "list files")
+DEFALIAS(dir, l)
 DEFALIAS(dir, ls)
 DEFALIAS(dir, ll)
 {
@@ -304,6 +305,8 @@ DEFALIAS(dir, ll)
 
     if( !strcmp(argv[0], "ll") )
         how = LSHOW_ALL | LSHOW_LONG ;
+    if( !strcmp(argv[0], "ls") )
+        how = LSHOW_SHORT ;
 
     if( argc == 1)
         what = "";
@@ -316,8 +319,9 @@ DEFALIAS(dir, ll)
                 case 'f':	how |= LSHOW_FSYS;	break;
                 case 'x':	how |= LSHOW_EXT;	break;
                 case 'l':	how |= LSHOW_LONG;	break;
+                case 's':	how |= LSHOW_SHORT;	break;
                 case 'h':
-                    printf("-a\tall\n-d\tdevs\n-f\tfilesys\n-l\tlong\n");
+                    printf("-a\tall\n-d\tdevs\n-f\tfilesys\n-l\tlong\n-s\tshort\n");
                     return 0;
                 }
             }

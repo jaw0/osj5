@@ -295,14 +295,14 @@ fatfs_ops(int what, MountEntry *me, ...){
     }
 }
 
-
 int
 fatfs_dir(MountEntry *me, int how, const char *dname){
     struct FatFS *fs = me->fsdat;
     DIR dir;
     FILINFO fi;
     long long total=0;
-    int i, files=0;
+    int files=0;
+    char i=0, col=0;
 
     if( f_opendir(&dir, dname) ) return -1;
 
@@ -313,8 +313,10 @@ fatfs_dir(MountEntry *me, int how, const char *dname){
         if( (fi.fattrib & AM_HID) && !(how & LSHOW_ALL) )
             continue;
 
-        total += fi.fsize;
-        files ++;
+        // lcase
+        for(i=0; i<12; i++)
+            fi.fname[i] = tolower(fi.fname[i]);
+
 
         if( how & LSHOW_LONG ){
 
@@ -333,11 +335,30 @@ fatfs_dir(MountEntry *me, int how, const char *dname){
                    (fi.fattrib&AM_HID)? 'h' : '-' );
         }
 
-        // lcase
-        for(i=0; i<12; i++)
-            fi.fname[i] = tolower(fi.fname[i]);
+        if( how & LSHOW_SHORT ){
+            if( files && !col ) printf("\n");
+            char fl = strlen(fi.fname);
+            printf("%s%c", fi.fname, (fi.fattrib & AM_DIR)?'/': ' ');
+            // how much padding?
+            char pad = 16 - fl - 1;
+            for(;pad;pad--) printf(" ");
+            // 5 columns across
+            col++;
+            col %= 5;
+        }else{
+            printf("%7.7d bytes    %s%c\n", fi.fsize, fi.fname, (fi.fattrib & AM_DIR)?'/': ' ');
+        }
 
-        printf("%7.7d bytes    %s%c\n", fi.fsize, fi.fname, (fi.fattrib & AM_DIR)?'/': ' ');
+        total += fi.fsize;
+        files ++;
+    }
+
+    // newer version of fatfs has:
+    // f_closedir(&dir);
+
+    if( how & LSHOW_SHORT ){
+        printf("\n");
+        return 0;
     }
 
     printf("========================\n"
