@@ -11,22 +11,24 @@ feature NSTDIO
 feature ED			# text editor
 feature CLI			# command line interface
 
+option  PROC_HIRES
+
 option DEVPREFIX	"dev:"	# prefix for naming device files
 option CHECKPROC		# additional error checking in proc
 
 option GETLINEHIST
 # option E9_EMUL_DEBUGGING
 
-srcfile         app/emul_proctest.c
-option PROJECT_MAIN     proctest
+#srcfile         app/emul_proctest.c
+#option PROJECT_MAIN     proctest
 
 
 ################################################################
 # FLFS options
     # what should happen when creating a file that already exists?
     # rename it, delete it, or keep it
-option RENAMEFILE_ON_CREAT
-# option DELETEFILE_ON_CREAT
+option FATFS_RENAMEFILE_ON_CREAT
+option FLFS_RENAMEFILE_ON_CREAT
 option ENOUGHALREADYHEURISTIC	64
 ################################################################
 
@@ -52,6 +54,9 @@ device rtc0     port 0x70
 #disk hd1:       type flfs  on hdc0 unit 1 partition -1
 #disk hd2:       type flfs  on hdc1 unit 0 partition -1
 #disk hd3:       type flfs  on hdc1 unit 1 partition -1
+
+disk ud0a:       type fatfs on ud unit 0 partition -1
+
 
 ################################################################
 

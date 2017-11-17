@@ -71,11 +71,10 @@ option  RTC_SYNC_CLOCK_FROM_RTC
 # device name type xxx port xxx addr xxx irq xxx baud xxx flags xxx init xxx args x,x,x,x
 
 device serial0 	baud 57600
-# 1212
 
 # virtual comm port over usb
-# feature usb
-# device  vcp0 type usbvcp
+feature usb
+device  vcp0 type usbvcp
 
 ################################################################
 

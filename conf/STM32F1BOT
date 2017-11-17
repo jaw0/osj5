@@ -32,11 +32,16 @@ option GETLINEHIST
 
 ################################################################
 
-srcfile         app/bot_init.c
-#srcfile         app/music.c
-srcfile         app/play.c
-srcfile         app/menu.c
-srcfile         app/bot.c
+feature play                    # music
+
+
+srcdir          /home/athena/jaw/projects/src/os_j5/src/app
+
+srcfile         bot_init.c
+#srcfile         music.c
+#srcfile         play.c
+srcfile         menu.c
+srcfile         bot.c
 
 option PROJECT_INIT     init_bot_hw
 option PROJECT_MAIN     main
@@ -45,7 +50,9 @@ option PROJECT_MAIN     main
 # FLFS options
     # what should happen when creating a file that already exists?
     # rename it, delete it, or keep it
-option RENAMEFILE_ON_CREAT
+option FATFS_RENAMEFILE_ON_CREAT
+option FLFS_DELETEFILE_ON_CREAT
+
 # option DELETEFILE_ON_CREAT
 option ENOUGHALREADYHEURISTIC	64
 ################################################################
@@ -74,11 +81,6 @@ device console
 
 device i2c0     baud 400000
 device spi1     baud 400000
-
-# QQQ
-#device usb0             addr 0x1234
-#device usbdisk0
-#device usbserial0
 
 ################################################################
 

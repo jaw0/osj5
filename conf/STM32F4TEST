@@ -1,6 +1,9 @@
 #
-# $Id: GENERIC,v 1.7 2001/11/15 22:56:37 jaw Exp $
+# ghi fez mini board
 #
+# stm32flash -v -w osj5.bin /dev/tty.usb*
+# dfu-util -a 0 -s 0x08000000 -D osj5.bin
+
 
 ident	STM32F4TEST
 
@@ -9,9 +12,11 @@ variant stm32f4
 
 option  SYSCLOCK        168000000
 option  HSECLOCK         12000000
+option  LSECLOCK
 
 option  PROC_TIME       1000
 option  KSTACK_SIZE     2048
+option  PROC_HIRES
 
 feature PROC
 feature NSTDIO
@@ -26,10 +31,16 @@ option CHECKPROC		# additional error checking in proc
 
 option GETLINEHIST
 
+option FATFS_RENAMEFILE_ON_CREAT
+option FLFS_DELETEFILE_ON_CREAT
+
 ################################################################
 
-srcfile         app/blm_test.c
+srcdir          /home/athena/jaw/projects/src/os_j5/src/app
 
+# srcfile         app/blm_test.c
+
+srcfile         blinky.c
 option PROJECT_MAIN     main
 
 ################################################################
@@ -41,6 +52,11 @@ option PROJECT_MAIN     main
 feature adc
 feature gpio
 feature pwm
+device  ccm
+device  rng
+device  rtc
+
+option  RTC_SYNC_CLOCK_FROM_RTC
 
 ################################################################
 
@@ -48,6 +64,14 @@ feature pwm
 # device name type xxx port xxx addr xxx irq xxx baud xxx flags xxx init xxx args x,x,x,x
 
 device serial2 	baud 57600
+
+################################################################
+# virtual comm port over usb
+feature usb
+device  vcp0 type usbvcp
+
+################################################################
+
 device console
 
 option I2C_PULLUPS
@@ -60,19 +84,31 @@ device spi0     baud 400000
 # i2c
 device oled0  type ssd1306 port 0 addr 0x3C flags 0x2 baud 800000
 
+
+# # spi0, CS=GPIO_A8, C/D=GPIO_A4
+device oled1  type ssd1331 unit 0 port 0x80 baud 36000000 args 0x8, 0x4
+
 # spi0, CS=GPIO_A3, C/D=GPIO_A4
-device oled1  type ssd1306 port 0x80 baud 36000000 flags 0x1 args 0x3, 0x4
+# device oled1  type ssd1306 port 0x80 baud 36000000 flags 0x1 args 0x3, 0x4
 
-# spi0, CS=GPIO_A8, C/D=GPIO_A4
-device oled2  type ssd1331 unit 0 port 0x80 baud 36000000 args 0x8, 0x4
 
+# spi0, CS=GPIO_A3
+device epaper0  type epaper unit 0 port 0x80 baud 1000000 flags 0x2 args 0x3, 0, 96, 96
 
 ################################################################
 
 filesys         fatfs
-device sd0      type sdcard port 0 baud 500000 args 0x2
+
+# CS = A2
+device sd0      type sdcard port 0 baud 50000000 args 0x2
 
 ################################################################
 
-config  root on sd0:  startup in startup.rc
+device          stflash
+filesys         flfs
+
+flashdev fl0:   type flfs  @ 0x80e0000  size 131072  block 512
+
+################################################################
+config  root on sd0:  startup in startup.rc console on vcp0
 

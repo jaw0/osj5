@@ -30,6 +30,7 @@ option GETLINEHIST
 srcfile         app/bcbot1/menu.c
 srcfile         app/bcbot1/lib.c
 srcfile         app/bcbot1/test2.c
+srcfile         app/bcbot1/bot.c
 
 option PROJECT_MAIN     main
 
