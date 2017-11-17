@@ -177,8 +177,9 @@ init_clock_internal(void){
 }
 
 #ifdef HSECLOCK
-static void
+static int
 init_clock_external(void){
+    int max;
 /*
 2. Enable the 3 to 20 MHz crystal oscillator by setting
 CKGR_MOR.MOSCXTEN. The user can define a start- up time. This can be
@@ -188,13 +189,16 @@ achieved by writing a value in the CKGR_MOR.MOSCXTST. */
     PMC->CKGR_MOR |=
         CKGR_MOR_KEY_PASSWD
         | CKGR_MOR_MOSCXTEN	// enable xtal
-        | (8 << 8)		// MOSCXTST = 8 => ~2msec
+        | (64 << 8)		// MOSCXTST = 64 => ~16msec
         ;
 
 /* Once this register has been correctly configured, the user
    must wait for PMC_SR.MOSCXTS to be set. */
 
-    while( (PMC->PMC_SR & PMC_SR_MOSCXTS) == 0 ){}
+    max = 1000000;
+    while( (PMC->PMC_SR & PMC_SR_MOSCXTS) == 0 ){
+        if( !--max ) return 0;
+    }
 
 /* 3. Switch the main clock to the 3 to 20 MHz crystal oscillator by
    setting CKGR_MOR.MOSCSEL. */
@@ -203,7 +207,10 @@ achieved by writing a value in the CKGR_MOR.MOSCXTST. */
 
 /* 4. Wait for PMC_SR.MOSCSELS to be set to ensure the switchover is complete. */
 
-    while( (PMC->PMC_SR & PMC_SR_MOSCSELS) == 0 ){}
+    max = 1000000;
+    while( (PMC->PMC_SR & PMC_SR_MOSCSELS) == 0 ){
+        if( !--max ) return 0;
+    }
 
 /*
 5. Check the main clock frequency: This frequency can be measured via
@@ -219,12 +226,25 @@ CKGR_MOR.MOSCSEL. If MAINF ≠ 0, proceed to Step 6.
     measure_clock(1);		// measure and discard
     freq_measured = measure_clock(1);
     freq_hclk = freq_mck = HSECLOCK;
+
+    return 1;
+}
+
+static void
+stop_clock_external(void){
+
+    uint32_t r = PMC->CKGR_MOR;
+    r &= ~CKGR_MOR_MOSCXTEN;
+    r &= ~(0xFF<<8);
+    r |= CKGR_MOR_MOSCXTEN;
+    PMC->CKGR_MOR = r;
 }
 #endif
 
 // SRCCLOCK -> SYSCLOCK
-static void
+static int
 init_clock_pll(void){
+    int max;
 /*
 6.
 In the names PLLx, DIVx, MULx, LOCKx, PLLxCOUNT, and CKGR_PLLxR, ‘x’ represents A.
@@ -239,7 +259,7 @@ Once CKGR_PLLxR has been written, the user must wait for PMC_SR.LOCKx to be set.
     int div = 1;	// RSN - support more speeds
     int mdv = (SYSCLOCK > MCK_MAXFREQ) ? 1 : 0;	// divide by 2 : 1
 
-    if( !mul ) return;
+    if( !mul ) return 1;
     if( mul > 62 ) mul = 62;
 
     freq_hclk = SRCCLOCK * (mul + 1) / div;
@@ -253,7 +273,10 @@ Once CKGR_PLLxR has been written, the user must wait for PMC_SR.LOCKx to be set.
         | (div)
         ;
 
-    while( (PMC->PMC_SR & PMC_SR_LOCKA) == 0 ){}
+    max = 1000000;
+    while( (PMC->PMC_SR & PMC_SR_LOCKA) == 0 ){
+        if( !--max ) return 0;
+    }
 
 /*
 7. Select the master clock and processor clock:
@@ -278,16 +301,29 @@ If CSS, MDIV or PRES are modified at any stage, the MCKRDY bit goes low to indic
     v &= ~(3<<8);
     v |= mdv << 8;	// MDIV
     PMC->PMC_MCKR = v;
-    while( (PMC->PMC_SR & PMC_SR_MCKRDY) == 0 ){}
+
+    max = 1000000;
+    while( (PMC->PMC_SR & PMC_SR_MCKRDY) == 0 ){
+        if( !--max ) return 0;
+    }
 
     v &= ~3;
     v |= PMC_MCKR_CSS_PLLA_CLK;
     PMC->PMC_MCKR = v;
-    while( (PMC->PMC_SR & PMC_SR_MCKRDY) == 0 ){}
+
+    max = 1000000;
+    while( (PMC->PMC_SR & PMC_SR_MCKRDY) == 0 ){
+        if( !--max ) return 0;
+    }
+
+    return 1;
+}
+
+static void
+stop_clock_pll(void){
 
 
 }
-
 
 
 static void
@@ -302,14 +338,14 @@ clock_init(void){
     init_clock_internal();
 #endif
 #ifdef HSECLOCK
-    init_clock_external();
+    if( ! init_clock_external() ){
+        stop_clock_external();
+        init_clock_external();
+    }
 #endif
 #if SYSCLOCK > SRCCLOCK
     init_clock_pll();
 #endif
-
-
-    // usb
 
 }
 
@@ -321,6 +357,7 @@ init_ints(void){
 
 void
 init_hw(void){
+
     clock_init();
     tick_init( SYSTICK_FREQ, 0 );
     // init_uniqueid();

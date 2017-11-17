@@ -208,6 +208,21 @@ init_hw2(void){
     bootmsg("clocks: sys %dMHz, apb1 %dMHz, apb2 %dMHz, usb %dMHz\n",
             freq_sys/1000000, freq_apb1/1000000, freq_apb2/1000000, freq_usb/1000000);
     bootmsg("uid %x-%x-%x\n", R_UNIQUE[0], R_UNIQUE[1], R_UNIQUE[2]);
-
 }
 
+/* enter low power standby mode */
+int
+power_down(void){
+
+    RCC->APB1ENR |= (1<<28);		// enable PWR system
+
+    //– Set SLEEPDEEP in CortexTM-M4F System Control register
+    //– Set PDDS bit in Power Control register (PWR_CR)
+    //– Clear WUF bit in Power Control/Status register (PWR_CSR)
+
+    SCB->SCR |= 4;	// sleepdeep
+    PWR->CR  |= 2;	// PDDS
+    PWR->CR  |= 4;	// clear WUF
+
+    __asm__("wfi");
+}

@@ -17,4 +17,13 @@ hsmci:  machdep/arm_cm/atsams70/src/hsmci.c
 atflash:  machdep/arm_cm/atsams70/src/atflash.c
 
 
+usb:    machdep/arm_cm/atsam/usb/usbhs_device.c
+usb:    machdep/arm_cm/atsam/usb/udc.c
+
+usbvcp: machdep/arm_cm/atsam/usb/udi_cdc.c
+usbvcp: machdep/arm_cm/atsam/usb/udi_cdc_desc.c
+#usbvcp: machdep/arm_cm/atsam/usb/udi_cdc_conf.c
+
+#usbvcp: machdep/arm_cm/atsam/src/usb_vcp.c
+
 # ...

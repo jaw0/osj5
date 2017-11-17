@@ -9,7 +9,7 @@
 */
 
 
-#include <conf.h>
+//#include <conf.h>
 #include <stdarg.h>
 #include <sys/types.h>
 #ifndef TESTING
@@ -23,6 +23,12 @@
 //   NOPRINTFTIME	- do not include support for timestamps %T
 //   NOPRINTFIP		- do not include support for ip addresses %I
 //   PRINTFFLOATTYPE	- use (float|double) for floating point math
+
+#ifdef TESTING
+//# define NOPRINTF64
+# define NOPRINTFFLOAT
+# define NOPRINTFTIME
+#endif
 
 
 /*
@@ -68,19 +74,20 @@ enum {
 #define isdig(x)	(((x)>='0') && ((x)<='9'))
 
 typedef unsigned long long u_quad;
-#ifndef NOPRINTF64
-typedef u_quad	u_num_t;
-#else
-typedef unsigned long u_num_t;
-#endif
+typedef unsigned int u_numstd_t;
 
+#ifndef NOPRINTF64
+typedef u_quad	u_numfull_t;
+#else
+typedef u_numstd_t u_numfull_t;
+#endif
 
 static const char Set_A[] =	"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 static const char Set_a[] =	"0123456789abcdefghijklmnopqrstuvwxyz";
 static const char spinchar[] = "|\\-/";
 
 int snprintf(char *, int, const char *, ...);
-static int putnum(int (*)(void*, char), void *, u_num_t, int, int, int, int);
+static int putnum(int (*)(void*, char), void *, u_numfull_t, int, int, int, int);
 int fncprintf(int (*)(void*, char), void *, const char *, ...);
 
 #ifndef NOPRINTFFLOAT
@@ -92,11 +99,10 @@ typedef float float_num_t;
 static int putfloat(int (*)(void*, char), void *, float_num_t, int, int, int);
 #endif
 
-
 int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
     const char *p = fmt;
     char *s;
-    u_num_t val;
+    u_numfull_t val;
 #ifndef NOPRINTFFLOAT
     float_num_t fval;
 #endif
@@ -264,9 +270,9 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                 base = 0x10;
             donum:
                 if( flags & B(PF_QUAD) ){
-                    val = va_arg(ap, u_num_t);
+                    val = va_arg(ap, u_numfull_t);
                 }else{
-                    val = va_arg(ap, u_long);
+                    val = va_arg(ap, u_numstd_t);
                     /* sign extend */
                     if( flags & B(PF_SIGNED)){
                         if( val & 0x80000000 )
@@ -329,7 +335,7 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
 #endif
                 break;
             case '\0':
-                return;
+                return pos;
             case '#':
                 flags |= B(PF_ALT);
                 goto rflag;
@@ -375,7 +381,7 @@ padding(int (*ofnc)(void*, char), void *arg, int n, int ch){
 #endif
 
 static int
-putnum(int (*ofnc)(void*, char), void *arg, u_num_t val, int base, int width, int prec, int flags){
+putnum(int (*ofnc)(void*, char), void *arg, u_numfull_t val, int base, int width, int prec, int flags){
     /* base must be: 2<=base<=36 */
 
     const char *chrs;
@@ -399,11 +405,12 @@ putnum(int (*ofnc)(void*, char), void *arg, u_num_t val, int base, int width, in
     /* convert to buffer (in reverse order) */
     do{
         n = val % base;
+        val = val / base;
         if( n < 0 || n > 36 )
             tbuf[i++] = '*';
         else
             tbuf[i++] = chrs[ n ];
-    }while( val /= base );
+    }while( val );
 
     /* add leading zeros */
     while( i < prec ){
@@ -557,6 +564,7 @@ void printf(const char *fmt, ...){
 
     va_start(ap,fmt);
     vprintf(printffnc, 0, fmt, ap);
+    va_end(ap);
 }
 
 /* **************************************************************** */
@@ -571,6 +579,7 @@ void fprintf(FILE *f, const char *fmt, ...){
 
     va_start(ap,fmt);
     vprintf(fprintffnc, f, fmt, ap);
+    va_end(ap);
 }
 
 #endif
@@ -605,7 +614,9 @@ int snprintf(char *buf, int len, const char *fmt, ...){
     s.max = len;
     if(len) *buf = 0;
 
-    return vprintf(snprintffnc, (void*)&s, fmt, ap);
+    int r = vprintf(snprintffnc, (void*)&s, fmt, ap);
+    va_end(ap);
+    return r;
 }
 
 int vsnprintf(char *buf, int len, const char *fmt, va_list ap){
@@ -623,7 +634,9 @@ fncprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, ...){
     va_list ap;
 
     va_start(ap, fmt);
-    return vprintf(ofnc, arg, fmt, ap);
+    int r = vprintf(ofnc, arg, fmt, ap);
+    va_end(ap);
+    return r;
 }
 
 /* **************************************************************** */
@@ -632,6 +645,7 @@ fncprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, ...){
 #ifdef TESTING
 #include <math.h>
 #include <string.h>
+
 void main(void){
     char buffer[128];
     int i;
@@ -639,9 +653,11 @@ void main(void){
     for(i=0; i<128; i++) buffer[i]='a';
 
 
-    snprintf(buffer, 128, "%d %c %s %02.2x\n", (int)324, (int)0x45, "foobar", (int)32);
+    //snprintf(buffer, 128, "%d %c %s %02.2X\n", (int)324, (int)0x45, "foobar", (int)32);
+    snprintf(buffer, 128, "%d %d %d %x %x\n", (int)324, (int)0x45, (int)1234, (int)32, (int)4321);
     puts(buffer);
 
+    exit(0);
     //printf("%ld %c %s %02.2x\n",   (int)324, (int)0x45, "foobar", (int)32);
     //printf("%.6ld %c %s %02.2x\n", (int)324, (int)0x45, "foobar", (int)32);
 

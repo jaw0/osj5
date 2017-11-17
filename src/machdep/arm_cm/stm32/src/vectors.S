@@ -143,6 +143,31 @@ g_pfnVectors:
   .word     SPI5_IRQHandler                   /* SPI5                         */
   .word     SPI6_IRQHandler                   /* SPI6                         */
 
+  // F7
+  .word     SAI1_IRQHandler                      /* SAI1 global Interrupt */
+  .word     LTDC_IRQHandler                      /* LTDC global Interrupt */
+  .word     LTDC_ER_IRQHandler                   /* LTDC Error global Interrupt */
+  .word     DMA2D_IRQHandler                     /* DMA2D global Interrupt */
+  .word     SAI2_IRQHandler                      /* SAI2 global Interrupt */
+  .word     QUADSPI_IRQHandler                   /* Quad SPI global interrupt */
+  .word     LPTIM1_IRQHandler                    /* LP TIM1 interrupt */
+  .word     CEC_IRQHandler                       /* HDMI-CEC global Interrupt */
+  .word     I2C4_EV_IRQHandler                   /* I2C4 Event Interrupt */
+  .word     I2C4_ER_IRQHandler                   /* I2C4 Error Interrupt */
+  .word     SPDIF_RX_IRQHandler                  /* SPDIF-RX global Interrupt */
+  .word     DSI_IRQHandler                       /* DSI global Interrupt */
+  .word     DFSDM1_FLT0_IRQHandler               /* DFSDM1 Filter 0 global Interrupt */
+  .word     DFSDM1_FLT1_IRQHandler               /* DFSDM1 Filter 1 global Interrupt */
+  .word     DFSDM1_FLT2_IRQHandler               /* DFSDM1 Filter 2 global Interrupt */
+  .word     DFSDM1_FLT3_IRQHandler               /* DFSDM1 Filter 3 global Interrupt */
+  .word     SDIO2_IRQHandler                     /* SDMMC2 global Interrupt */
+  .word     CAN3_TX_IRQHandler                   /* CAN3 TX Interrupt */
+  .word     CAN3_RX0_IRQHandler                  /* CAN3 RX0 Interrupt */
+  .word     CAN3_RX1_IRQHandler                  /* CAN3 RX1 Interrupt */
+  .word     CAN3_SCE_IRQHandler                  /* CAN3 SCE Interrupt */
+  .word     JPEG_IRQHandler                      /* JPEG global Interrupt */
+  .word     MDIOS_IRQHandler                     /* MDIO Slave global Interrupt */
+
   .size  g_pfnVectors, .-g_pfnVectors
 /*******************************************************************************
 *
@@ -439,4 +464,73 @@ g_pfnVectors:
 
    .weak      SPI6_IRQHandler
    .thumb_set SPI6_IRQHandler,Default_Handler
+
+  .weak      SAI1_IRQHandler
+  .thumb_set SAI1_IRQHandler,Default_Handler
+
+  .weak      LTDC_IRQHandler
+  .thumb_set LTDC_IRQHandler,Default_Handler
+
+  .weak      LTDC_ER_IRQHandler
+  .thumb_set LTDC_ER_IRQHandler,Default_Handler
+
+  .weak      DMA2D_IRQHandler
+  .thumb_set DMA2D_IRQHandler,Default_Handler
+
+  .weak      SAI2_IRQHandler
+  .thumb_set SAI2_IRQHandler,Default_Handler
+
+  .weak      QUADSPI_IRQHandler
+  .thumb_set QUADSPI_IRQHandler,Default_Handler
+
+  .weak      LPTIM1_IRQHandler
+  .thumb_set LPTIM1_IRQHandler,Default_Handler
+
+  .weak      CEC_IRQHandler
+  .thumb_set CEC_IRQHandler,Default_Handler
+
+  .weak      I2C4_EV_IRQHandler
+  .thumb_set I2C4_EV_IRQHandler,Default_Handler
+
+  .weak      I2C4_ER_IRQHandler
+  .thumb_set I2C4_ER_IRQHandler,Default_Handler
+
+  .weak      SPDIF_RX_IRQHandler
+  .thumb_set SPDIF_RX_IRQHandler,Default_Handler
+
+  .weak      DSI_IRQHandler
+  .thumb_set DSI_IRQHandler,Default_Handler
+
+  .weak      DFSDM1_FLT0_IRQHandler
+  .thumb_set DFSDM1_FLT0_IRQHandler,Default_Handler
+
+  .weak      DFSDM1_FLT1_IRQHandler
+  .thumb_set DFSDM1_FLT1_IRQHandler,Default_Handler
+
+  .weak      DFSDM1_FLT2_IRQHandler
+  .thumb_set DFSDM1_FLT2_IRQHandler,Default_Handler
+
+  .weak      DFSDM1_FLT3_IRQHandler
+  .thumb_set DFSDM1_FLT3_IRQHandler,Default_Handler
+
+  .weak      SDIO2_IRQHandler
+  .thumb_set SDIO2_IRQHandler,Default_Handler
+
+  .weak      CAN3_TX_IRQHandler
+  .thumb_set CAN3_TX_IRQHandler,Default_Handler
+
+  .weak      CAN3_RX0_IRQHandler
+  .thumb_set CAN3_RX0_IRQHandler,Default_Handler
+
+  .weak      CAN3_RX1_IRQHandler
+  .thumb_set CAN3_RX1_IRQHandler,Default_Handler
+
+  .weak      CAN3_SCE_IRQHandler
+  .thumb_set CAN3_SCE_IRQHandler,Default_Handler
+
+  .weak      JPEG_IRQHandler
+  .thumb_set JPEG_IRQHandler,Default_Handler
+
+  .weak      MDIOS_IRQHandler
+  .thumb_set MDIOS_IRQHandler,Default_Handler
 

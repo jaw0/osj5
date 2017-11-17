@@ -46,6 +46,7 @@ tick_init(int freq, int ext){
     SysTick->CTRL = ext ? 3 : 7;
 
     NVIC_SetPriority(SysTick_IRQn, IPL_CLOCK);
+    //bootmsg("systick f %d, L %d\n", freq, counter);
 }
 
 utime_t

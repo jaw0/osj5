@@ -27,7 +27,7 @@ gpio_init(int pin, int mode){
     pin &= 0xF;
     int pos = (pin & 0x7) << 2;
 
-#if defined(PLATFORM_STM32F4)
+#if defined(PLATFORM_STM32F4) || defined(PLATFORM_STM32F7)
     RCC->AHB1ENR |= 1 << io;
 #elif defined(PLATFORM_STM32F0)
     RCC->AHBENR |= 1 << (io + 17);

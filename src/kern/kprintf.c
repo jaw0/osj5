@@ -162,6 +162,7 @@ kprintf(const char *fmt, ...){
     red_on();
     va_start(ap,fmt);
     vprintf(kprintffnc, 0, fmt, ap);
+    va_end(ap);
     red_off();
 }
 

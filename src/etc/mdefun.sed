@@ -5,3 +5,4 @@
 /^#[ 	]*else/p
 /^#[ 	]*elif/p
 /^#[ 	]*endif/p
+/MKDEFSKIPFILE/q

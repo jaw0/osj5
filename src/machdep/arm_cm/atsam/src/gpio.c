@@ -126,7 +126,7 @@ gpio_init(uint32_t pin, uint32_t mode){
     // ...
 
 
-    _protect(addr);
+    //_protect(addr);
     splx(plx);
 }
 
