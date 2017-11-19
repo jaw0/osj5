@@ -12,6 +12,7 @@
   .section  .text.Default_Handler,"ax",%progbits
 irqmsg:
         .asciz "irq default handler\n"
+        .align 2
 Default_Handler:
         ldr r0, =irqmsg
         bl kprintf
