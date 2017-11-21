@@ -18,13 +18,14 @@
 void
 gpio_init(int pin, int mode){
 
+    GPIO_TypeDef *addr = _gpio_addr(pin);
+    if( !addr ) return;
+
     int plx = splhigh();
     int io  = pin >> 4;
 
-    GPIO_TypeDef *addr = _gpio_addr(pin);
     pin &= 0xF;
     int pos = (pin & 0x7) << 2;
-
 
 #if defined(PLATFORM_STM32F4)
     RCC->AHB1ENR |= 1 << io;
