@@ -95,7 +95,7 @@ ssd1331_init(struct Device_Conf *dev){
     ii->spicf_cmd.nss   = ii->spicf_dpy.nss   = 2;
     ii->spicf_cmd.ss[0] = ii->spicf_dpy.ss[0] = dev->arg[0];
     ii->spicf_cmd.ss[1] = ii->spicf_dpy.ss[1] = dev->arg[1];
-    ii->spicf_dpy.ss[1] |= 0x80;
+    ii->spicf_dpy.ss[1] |= SPI_SS_INV;
 
     spi_cf_init( & ii->spicf_cmd );
     spi_cf_init( & ii->spicf_dpy );

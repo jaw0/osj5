@@ -14,7 +14,8 @@ struct SPIConf {
     int		unit;
     int		speed;
     int		nss;
-    char	ss[8];
+    short	ss[8];
+# define SPI_SS_INV	0x8000
 };
 
 

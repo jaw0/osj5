@@ -86,7 +86,7 @@ epaper_init(struct Device_Conf *dev){
     ii->spicf_dpy.nss   = 1;
 
     // CS is active high
-    ii->spicf_dpy.ss[0] = dev->arg[0] | 0x80;	// arg[0] = CS
+    ii->spicf_dpy.ss[0] = dev->arg[0] | SPI_SS_INV;	// arg[0] = CS
 
     spi_cf_init( & ii->spicf_dpy );
 

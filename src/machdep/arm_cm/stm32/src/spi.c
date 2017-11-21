@@ -382,21 +382,23 @@ void spi_dump_crumb(){_spi_dump_crumb();}
 // init CS pins
 int
 spi_cf_init(const struct SPIConf *cf){
-    int i;
+    int i, p;
 
     for(i=0; i<cf->nss; i++){
+        p = cf->ss[i] & 0xFF;
+        bootmsg("spi pin %d/%d pin %X\n", i, cf->nss, p);
 #if defined(PLATFORM_STM32F1)
-        gpio_init( cf->ss[i], GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
+        gpio_init( p, GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
 #elif defined(PLATFORM_STM32F4)
-        gpio_init( cf->ss[i], GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_25MHZ );
+        gpio_init( p, GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_25MHZ );
 #elif defined(PLATFORM_STM32L1)
-        gpio_init( cf->ss[i], GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
+        gpio_init( p, GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
 #else
 # error "unknown platform"
 #endif
     }
 
-    gpio_set( cf->ss[0] );
+    gpio_set( cf->ss[0] & 0xFF );
 
     return 0;
 }
@@ -406,17 +408,17 @@ spi_cf_init(const struct SPIConf *cf){
 static void
 _spi_cspins(const struct SPIConf *cf, int on){
     int nss = cf->nss;
-    const char *ss = cf->ss;
+    const short *ss = cf->ss;
 
     SPI_CRUMB("cspins", on, 0);
     while(nss--){
         int s = *ss ++;
-        int m = (s & 0x80) ? 1 : 0;	// hi bit = on/off
+        int m = (s & SPI_SS_INV) ? 1 : 0;	// hi bit = on/off
 
         if( on == m )
-            gpio_set( s & 0x7F );
+            gpio_set( s & 0xFF );
         else
-            gpio_clear( s & 0x7F );
+            gpio_clear( s & 0xFF );
 #ifdef SPIVERBOSE
         // kprintf("pin %x %s\n", (s & 0x7f), (on==m)?"on":"off");
 #endif
@@ -750,7 +752,7 @@ _msg_do(struct SPIInfo *ii){
     return 0;
 }
 
-
+void
 _irq_spidma_handler(int unit, int dman, DMAC_T *dmac){
     struct SPIInfo *ii = spiinfo + unit;
     SPI_TypeDef *dev   = ii->addr;
