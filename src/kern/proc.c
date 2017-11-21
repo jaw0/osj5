@@ -97,7 +97,7 @@ void proc_trace_add(const char *event, u_long arg1){
 void proc_trace_enable(void){}
 void proc_trace_disable(void){}
 void proc_trace_log(void){}
-void proc_trace_add(void){}
+void proc_trace_add(const char *event, u_long arg1){}
 #endif
 /****************************************************************/
 

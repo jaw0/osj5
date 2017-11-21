@@ -17,6 +17,7 @@
 #include <sys/types.h>
 #include <conf.h>
 
+typedef uint32_t uregister_t;
 
 #define IPL_ZERO	0x00	// basepri 0 enables all
 #define IPL_PROC	0xF0

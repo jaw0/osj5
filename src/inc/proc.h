@@ -3,9 +3,6 @@
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 1998
   Function: processes
-
-  $Id$
-
 */
 
 #ifndef __proc_h__
@@ -17,14 +14,16 @@
 #include <md_proc.h>
 #include <fs.h>
 
+
+
 struct Proc {
 #ifdef CHECKPROC
-	u_long magic;			/* for consistancy checking */
+	uint32_t magic;			/* for consistancy checking */
 #	define	PROCMAGIC	987654321
-        u_long lowsp;
+    	uregister_t lowsp;
 #endif
 
-	u_long sp;			/* saved stack ptr */
+	uregister_t sp;			/* saved stack ptr */
 
 	u_char flags;
 #define PRF_NONBLOCK	1	/* process is not permitted to block */
@@ -147,6 +146,13 @@ extern void  asleep(void*, const char*);
 extern int   await(int, int);
 extern void  aunsleep(void);
 extern int   alarm(int);
+
+
+extern void proc_trace_enable(void);
+extern void proc_trace_disable(void);
+extern void proc_trace_log(void);
+extern void proc_trace_add(const char *, u_long);
+
 
 #endif /* __proc_h__ */
 
