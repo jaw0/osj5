@@ -1,6 +1,6 @@
 
 CONF_PREFIX = arm-none-eabi-
-CONF_FLAGS  = -mthumb -mcpu=cortex-m3 -march=armv7-m -mno-thumb-interwork -Os
+CONF_FLAGS  = -mthumb -mcpu=cortex-m4 -march=armv7e-m -mno-thumb-interwork -Os
 
 INCL_FLAGS  = -I../../src/machdep/arm_cm/stm32f4/inc -I../../src/machdep/arm_cm/stm32/inc -I../../src/machdep/arm_cm/common/inc
 
