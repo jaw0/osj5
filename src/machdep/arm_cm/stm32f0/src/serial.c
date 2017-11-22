@@ -102,7 +102,11 @@ serial_init(struct Device_Conf *dev){
     case 2:
         addr = USART3;
         com[i].baudclock = apb1_clock_freq();
+#ifdef IRQ_USART3_4
         irq           = (int) IRQ_USART3_4;
+#else
+        irq           = (int) IRQ_USART3;
+#endif
         break;
 
     default:

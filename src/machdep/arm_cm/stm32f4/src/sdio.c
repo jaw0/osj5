@@ -16,6 +16,11 @@
 #include <nvic.h>
 #include <userint.h>
 
+#ifdef PLATFORM_STM32F7
+#  define SDIO SDMMC1
+#  define SDIO_IRQn SDMMC1_IRQn
+#endif
+
 
 #define DMA	DMA2
 #define DMASTR	DMA2_Stream3
