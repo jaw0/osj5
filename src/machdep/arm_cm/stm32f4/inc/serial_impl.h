@@ -9,7 +9,17 @@
 #ifndef __stm32f4_serial_impl_h__
 #define __stm32f4_serial_impl_h__
 
-static inline void serial_pins_init(int i, int altpins){
+#define SERIAL_PUT(addr, ch)	(addr)->DR = ch
+#define SERIAL_GET(addr)	(addr)->DR
+#define SERIAL_STATUS(addr)	(addr)->SR
+
+#define SERIAL_CR1_EN 	(\
+    0x200C 		/* enable rx/tx, no parity, 8 bit, ... */ \
+    | 0x20 )	 	/* enable RX irq */
+
+
+static inline void
+serial_pins_init(int i, int altpins){
 
     switch(i){
     case 0:
@@ -93,6 +103,45 @@ static inline void serial_pins_init(int i, int altpins){
     default:
         PANIC("invalid serial");
         break;
+    }
+}
+
+static inline int
+serial_baudclock(int i){
+
+    switch(i){
+    case 0:
+        return apb2_clock_freq();
+    case 1:
+        return apb1_clock_freq();
+    case 2:
+        return apb1_clock_freq();
+#ifdef UART4
+    case 3:
+        return apb1_clock_freq();
+#endif
+#ifdef UART5
+    case 4:
+        return apb1_clock_freq();
+#endif
+#ifdef USART6
+    case 5:
+        return apb2_clock_freq();
+#endif
+#ifdef UART7
+    case 6:
+        return apb1_clock_freq();
+#endif
+#ifdef UART8
+    case 7:
+        return apb1_clock_freq();
+        break;
+#endif
+
+    default:
+        PANIC("invalid serial");
+        break;
+
     }
 }
 

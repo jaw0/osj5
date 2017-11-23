@@ -9,6 +9,16 @@
 #ifndef __stm32f0_serial_impl_h__
 #define __stm32f0_serial_impl_h__
 
+#define SERIAL_PUT(addr, ch)	(addr)->TDR = ch
+#define SERIAL_GET(addr)	(addr)->RDR
+#define SERIAL_STATUS(addr)	(addr)->ISR
+
+#define SERIAL_CR1_EN 	(\
+    0x0C 		/* enable rx/tx, no parity, 8 bit, ...*/        \
+    | 0x20 	 	/* enable RX irq */                             \
+    | 1)		/* enable */
+
+
 static inline void serial_pins_init(int i, int altpins){
 
     switch(i){
@@ -56,6 +66,24 @@ static inline void serial_pins_init(int i, int altpins){
         break;
     }
 }
+
+
+static inline int
+serial_baudclock(int i){
+
+    switch(i){
+    case 0:
+        return apb2_clock_freq();
+    case 1:
+        return apb1_clock_freq();
+    case 2:
+        return apb1_clock_freq();
+    default:
+        PANIC("invalid serial");
+        break;
+    }
+}
+
 
 #endif /* __stm32f0_serial_impl_h__ */
 

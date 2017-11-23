@@ -6,7 +6,7 @@ kern:   machdep/arm_cm/stm32f0/src/stm32f0_asm.S
 
 pwm:    machdep/arm_cm/stm32/src/pwm.c
 
-serial: machdep/arm_cm/stm32f0/src/serial.c
+serial: machdep/arm_cm/stm32/src/serial.c
 adc:    machdep/arm_cm/stm32f0/src/adc.c
 
 gpio:   machdep/arm_cm/stm32f4/src/gpio.c

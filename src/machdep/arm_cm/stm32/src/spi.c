@@ -253,6 +253,31 @@ spi_init(struct Device_Conf *dev){
         // ...
         PANIC("invalid spi device");
     }
+#elif defined(PLATFORM_STM32F7)
+    switch(unit){
+        // RSN ... 0,1,2 - same as F4
+        
+    case 3:
+        // on ahb2, dma2 chan2+3
+        // CLK = E12, MISO = E13, MOSI = E14
+        ii->addr      = addr = SPI4;
+        ii->irq       = IRQ_SPI4;
+        ii->rxdma     = DMA2_Stream0;
+        ii->txdma     = DMA2_Stream1;
+        ii->dma	      = DMA2;
+        ii->clock     = APB2CLOCK;
+        dmairqrx      = IRQ_DMA2_STREAM0;
+        dmairqtx      = IRQ_DMA2_STREAM1;
+        ii->dmanrx    = 0;
+        ii->dmantx    = 1;
+        ii->dmachan   = 4;
+        RCC->APB2ENR |= 1<<13;	// spi
+        RCC->AHB1ENR |= 1<<22;	// DMA2
+        gpio_init( GPIO_E12, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
+        gpio_init( GPIO_E13, GPIO_AF(5) | GPIO_PULL_UP );
+        gpio_init( GPIO_E14, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
+        break;
+    
 #elif defined(PLATFORM_STM32L1)
     switch(unit){
     case 0:

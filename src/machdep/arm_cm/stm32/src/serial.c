@@ -12,6 +12,7 @@
 #include <arch.h>
 #include <error.h>
 #include <msgs.h>
+#include <misc.h>
 #include <dev.h>
 #include <bootflags.h>
 #include <clock.h>
@@ -34,8 +35,6 @@ int serial_getchar(FILE*);
 int serial_noop(FILE*);
 int serial_status(FILE*);
 void serial_setbaud(int, int);
-
-extern void blink(int);
 
 
 const struct io_fs serial_port_fs = {
@@ -68,6 +67,30 @@ struct Com {
 
 FILE *serial0_port = 0;
 
+struct serialDevConf {
+    USART_TypeDef * addr;
+    int irq;
+} dev_conf[] = {
+    { USART1, USART1_IRQn },
+    { USART2, USART2_IRQn },
+    { USART3, USART3_IRQn },
+#ifdef UART4
+    { UART4,  UART4_IRQn  },
+#endif
+#ifdef UART5
+    { UART5,  UART5_IRQn  },
+#endif
+#ifdef USART6
+    { USART6, USART6_IRQn },
+#endif
+#ifdef UART7
+    { UART7,  UART7_IRQn  },
+#endif
+#ifdef UART8
+    { UART8,  UART8_IRQn  },
+#endif
+};
+
 
 /* initialize the serial ports */
 int
@@ -89,63 +112,13 @@ serial_init(struct Device_Conf *dev){
 
     // enable gpio clock, usart clock, configure pins
     serial_pins_init( i, altpins );
+    com[i].baudclock = serial_baudclock(i);
 
-    switch(i){
-    case 0:
-        addr = USART1;
-        com[i].baudclock = apb2_clock_freq();
-        irq           = (int) IRQ_USART1;
-        break;
-    case 1:
-        addr = USART2;
-        com[i].baudclock = apb1_clock_freq();
-        irq           = (int) IRQ_USART2;
-        break;
-    case 2:
-        addr = USART3;
-        com[i].baudclock = apb1_clock_freq();
-        irq           = (int) IRQ_USART3;
-        break;
-#ifdef UART4
-    case 3:
-        addr = UART4;
-        irq  = (int) IRQ_UART4;
-        com[i].baudclock = apb1_clock_freq();
-        break;
-#endif
-#ifdef UART5
-    case 4:
-        addr = UART5;
-        irq  = (int) IRQ_UART5;
-        com[i].baudclock = apb1_clock_freq();
-        break;
-#endif
-#ifdef USART6
-    case 5:
-        addr = USART6;
-        irq  = (int) IRQ_USART6;
-        com[i].baudclock = apb2_clock_freq();
-        break;
-#endif
-#ifdef UART7
-    case 6:
-        addr = UART7;
-        irq  = (int) IRQ_UART7;
-        com[i].baudclock = apb1_clock_freq();
-        break;
-#endif
-#ifdef UART8
-    case 7:
-        addr = UART8;
-        irq  = (int) IRQ_UART8;
-        com[i].baudclock = apb1_clock_freq();
-        break;
-#endif
-
-    default:
+    if( i < ELEMENTSIN(dev_conf) ){
+        addr = dev_conf[i].addr;
+        irq  = dev_conf[i].irq;
+    }else{
         PANIC("invalid serial");
-        break;
-
     }
 
     com[i].addr   = addr;
@@ -155,8 +128,7 @@ serial_init(struct Device_Conf *dev){
     else
         serial_setbaud(i, b=9600);
 
-    addr->CR1 |= 0x200C		// enable, no parity, 8 bit, ...
-        | 0x20;			// enable RX irq
+    addr->CR1 = SERIAL_CR1_EN;
 
     // enable ints
     nvic_enable( irq, IPL_TTY );
@@ -176,7 +148,7 @@ serial_setbaud(int port, int baud){
     int d, i;
     int plx;
 
-    com[port].addr->BRR = com[port].baudclock / baud;
+    com[port].addr->BRR = (com[port].baudclock + baud/2) / baud;
 }
 
 int
@@ -208,32 +180,33 @@ serial_putchar(FILE *f, char ch){
     if( f->flags & F_NONBLOCK ){
         while(1){
             plx = spltty();
-            if( addr->SR & SR_TXE ) break;
+            if( SERIAL_STATUS(addr) & SR_TXE ) break;
         }
     }else{
         while(1){
             plx = splproc();
             asleep( addr, "com/o" );
-            if( addr->SR & SR_TXE ) break;
+            if( SERIAL_STATUS(addr) & SR_TXE ) break;
             addr->CR1 |= 0x80;	/* enable TXE irq */
             await( -1, 100000 );
-            if( addr->SR & SR_TXE ) break;
+            if( SERIAL_STATUS(addr) & SR_TXE ) break;
         }
         aunsleep();
     }
 #else
     while(1){
         plx = spltty();
-        if( addr->SR & SR_TXE ) break;
+        if( SERIAL_STATUS(addr) & SR_TXE ) break;
     }
 
 #endif
 
-    addr->DR = ch;
+    SERIAL_PUT(addr, ch);
     splx(plx);
 
     return 1;
 }
+
 
 /* get a char */
 int
@@ -252,9 +225,9 @@ serial_getchar(FILE *f){
         if( f->flags & F_NONBLOCK ){
             /* wait until something is available */
             do {
-                i = addr->SR;
+                i = SERIAL_STATUS(addr);
             }while( !(i & SR_RXNE) );
-            ch = addr->DR;
+            ch = SERIAL_GET(addr);
             splx(plx);
             return ch;
         }else{
@@ -281,9 +254,9 @@ static void
 serial_irq(int unit){
     USART_TypeDef *addr = com[unit].addr;
 
-    int sr = addr->SR;
+    int sr = SERIAL_STATUS(addr);
 
-    // kprintf("s %d %x\n", unit, sr);
+    //kprintf("s %d %x\n", unit, sr);
 
     if( sr & SR_TXE ){
         /* transmitter empty */
@@ -294,7 +267,7 @@ serial_irq(int unit){
 
     if( sr & SR_RXNE ){
         /* got a char */
-        int ch = addr->DR;
+        int ch = SERIAL_GET(addr);
         int i;
 
         /* special control char ? */
@@ -336,23 +309,35 @@ void
 USART3_IRQHandler(void){
     serial_irq(2);
 }
+
+#ifdef UART4
 void
 UART4_IRQHandler(void){
     serial_irq(3);
 }
+#endif
+#ifdef UART5
 void
 UART5_IRQHandler(void){
     serial_irq(4);
 }
+#endif
+#ifdef USART6
 void
 USART6_IRQHandler(void){
     serial_irq(5);
 }
+#endif
+#ifdef UART7
 void
 UART7_IRQHandler(void){
     serial_irq(6);
 }
+#endif
+#ifdef UART8
 void
 UART8_IRQHandler(void){
     serial_irq(7);
 }
+#endif
+
