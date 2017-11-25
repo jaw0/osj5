@@ -211,9 +211,12 @@ init_hw2(void){
 }
 
 /*
- cpuid & 0xFF
- x451 - f7[67]x, Flash: 1M|2M, RAM: 384k+16+128
+ cpuid & 0xFFF
+ 0x451 - f7[67]x, Flash: 1M|2M, RAM: 384k+16+128
+ 0x449, "STM32F74xxx/75xx
+ 0x452, "STM32F72xxx/73xx
 
+ 
  pkgid >> 8, & 7
 
 0x111: STM32F767 and STM32F777 LQFP208 and TFBGA216 package
@@ -221,6 +224,7 @@ init_hw2(void){
 0x101: STM32F767 and STM32F777 LQFP176 package
 0x100: STM32F769 and STM32F779 LQFP176 package
 0x011: WLCSP180 package
-0x010: LQFP144 package 0x001: LQFP100 package 
+0x010: LQFP144 package
+0x001: LQFP100 package 
  
 */

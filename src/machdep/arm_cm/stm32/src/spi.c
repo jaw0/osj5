@@ -18,7 +18,7 @@
 #include <stm32.h>
 #include <nvic.h>
 
-// #define SPIVERBOSE
+#define SPIVERBOSE
 
 
 #define CR1_CRCEN	0x2000
@@ -60,7 +60,6 @@
 #define SPI_STATE_BUSY              4
 #define SPI_STATE_ERROR             -1
 
-
 #define DMA_MIN_SIZE	64
 
 
@@ -96,7 +95,7 @@ _spi_drop_crumb(const char *event, u_long arg0, u_long arg1) {
 
 #if defined(PLATFORM_STM32F1) || defined(PLATFORM_STM32L1)
 typedef DMA_Channel_TypeDef DMAC_T;
-#elif defined(PLATFORM_STM32F4)
+#elif defined(PLATFORM_STM32F4) || defined(PLATFORM_STM32F7)
 typedef DMA_Stream_TypeDef DMAC_T;
 #endif
 
@@ -261,7 +260,7 @@ spi_init(struct Device_Conf *dev){
         // on ahb2, dma2 chan2+3
         // CLK = E12, MISO = E13, MOSI = E14
         ii->addr      = addr = SPI4;
-        ii->irq       = IRQ_SPI4;
+        ii->irq       = SPI4_IRQn;
         ii->rxdma     = DMA2_Stream0;
         ii->txdma     = DMA2_Stream1;
         ii->dma	      = DMA2;
@@ -277,7 +276,7 @@ spi_init(struct Device_Conf *dev){
         gpio_init( GPIO_E13, GPIO_AF(5) | GPIO_PULL_UP );
         gpio_init( GPIO_E14, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         break;
-    
+    }
 #elif defined(PLATFORM_STM32L1)
     switch(unit){
     case 0:
@@ -347,6 +346,9 @@ spi_init(struct Device_Conf *dev){
 
     addr->CR1 |= CR1_SSM | /*CR1_SSI | */ CR1_MSTR;
     addr->CR2 &= ~0xE7;
+#ifdef PLATFORM_STM32F7
+    addr->CR2 |= 7<<8;
+#endif
 
     int speed = _set_speed(ii, dev->baud);
 
@@ -411,10 +413,10 @@ spi_cf_init(const struct SPIConf *cf){
 
     for(i=0; i<cf->nss; i++){
         p = cf->ss[i] & 0xFF;
-        bootmsg("spi pin %d/%d pin %X\n", i, cf->nss, p);
+
 #if defined(PLATFORM_STM32F1)
         gpio_init( p, GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
-#elif defined(PLATFORM_STM32F4)
+#elif defined(PLATFORM_STM32F4) || defined(PLATFORM_STM32F7)
         gpio_init( p, GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_25MHZ );
 #elif defined(PLATFORM_STM32L1)
         gpio_init( p, GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
@@ -522,7 +524,7 @@ _dma_enable_write(struct SPIInfo *ii){
 
 /****************************************************************/
 
-#elif defined(PLATFORM_STM32F4)
+#elif defined(PLATFORM_STM32F4) || defined(PLATFORM_STM32F7)
 
 static inline int
 _dma_isr_clear_irqs(DMA_TypeDef *dma, int dman){
@@ -811,7 +813,7 @@ _irq_spidma_handler(int unit, int dman, DMAC_T *dmac){
             wakeup( ii );
         }
     }
-#elif defined(PLATFORM_STM32F4)
+#elif defined(PLATFORM_STM32F4) || defined(PLATFORM_STM32F7)
 
     int isr = _dma_isr_clear_irqs( ii->dma, dman );
     SPI_CRUMB("dma-irq", dman, isr);
@@ -855,7 +857,7 @@ spi_clear(const struct SPIConf * cf){
 
     for(i=0; i<16; i++){
         while( !(dev->SR & SR_TXE) ) {}
-        dev->DR   = 0xFF;
+        dev->DR = 0xFF;
     }
 
     // disable device, pins
@@ -876,7 +878,7 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
 
     struct SPIInfo *ii = spiinfo + cf->unit;
     SPI_TypeDef *dev   = ii->addr;
-    int verbose=0;
+    int verbose=1;
 
     if( msgs[0].mode & 0x80 ){
         verbose = 1;
@@ -891,7 +893,7 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
     cur_crumb = 0;
 
 #ifdef SPIVERBOSE
-    //kprintf("spi xfer2 starting, %d msgs\n", nmsg);
+    kprintf("spi xfer starting, %d msgs\n", nmsg);
 #endif
 
     ii->cf        = cf;
@@ -981,6 +983,9 @@ void DMA1_Stream4_IRQHandler(void){ _irq_spidma_handler(1, 4, DMA1_Stream4); }
 void DMA1_Stream5_IRQHandler(void){ _irq_spidma_handler(2, 5, DMA1_Stream5); }
 void DMA2_Stream2_IRQHandler(void){ _irq_spidma_handler(0, 2, DMA2_Stream2); }
 void DMA2_Stream3_IRQHandler(void){ _irq_spidma_handler(0, 3, DMA2_Stream3); }
+#elif defined(PLATFORM_STM32F7)
+void DMA2_Stream0_IRQHandler(void){ _irq_spidma_handler(3, 0, DMA2_Stream0); }
+void DMA2_Stream1_IRQHandler(void){ _irq_spidma_handler(3, 1, DMA2_Stream1); }
 #else
 #  error "unknown platform"
 #endif
