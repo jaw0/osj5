@@ -8,6 +8,10 @@
 #ifndef __machdep_stm32_h__
 #define __machdep_stm32_h__
 
+#ifdef PLATFORM_STM32F0
+# include <stm32f0xx.h>
+#endif
+
 #ifdef PLATFORM_STM32F1
 # include <stm32f10x.h>
 # include <nvic.h>
@@ -17,16 +21,16 @@
 # include <stm32f4xx.h>
 #endif
 
-#ifdef PLATFORM_STM32F0
-# include <stm32f0xx.h>
+#ifdef PLATFORM_STM32F7
+# include <stm32f7xx.h>
 #endif
 
 #ifdef PLATFORM_STM32L1
 # include <stm32l1xx.h>
 #endif
 
-#ifdef PLATFORM_STM32F7
-# include <stm32f7xx.h>
+#ifdef PLATFORM_STM32L4
+# include <stm32l4xx.h>
 #endif
 
 #define PLATFORM_STM32
