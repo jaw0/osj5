@@ -6,20 +6,13 @@
 
 */
 
-#include <sys/types.h>
-#include <sys/param.h>
 #include <conf.h>
 #include <nstdio.h>
 #include <arch.h>
-#include <proc.h>
-#include <alloc.h>
-#include <locks.h>
-#include <ioctl.h>
-#include <flash.h>
 #include <dev.h>
 #include <fs.h>
 #include <misc.h>
-
+#include <stflash.h>
 #include <stm32.h>
 
 #define R_FLASHKB	((unsigned short *)(0x1FFF7A22))
