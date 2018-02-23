@@ -4,6 +4,9 @@ kern:   machdep/arm_cm/stm32/src/stm32_init.c
 kern:   machdep/arm_cm/stm32l4/src/stm32l4_init.c
 kern:   machdep/arm_cm/stm32l4/src/stm32l4_asm.S
 
+stflash:        machdep/arm_cm/stm32/src/stflash.c
+stflash:        machdep/arm_cm/stm32l4/src/stflashimpl.c
+
 pwm:    machdep/arm_cm/stm32/src/pwm.c
 serial: machdep/arm_cm/stm32/src/serial.c
 
