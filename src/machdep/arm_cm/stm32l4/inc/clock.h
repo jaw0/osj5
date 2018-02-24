@@ -21,7 +21,7 @@
 #  define USBFREQ  	 48000000
 #  define ADCMAX         80000000
 #  define FLASHMAX 	 16000000       /* NB: depends on voltage; low power = 6MHz */
-#  define PLLVCOTARGET  160000000
+#  define PLLVCOTARGET   16000000
 #  define PLLVCOMIN      64000000
 #  define PLLVCOMAX     344000000
 

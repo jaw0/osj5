@@ -11,6 +11,8 @@
 #include <alloc.h>
 #include <clock.h>
 
+#undef SYSCLOCK
+#define SYSCLOCK 80000000
 
 #define R_FLASHKB	((unsigned short *)(0x1FFF75E0))
 #define R_UNIQUE	((unsigned long*)(0x1FFF7590))
@@ -80,7 +82,6 @@ set_clocksrc(int src){
 }
 
 static const int  msifreq[] = { 100000, 200000, 400000, 800000, 1600000, 2000000, 4000000, 8000000, 16000000, 24000000, 32000000, 48000000 };
-static const char pllm[] = { 3, 4, 6, 8, 12, 16, 24, 32, 48 };
 
 static void
 clock_init(void){
@@ -101,16 +102,17 @@ clock_init(void){
 
 
 #if !defined(HSECLOCK)
-    RCC->CR	|= 1;	// HSI_ON
-    while( RCC->CR & (1<<1) == 0 ) {}	// wait until ready
+    RCC->CR	|= 1<<8;	// HSI_ON
+    while( RCC->CR & (1<<10) == 0 ) {}	// wait until ready
+    freq_sys = HSICLOCK;
 # if (SYSCLOCK == HSICLOCK)
     set_clocksrc(1);
-    freq_sys = HSICLOCK;
     also_adc_clk();
     also_hsi48();
     return;
 # endif
 #endif
+
 
 #ifdef HSECLOCK
 #  if (HSECLOCK < 1000000) || (HSECLOCK > 24000000)
@@ -130,45 +132,55 @@ clock_init(void){
     if( SYSCLOCK > FLASHMAX ){
         RCC->APB1ENR1 |= 1<<28;	// pwr enable
         PWR->CR1 = 1<<9;	// "range 1" (1V8)
-        FLASH->ACR |= 4;	// 64bit
-        FLASH->ACR |= 1;	// wait-state
-        FLASH->ACR |= 2;	// prefetch
+
+        int fws = (SYSCLOCK + FLASHMAX - 1) / FLASHMAX - 1;
+        FLASH->ACR &= 7;
+        FLASH->ACR |= fws;
+
+        FLASH->ACR |= 3<<9;	// cache enable
+        FLASH->ACR |= 1<<8;	// prefetch
 
         while( PWR->SR2 & (1<<10) ){}	// wait for voltage (VOSF)
     }
 
+
     /****************************************************************/
     /* config PLL */
+
 
 #if SYSCLOCK != SRCCLOCK
 
     clksrc = 3;
 #  ifdef HSECLOCK
-#    define PLLSRC	1
+#    define PLLSRC	3
 #  else
-#    define PLLSRC 	0
+#    define PLLSRC 	2
+    // 1 => msi
 #endif
 
-#  define PLLM ((PLLVCOTARGET + SRCCLOCK - 1) / SRCCLOCK)
-#  if (PLLM < 3) || (PLLM > 48)
+#  define PLLM ((SRCCLOCK + PLLVCOTARGET - 1) / PLLVCOTARGET)
+#  if (PLLM < 1) || (PLLM > 8)
 #    error "cannot configure pll. hseclock should be 1MHz - 24MHz"
 #  endif
 
-#  define PLLFVIN	(SRCCLOCK * PLLM)
-#  define PLLDIV	((PLLFVIN + SYSCLOCK - 1) / SYSCLOCK)
-#  define PLLFOUT	(PLLFVIN / PLLDIV)
+#  define PLLFVIN	(SRCCLOCK / PLLM)
+#  define PLLR		2
+
+#  define PLLN		((SYSCLOCK * PLLR + PLLFVIN/2) / PLLFVIN)
+#  define PLLFVCO 	(PLLFVIN * PLLN)
+#  define PLLFOUT	(PLLFVCO / PLLR)
 
 // RSN - check min/max, ...
 
 
     freq_sys = PLLFOUT;
-
-    for(m=0; m<8; m++)
-        if( pllm[m] >= PLLM ) break;
-
-    RCC->CFGR |= ((PLLDIV - 1) << 22)
-        | (m << 18)
-        | (PLLSRC << 16);
+    RCC->PLLCFGR =
+        PLLSRC
+        | ( (PLLM-1) << 4) 	// PLLM
+        | (PLLN <<8) 		// PLLN
+        | (0 << 25) 		// R=2
+        | (1 << 24) 		// enable R
+        ;
 
     RCC->CR |= (1<<24);               /* enable pll */
     while( RCC->CR & (1<<25) == 0 ){} /* wait for it */
