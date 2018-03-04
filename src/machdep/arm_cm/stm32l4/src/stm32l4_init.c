@@ -11,8 +11,6 @@
 #include <alloc.h>
 #include <clock.h>
 
-#undef SYSCLOCK
-#define SYSCLOCK 80000000
 
 #define R_FLASHKB	((unsigned short *)(0x1FFF75E0))
 #define R_UNIQUE	((unsigned long*)(0x1FFF7590))
@@ -205,6 +203,7 @@ init_ints(void){
 
 void
 init_hw(void){
+
     clock_init();
     tick_init( freq_sys / 8, 1 );
     stm32_init();
@@ -227,10 +226,31 @@ init_hw2(void){
     int ram = (&_estack - &_sdata)/1024;
     int id  = DBGMCU->IDCODE & 0xFFF;
 
-
     bootmsg("bootflags = 0x%x, cpuid %x/%x, %dk flash, %dk RAM\n", bootflags, SCB->CPUID, id, *R_FLASHKB, ram);
     bootmsg("clocks: sys %dMHz\n", freq_sys/1000000);
     bootmsg("uid %x-%x-%x\n", R_UNIQUE[0], R_UNIQUE[1], R_UNIQUE[2]);
 
 }
 
+/* enter low power shutdown mode */
+/* nb. chip supports several other low power modes */
+
+int
+power_down(void){
+
+
+#ifdef USE_ADC
+    // put adc into deep sleep mode
+    ADC1->CR |= 1<<29;
+    ADC2->CR |= 1<<29;
+    ADC3->CR |= 1<<29;
+#endif
+
+    RCC->APB1ENR1 |= 1<<28;	// pwr enable
+
+    PWR->CR1 |= 4;	// LPMS = shutdown mode
+    PWR->SCR = 0x1F;	// clear WUFx
+    SCB->SCR |= 4;      // sleepdeep
+
+    __asm__("wfi");
+}

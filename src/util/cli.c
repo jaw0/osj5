@@ -1231,7 +1231,7 @@ static char *
 shell_interp_var(struct cli_env *env, char *buf, char *p, char **argv){
     char tmp[64];
     const struct Var *var=0, *vx;
-    int off;
+    int off=0;
     short buflen, varlen, vallen;
 
     // find longest matching var

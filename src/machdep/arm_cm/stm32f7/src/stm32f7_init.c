@@ -126,6 +126,14 @@ clock_init(void){
             ;
 
     RCC->CR |= (1<<24);               /* enable pll */
+
+# ifdef STM32F7_OVERDRIVE
+    PWR->CR1 |= 1<<16;  // enable ODEN
+    while( PWR->CSR1 & (1<<16) == 0 ){} // wait for over-drive
+    PWR->CR1 |= 1<<17;  // set ODSW to switch to over-drive
+    while( PWR->CSR1 & (1<<17) == 0 ){} // wait for it
+# endif
+
     while( RCC->CR & (1<<25) == 0 ){} /* wait for it */
 #endif
 

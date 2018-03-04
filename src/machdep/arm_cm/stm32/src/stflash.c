@@ -236,9 +236,35 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
         return 0;
 
     kprintf("stf write %d @ %x => %x + %x\n", len, b, d->addr, offset);
-    //hexdump(b, len);
+    hexdump(b, len);
     ststart(d);
 
+#ifdef PLATFORM_STM32L4
+    if( len & 7 ){
+        // not a multiple of 64bits, read-modify-write
+        unsigned long buf[2];
+        unsigned long *dst = (unsigned long*)(d->addr + (offset & ~7));
+
+        kprintf("rmw: dst %x+%x\n", dst, offset&7);
+
+        // read
+        memcpy((char*)buf, (char*)dst, 8);
+        // modify
+        for(i=0; i<len&7; i++){
+            ((char*)buf)[i + (offset & 7)] = b[i];
+        }
+        hexdump(buf, 8);
+        // write
+        FLASH->CR |= 1;	// enable program
+
+        for(i=0; i<2; i++){
+            wait_not_busy();
+            dst[i] = buf[i];
+        
+            if( FLASH->SR & 0xF2 ) kprintf("err: %x; @ %x, cr %x\n", FLASH->SR, dst + i, FLASH->CR);
+            if( dst[i] != buf[i] ) kprintf("err @%x: %x != %x\n", dst + i, dst[i], buf[i]);
+        }
+#else
     if( len & 3 ){
         // not a multiple of 32bits, go byte-by-byte
         const unsigned char *src = (unsigned char*)b;
@@ -251,7 +277,7 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
             //if( FLASH->SR & 0xF2 ) kprintf("err: %x; @ %x, cr %x\n", FLASH->SR, dst + i, FLASH->CR);
             //if( dst[i] != src[i] ) kprintf("err @%x: %x != %x\n", dst + i, dst[i], src[i]);
         }
-
+#endif
     }else{
         const unsigned long *src = (unsigned long*)b;
         unsigned long *dst = (unsigned long*)(d->addr + offset);
@@ -271,7 +297,7 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
     FLASH->CR &= ~(3<<8);	// clear size
     stfinish(d);
 
-    //hexdump(d->addr + offset, len);
+    hexdump(d->addr + offset, len);
     return len;
 }
 

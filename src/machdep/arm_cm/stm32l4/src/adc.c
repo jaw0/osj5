@@ -3,8 +3,6 @@
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 2013-Apr-05 19:59 (EDT)
   Function: 
- 
-  $Id$
 
 */
 
@@ -18,14 +16,19 @@
 #include <stm32.h>
 
 
-#define SR_EOC		2
-#define CR2_SWSTART	0x40000000
-#define CR2_ADON	1
+#define SR_EOC		4
+#define CR_START	4
+#define CR_ADON		1
+#define CR_DEEPPWD	(1<<29)
+#define CR_ADVREGEN	(1<<28)
+#define SR_ARDY		1
 
 static inline ADC_TypeDef *
 _adc_addr(int adc){
     switch(adc >> 5){
     case 0:	return (ADC_TypeDef*)ADC1;
+    case 1:	return (ADC_TypeDef*)ADC2;
+    case 2:	return (ADC_TypeDef*)ADC3;
     default:
         PANIC("invalid ADC");
     }
@@ -34,21 +37,27 @@ _adc_addr(int adc){
 static inline void
 _adc12_conf_gpio(int cn){
 
-    if( cn < 8 ){
-        gpio_init( GPIO_A0 + cn, GPIO_ANALOG );
-    }else if( cn < 10 ){
-        gpio_init( GPIO_B0 + cn - 8,  GPIO_ANALOG );
+    if( cn < 5 )  return;  // internal Vref on 0
+    if( cn > 16 ) return;  // internal Temp on 17, Vbat on 18
+
+    if( cn < 13 ){
+        // adc5..12 -> A0..7
+        gpio_init( GPIO_A0 + cn - 5, GPIO_ANALOG );
+    }else if( cn < 17 ){
+        // adc15,16 -> B0,1
+        gpio_init( GPIO_B0 + cn - 15,  GPIO_ANALOG );
     }else{
-        gpio_init( GPIO_C0 + cn - 10, GPIO_ANALOG );
+
     }
 }
+
 
 void
 adc_init(int chan, int samp){
     ADC_TypeDef *dev = _adc_addr(chan);
     int cn = chan & 0x1F;
 
-    RCC->APB2ENR |= 1<<9;
+    RCC->AHB2ENR |= 1<<13;
 
     switch(chan>>5){
     case 0:
@@ -59,22 +68,28 @@ adc_init(int chan, int samp){
         PANIC("invalid ADC");
     }
 
-    dev->CR2 |= CR2_ADON;	/* enable */
+    // adc starts in deep sleep - wake it, enable regulator
+    if( dev->CR & CR_DEEPPWD ){
+        dev->CR &= ~CR_DEEPPWD;
+        dev->CR |= CR_ADVREGEN;
+        // must wait 20us
+        int i=1600;
+        while(i-->0){
+            __asm("nop");
+        }
 
-    ADC->CCR &= 0x00C37F1F;
+        // use default clock (from RCC)
+        // enable vref, temp
+        ADC123_COMMON->CCR = (0<<16) | (0<<18) | (3 <<22);
+
+        dev->ISR = 0;
+        dev->CR |= CR_ADON;	/* enable */
+        while( (dev->ISR & SR_ARDY) == 0 ){} // wait for it
+    }
 
     chan &= 0x1F;
 
     if( samp > 7 ) samp = 7;
-    // bizarre relationship
-    // 0 => 3
-    // 1 => 15
-    // 2 => 28
-    // 3 => 56
-    // 4 => 84
-    // 5 => 112
-    // 6 => 144
-    // 7 => 480
 
     if( chan < 10 ){
         dev->SMPR1 &= ~ (7<< (3 * chan));
@@ -92,13 +107,13 @@ adc_get(int chan){
     ADC_TypeDef *dev = _adc_addr(chan);
 
     int v = dev->DR;	// clear any previous result
-    dev->SQR3 = chan & 0x1F;
+    dev->SQR1 = chan << 6;
 
-    dev->CR2 |= CR2_SWSTART;
+    dev->CR |= CR_START;
 
     while(1){
         // ~ 2usec
-        if( dev->SR & SR_EOC ) break;
+        if( dev->ISR & SR_EOC ) break;
         //printf("sr %x\n", dev->SR);
     }
 

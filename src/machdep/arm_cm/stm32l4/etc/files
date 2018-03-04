@@ -10,7 +10,7 @@ stflash:        machdep/arm_cm/stm32l4/src/stflashimpl.c
 pwm:    machdep/arm_cm/stm32/src/pwm.c
 serial: machdep/arm_cm/stm32/src/serial.c
 
-adc:    machdep/arm_cm/stm32l1/src/adc.c
+adc:    machdep/arm_cm/stm32l4/src/adc.c
 rng:    machdep/arm_cm/stm32l4/src/rng.c
 
 gpio:   machdep/arm_cm/stm32f4/src/gpio.c

@@ -7,10 +7,10 @@ timer_rcc_init(int t){
 
     switch( t ){
     case 1:
-        RCC->APB2ENR |= 11;
+        RCC->APB2ENR |= 1<<11;
         break;
     case 8:
-        RCC->APB2ENR |= 13;
+        RCC->APB2ENR |= 1<<13;
         break;
 
     case 15:
