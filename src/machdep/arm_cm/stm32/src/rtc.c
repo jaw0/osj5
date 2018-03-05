@@ -18,7 +18,7 @@
 #include <stm32.h>
 #include <time.h>
 #include <userint.h>
-
+#include <rtc_impl.h>
 
 #define CR_WUTE		(1<<10)
 #define CR_WUTIE	(1<<14)
@@ -63,72 +63,12 @@ init_disable(void){
 void
 rtc_init(void){
 
-    RCC->APB1ENR |= (1<<28);		// enable PWR system
-    PWR->CR |= (1<<8);			// enable backup domain (DBP)
-
-    rtc_isr_boot = RTC->ISR;		// save it, so we can check t later
+    rtc_isr_boot = RTC->ISR;		// save it, so we can check it later
 
     rtc_pre_s = 0;
     rtc_pre_a = 128;
 
-// F4, L1 - same except for the RCC register and lsi freq
-#ifdef PLATFORM_STM32L1
-#  ifdef LSECLOCK
-    RCC->CSR |= 1<<8;			// enable LSE
-    while( (RCC->CSR & (1<<9)) == 0 ){} // wait for it
-    RCC->CSR |= 1<<16;			// src = lse
-    rtc_pre_s = 256;
-    const char *info = "LSE 32768Hz";
-#  else
-    // QQQ - are all chips 32kHz?
-    RCC->CSR  |= 1;			// enable LSI
-    while( (RCC->CSR & 2) == 0 ){}	// wait for it
-    RCC->CSR |= 2<<16;			// src = lsi
-    rtc_pre_s = 296;
-    rtc_pre_a = 125;
-    const char *info = "LSI 37kHz";	// wtf?
-#  endif
-    RCC->CSR |= 1<<22;			// enable rtc
-
-//################
-#elif defined(PLATFORM_STM32F0)
-#  ifdef LSECLOCK
-    RCC->BDCR |= 1;			// enable LSE
-    while( (RCC->BDCR & 2) == 0 ) {}	// wait for it
-    RCC->BDCR |= 1<<8;			// src = lse
-    rtc_pre_s = 256;
-    const char *info = "LSE 32768Hz";
-#  else
-    RCC->CSR  |= 1;			// enable LSI
-    while( (RCC->CSR & 2) == 0 ) {}	// wait for it
-    RCC->BDCR |= 2<<8;			// src = lsi
-    rtc_pre_s = 320;
-    rtc_pre_a = 125;
-    const char *info = "LSI 40kHz";
-#  endif
-    RCC->BDCR |= 1<<15;			// enable rtc
-
-
-//################
-#else
-#  ifdef LSECLOCK
-    // QQQ - support other frequencies?
-    RCC->BDCR |= 1;			// enable LSE
-    while( (RCC->BDCR & 2) == 0 ) {}	// wait for it
-    RCC->BDCR |= 1<<8;			// src = lse
-    rtc_pre_s = 256;
-    const char *info = "LSE 32768Hz";
-#  else
-    // QQQ - are all chips 32kHz?
-    RCC->CSR  |= 1;			// enable LSI
-    while( (RCC->CSR & 2) == 0 ) {}	// wait for it
-    RCC->BDCR |= 2<<8;			// src = lsi
-    rtc_pre_s = 250;
-    const char *info = "LSI 32kHz";
-#  endif
-    RCC->BDCR |= 1<<15;			// enable rtc
-#endif
-
+    const char *info = _rtc_init(&rtc_pre_s, &rtc_pre_a);
 
 #ifdef RTC_SYNC_RTC_FROM_CLOCK
     // so we can tweak it more precisely
