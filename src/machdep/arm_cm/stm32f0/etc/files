@@ -10,5 +10,5 @@ serial: machdep/arm_cm/stm32/src/serial.c
 adc:    machdep/arm_cm/stm32f0/src/adc.c
 
 gpio:   machdep/arm_cm/stm32f4/src/gpio.c
-rtc:    machdep/arm_cm/stm32f4/src/rtc.c
+rtc:    machdep/arm_cm/stm32/src/rtc.c
 
