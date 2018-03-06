@@ -162,3 +162,8 @@ rtc_init(struct Device_Conf *dev){
 }
 
 
+int
+set_rtc(void){
+
+}
+

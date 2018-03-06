@@ -1,8 +1,8 @@
 
 AS = as $(CONF_FLAGS)
-LD = gcc
-CC = gcc
-LINK = gcc
+LD = gcc -m32
+CC = gcc -m32
+LINK = gcc -m32
 OBJCOPY = objcopy
 LIBS = -lm
 CFLAGS = -g -fno-builtin

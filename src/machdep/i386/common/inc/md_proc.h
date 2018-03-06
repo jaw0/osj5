@@ -17,6 +17,8 @@
 #include <sys/types.h>
 #include <conf.h>
 
+typedef uint32_t uregister_t;
+
 struct intrframe {
         int es;
         int ds;
