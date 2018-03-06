@@ -33,5 +33,6 @@ ed:             util/ed.c
 cli:            util/cli.c
 debugger:       util/debugger.c
 play:           util/play.c
+beep:           util/beep.c
 
 
