@@ -232,12 +232,19 @@ init_hw2(void){
 
 }
 
-/* enter low power shutdown mode */
-/* nb. chip supports several other low power modes */
+/* enter low power shutdown mode
+   nb. chip supports several other low power modes
+
+   standby: LSI, LSE, RTC, BOR, IWDG
+     0.03uA; 0.29uA w/RTC
+
+   shutdown: LSE, RTC
+     0.01uA; 0.20uA w/RTC
+
+*/
 
 int
 power_down(void){
-
 
 #ifdef USE_ADC
     // put adc into deep sleep mode
@@ -248,7 +255,12 @@ power_down(void){
 
     RCC->APB1ENR1 |= 1<<28;	// pwr enable
 
+#if defined(USE_RTC) && !defined(LSECLOCK)
+    PWR->CR1 |= 3;	// LPMS = standby mode
+#else
     PWR->CR1 |= 4;	// LPMS = shutdown mode
+#endif
+
     PWR->SCR = 0x1F;	// clear WUFx
     SCB->SCR |= 4;      // sleepdeep
 
