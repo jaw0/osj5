@@ -252,7 +252,7 @@ findfile(struct FLFS *flfs, const char *name, char *buffer, int buflen){
         }else{
             nblnk = 0;
             tlen = fc->totlen;
-            if( tlen == 0xFFFFFFFF || tlen == 0 )
+            if( tlen == ALLONES || tlen == 0 )
                 offset += chunklength( flfs, offset );
             else
                 offset += tlen;
@@ -408,8 +408,8 @@ flfs_open_w(MountEntry *me, const char *name){
 
     /* add to open file list */
     sync_lock( &filesystemlock, "flfs.L" );
-    fd->cnkstart  = 0xFFFFFFFF;
-    fd->filestart = 0xFFFFFFFF;
+    fd->cnkstart  = ALLONES;
+    fd->filestart = ALLONES;
     fd->next = openforwrite;
     fd->prev = 0;
     openforwrite = fd;
@@ -441,7 +441,7 @@ flfs_open_w(MountEntry *me, const char *name){
     ff = (struct FSFile  *)(fd->buffer + sizeof(struct FSChunk));
 
     ff->ctime   = get_time();
-    ff->filelen = 0xFFFFFFFF;
+    ff->filelen = ALLONES;
     ff->attr    = attr;
     strncpy(ff->name, name, sizeof(ff->name));
 
@@ -457,16 +457,16 @@ int
 flfs_close(FILE *f){
     struct FileData *fd;
     struct FLFS *flfs;
-    int i;
+    fs2_t i;
 
     fd   = f->d;
     flfs = fd->flfs;
 
     if( fd->how == FDH_WRITE ){
+        struct FSChunk *fc = (struct FSChunk *) fd->buffer;
+        struct FSFile  *ff = 0;
 
         if( flfs->flags & SSF_BLKWRITE ){
-            struct FSChunk *fc = (struct FSChunk *) fd->buffer;
-            struct FSFile  *ff;
 
             /* chunk len == bufferlen == fblksize */
             fc->cnklen = fd->cnkpos;
@@ -508,8 +508,9 @@ flfs_close(FILE *f){
             }
 
             /* update chunk header on disk, possibly chopping it */
+            i = fd->cnkpos;
             if( diskwrite(flfs, fd->cnkstart + offsetof(struct FSChunk, cnklen),
-                          (char*)&fd->cnkpos, sizeof(fd->cnkdlen), 0) <= 0 ){
+                          (char*)&i, sizeof(fc->cnklen), 0) <= 0 ){
                 fsmsg("write %s,%d failed (line %d)\n", flfs->me->name,
                       fd->cnkstart + offsetof(struct FSChunk, cnklen), __LINE__);
             }
@@ -518,7 +519,7 @@ flfs_close(FILE *f){
 
             i = (fd->cnkpos + flfs->fblksize - 1) & ~(flfs->fblksize-1);
             if( diskwrite(flfs, fd->cnkstart + offsetof(struct FSChunk, totlen),
-                          (char*)&i, sizeof(fd->cnktlen), 0) <= 0 ){
+                          (char*)&i, sizeof(fc->totlen), 0) <= 0 ){
                 fsmsg("write %s,%d failed (line %d)\n", flfs->me->name,
                       fd->cnkstart + offsetof(struct FSChunk, totlen));
             }
@@ -536,8 +537,9 @@ flfs_close(FILE *f){
             }
 
             /* update file header on disk */
+            i = fd->filelen;
             if( diskwrite(flfs, fd->filestart + sizeof(struct FSChunk) + offsetof(struct FSFile, filelen),
-                          (char*)&fd->filelen, sizeof(fd->filelen), 0) <= 0 ){
+                          (char*)&i, sizeof(ff->filelen), 0) <= 0 ){
                 fsmsg("write %s,%d failed (line %d)\n", flfs->me->name,
                       fd->filestart + sizeof(struct FSChunk) + offsetof(struct FSFile, filelen),
                       __LINE__);
@@ -590,7 +592,7 @@ flfs_read(FILE* f, char* buf, int len){
             /* done this chunk, on to the next */
             struct FSChunk *fc;
 
-            if( fd->cnknext == 0xFFFFFFFF )
+            if( fd->cnknext == ALLONES )
                 PANIC("corrupt chunk chain");
 
             if( diskread(flfs, fd->cnknext, fd->buffer, flfs->fblksize) <= 0 ){
@@ -605,7 +607,7 @@ flfs_read(FILE* f, char* buf, int len){
             fd->cnknext  = fc->next;
             fd->buflen   = flfs->fblksize;
 
-            if( fd->cnktlen == 0xFFFFFFFF )
+            if( fd->cnktlen == ALLONES )
                 PANIC("corrupt chunk");
         }
 
@@ -695,7 +697,7 @@ findavailable(FILE *f, int type){
 
     lookagain:
         tlen = fc->totlen;
-        if( tlen == 0xFFFFFFFF || tlen == 0 )
+        if( tlen == ALLONES || tlen == 0 )
             offset += chunklength( flfs, offset );
         else
             offset += tlen;
@@ -761,9 +763,9 @@ findavailable(FILE *f, int type){
     sync_unlock( &filesystemlock );
 
     fc->type    = type;
-    fc->totlen  = 0xFFFFFFFF;
-    fc->cnklen  = 0xFFFFFFFF;
-    fc->next    = 0xFFFFFFFF;
+    fc->totlen  = ALLONES;
+    fc->cnklen  = ALLONES;
+    fc->next    = ALLONES;
     fd->cnkpos  = sizeof(struct FSChunk);
     fd->bufpos  = sizeof(struct FSChunk);
     fd->buflen  = flfs->fblksize;
@@ -975,7 +977,7 @@ flfs_dir(MountEntry *me, int how){
 
 
     if( !me ){
-        printf("no such file or flfsice\n");
+        printf("no such file or device\n");
         return -1;
     }
 
@@ -1017,9 +1019,9 @@ flfs_dir(MountEntry *me, int how){
                                    ff->ctime,
                                    (ff->attr & FFA_READONLY) ? 'r' : '-',
                                    (ff->attr & FFA_HIDDEN)   ? 'h' : '-',
-                                   ff->filelen, ff->name);
+                                   (int)ff->filelen, ff->name);
                         }else{
-                            printf("%7.7d bytes    %s\n", ff->filelen, ff->name);
+                            printf("%7.7d bytes    %s\n", (int)ff->filelen, ff->name);
                         }
                         nfiles ++;
                     }else{
@@ -1038,9 +1040,9 @@ flfs_dir(MountEntry *me, int how){
         }else{
 
             tlen = fc->totlen;
-            if( tlen == 0xFFFFFFFF || tlen == 0 ){
+            if( tlen == ALLONES || tlen == 0 ){
                 printf(">>typ %x, off %d, blk %d, chk %d, tot %d, nxt %d\n",
-                       fc->type, offset, flfs->fblksize, fc->cnklen, fc->totlen, fc->next);
+                       (int)fc->type, offset, flfs->fblksize, (int)fc->cnklen, (int)fc->totlen, (int)fc->next);
                 offset += chunklength( flfs, offset );
             }else
                 offset += tlen;
@@ -1135,7 +1137,7 @@ flfs_format(MountEntry *me, char *flfsname){
         i = (i + flfs->fblksize - 1) & ~(flfs->fblksize - 1);
         fc->totlen = i;
         fc->cnklen = 0;
-        fc->next = 0xFFFFFFFF;
+        fc->next = ALLONES;
         printf("allocating %d for boot block\n", i);
         diskwrite(flfs, 0, buffer, flfs->fblksize, 1);
     }
@@ -1205,7 +1207,7 @@ flfs_deletefile(MountEntry *me, const char *name){
                       (char*)&d, sizeof(d), 0);
         }
         offset = fc->next;
-        if( offset == 0xFFFFFFFF ){
+        if( offset == ALLONES ){
             break;
         }
     }
@@ -1281,7 +1283,7 @@ flfs_glob(MountEntry *me, const char *pattern, int (*fnc)(const char *, void*), 
         }else{
             nblnk = 0;
             tlen = fc->totlen;
-            if( tlen == 0xFFFFFFFF || tlen == 0 )
+            if( tlen == ALLONES || tlen == 0 )
                 offset += chunklength( flfs, offset );
             else
                 offset += tlen;

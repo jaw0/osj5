@@ -18,32 +18,43 @@
 
 */
 
+#ifndef FLFS_64BIT
+typedef u_long fs2_t;
+# define ALLONES 	0xFFFFFFFF
+# define FCT_UNUSED	0		/* zero'ed memory */
+# define FCT_DELETED	1
+#else
+typedef u_int64_t fs2_t;
+# define ALLONES 	0xFFFFFFFFFFFFFFFF
+# define FCT_UNUSED	ALLONES
+# define FCT_DELETED	0
+#endif
+
+
 struct FSChunk {
-        /* 16 bytes */
-	u_short type;
-#define FCT_UNUSED	0		/* zero'ed memory */
-#define FCT_BLANK	0xFFFF		/* erased flash */
-#define FCT_DELETED	1
+    fs2_t type;
+#define FCT_BLANK	ALLONES		/* erased flash */
 #define FCT_FILE	3
 #define FCT_CONT	5
 #define FCT_BIOSEXT	0xAA55		/* dummy1 and cnklen will have romsize, and code in them */
 
-	u_short dummy1;
-	u_long cnklen;		/* length of chunk data */
-	u_long totlen;		/* length of hdr, data, padding */
-	u_long next;		/* offset of next chunk in this file */
+
+    fs2_t cnklen;	/* length of chunk data */
+    fs2_t totlen;	/* length of hdr, data, padding */
+    fs2_t next;		/* offset of next chunk in this file */
 
 };
 
-#define FLFS_NAMELEN	64
+
+#ifndef FLFS_NAMELEN
+# define FLFS_NAMELEN	64
+#endif
 
 struct FSFile {
-        /* 80 bytes */
-	u_long filelen;		/* length of file */
-	u_long attr;		/* file attributes */
-
-	long long ctime;
-	char name[FLFS_NAMELEN];		/* null terminated */
+    fs2_t filelen;		/* length of file */
+    fs2_t attr;			/* file attributes */
+    long long ctime;
+    char name[FLFS_NAMELEN];	/* null terminated */
 };
 
 

@@ -235,8 +235,8 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
     if( offset >= d->totalsize )
         return 0;
 
-    kprintf("stf write %d @ %x => %x + %x\n", len, b, d->addr, offset);
-    hexdump(b, len);
+    //kprintf("stf write %d @ %x => %x + %x\n", len, b, d->addr, offset);
+    //hexdump(b, len);
     ststart(d);
 
 #ifdef PLATFORM_STM32L4
@@ -262,7 +262,7 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
             dst[i] = buf[i];
         
             if( FLASH->SR & 0xF2 ) kprintf("err: %x; @ %x, cr %x\n", FLASH->SR, dst + i, FLASH->CR);
-            if( dst[i] != buf[i] ) kprintf("err @%x: %x != %x\n", dst + i, dst[i], buf[i]);
+            //if( dst[i] != buf[i] ) kprintf("err @%x: %x != %x\n", dst + i, dst[i], buf[i]);
         }
 #else
     if( len & 3 ){
@@ -285,9 +285,17 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
 
         int wlen = len / 4;
         for(i=0; i<wlen; i++){
+#  ifdef PLATFORM_STM32L4
+            // has ECC, can only overwrite with all 0s
+            if( !(i&1) && src[i]==0xFFFFFFFF && src[i+1]==0xFFFFFFFF ){
+                i ++;
+                continue;
+            }
+#  endif
+
             wait_not_busy();
             dst[i] = src[i];
-            //if( FLASH->SR & 0xF2 ) kprintf("err: %x; @ %x, cr %x\n", FLASH->SR, dst + i, FLASH->CR);
+            if( FLASH->SR & 0xF2 ) kprintf("err: %x; @ %x, cr %x\n", FLASH->SR, dst + i, FLASH->CR);
             //if( dst[i] != src[i] ) kprintf("err @%x: %x != %x\n", dst + i, dst[i], src[i]);
         }
     }
@@ -297,7 +305,7 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
     FLASH->CR &= ~(3<<8);	// clear size
     stfinish(d);
 
-    hexdump(d->addr + offset, len);
+    //hexdump(d->addr + offset, len);
     return len;
 }
 
