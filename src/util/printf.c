@@ -33,7 +33,7 @@
 
 /*
   a minimal implementation of printf
-  %<flags><width><.prec><type>
+  %<flags><width><.prec><,char digits><type>
 
   type::
   c	- char
@@ -44,6 +44,7 @@
   X	- UPPER case hex
   d,D	- decimal
   o	- octal
+  b     - binary
   f     - float
   p	- spin (prec times, delay of width)
   I	- IP addr as dotted quad
@@ -64,6 +65,7 @@ enum {
     PF_ALT,		/* use lowercase instead of UPPER */
     PF_SIGNED,		/* arg is signed */
     PF_SHOW_PLS,    	/* arg is signed, show + if positive */
+    PF_SPACE,
     PF_LEFT,        	/* left justify, not right */
     PF_QUAD,	    	/* arg is a quad */
     PF_FLT_F,
@@ -82,12 +84,24 @@ typedef u_quad	u_numfull_t;
 typedef u_numstd_t u_numfull_t;
 #endif
 
+struct put_args {
+    short flags;
+    char base;
+    char width;
+    char prec;
+    char group;
+    char gchar;
+};
+
+
 static const char Set_A[] =	"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 static const char Set_a[] =	"0123456789abcdefghijklmnopqrstuvwxyz";
 static const char spinchar[] = "|\\-/";
 
 int snprintf(char *, int, const char *, ...);
-static int putnum(int (*)(void*, char), void *, u_numfull_t, int, int, int, int);
+static int putnum(int (*)(void*, char), void *, u_numfull_t, struct put_args);
+static int puthex(int (*)(void*, char), void *, const char *, struct put_args);
+static int putstr(int (*)(void*, char), void *, const char *, struct put_args);
 int fncprintf(int (*)(void*, char), void *, const char *, ...);
 
 #ifndef NOPRINTFFLOAT
@@ -96,7 +110,7 @@ typedef PRINTFFLOATTYPE float_num_t;
 #  else
 typedef float float_num_t;
 #  endif
-static int putfloat(int (*)(void*, char), void *, float_num_t, int, int, int);
+static int putfloat(int (*)(void*, char), void *, float_num_t, struct put_args);
 #endif
 
 int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
@@ -106,15 +120,14 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
 #ifndef NOPRINTFFLOAT
     float_num_t fval;
 #endif
-    int width = 0, prec = 0;
-    u_short flags;
-    int base;
+    struct put_args pa;
     int pos = 0;
     int i, n;
 
     while(*p){
-        prec = width = flags = 0;
-        base = 10;
+        pa.width = pa.prec = pa.group = pa.flags = 0;
+        pa.gchar = ',';
+        pa.base = 10;
         if(*p != '%'){
             (*ofnc)(arg, *p++);
             pos++;
@@ -126,51 +139,7 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
             case 's':
                 /* %s - string */
                 s = va_arg(ap, char*);
-                if( !s )
-                    s = "(null)";
-
-                /* how much padding */
-                /* width is minlen, prec is maxlen */
-                if( width ){
-                    n = strlen(s);
-                    if( prec && n > prec ){
-                        /* longer than maxlen, no pad */
-                        n = width;
-                    }
-                    if( n >= width )
-                        /* longer than minlen, no pad */
-                        n = 0;
-                    else
-                        n = width - n;
-                }else{
-                    n = 0;
-                }
-
-                val = 0;
-                if( !(flags & B(PF_LEFT)) && n ){
-                    /* add pad */
-                    while(n){
-                        (*ofnc)(arg, ' ');
-                        pos++;
-                        n--;
-                    }
-                }
-                while(*s){
-                    (*ofnc)(arg, *s++);
-                    pos ++;
-                    /* no more than prec chars out */
-                    /* pad to width */
-                    if(prec && (++val>prec)) break;
-                }
-
-                if( n ){
-                    /* add pad */
-                    while(n){
-                        (*ofnc)(arg, ' ');
-                        pos++;
-                        n--;
-                    }
-                }
+                pos += putstr(ofnc, arg, s, pa);
 
                 break;
 #ifndef NOPRINTFTIME
@@ -182,14 +151,14 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                 val = va_arg(ap, u_quad);
                 gmtime_r(&val, &tr);
 
-                if( flags & B(PF_ALT) )
+                if( pa.flags & B(PF_ALT) )
                     snprintf(buf, sizeof(buf), "%d-%0.2d-%0.2d T%d:%0.2d:%0.2d.%0.6d",
                              tr.tm_year, tr.tm_mon, tr.tm_mday, tr.tm_hour, tr.tm_min, tr.tm_sec, tr.tm_usec);
                 else
                     snprintf(buf, sizeof(buf), "%d-%0.2d-%0.2d T%0.2d:%0.2d:%0.2d",
                              tr.tm_year, tr.tm_mon, tr.tm_mday, tr.tm_hour, tr.tm_min, tr.tm_sec);
 
-                fncprintf(ofnc, arg, "%*.*s", width, prec, buf);
+                fncprintf(ofnc, arg, "%*.*s", pa.width, pa.prec, buf);
                 break;
 
             }
@@ -208,7 +177,7 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                         (*ofnc)(arg, '.');
                         pos++;
                     }
-                    pos += putnum(ofnc, arg, addr[i], 10, width, prec, flags);
+                    pos += putnum(ofnc, arg, addr[i], pa);
                 }
                 break;
             }
@@ -221,7 +190,7 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                 break;
             case 'c':
                 val = va_arg(ap, int);
-                if( (flags & B(PF_SHOW_PLS)) && (val > 0xff) ){
+                if( (pa.flags & B(PF_SHOW_PLS)) && (val > 0xff) ){
                     // utf-8 encode
                     if( val < 0x800 ){
                         (*ofnc)(arg, 0xC0 | (val>>6));
@@ -238,21 +207,24 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                 break;
             case 'd':
             case 'D':
-                flags |= B(PF_SIGNED);
+                pa.flags |= B(PF_SIGNED);
                 /* fall thru - weeee!!! */
             case 'u':
             case 'U':
-                base = 10;
+                pa.base = 10;
                 goto donum;
             case 'o':
-                base = 8;
+                pa.base = 8;
+                goto donum;
+            case 'b':
+                pa.base = 2;
                 goto donum;
             case '=':
                 /* arbitrary base */
-                if(!prec) prec = 16;
+                if(!pa.prec) pa.prec = 16;
                 if(*++p == '*'){
                     val = va_arg(ap, int);
-                    base = (val<0)?-val:val;
+                    pa.base = (val<0)?-val:val;
                     goto donum;
                 }
                 val = 0;
@@ -260,48 +232,57 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                     val =  10*val + *p -'0';
                     p++;
                 }
-                base = val;
+                pa.base = val;
                 p--; /* push back */
                 goto donum;
             case 'x':
-                flags |= B(PF_ALT);
+                pa.flags |= B(PF_ALT);
                 /* fallthru' */
             case 'X':
-                base = 0x10;
+                pa.base = 0x10;
             donum:
-                if( flags & B(PF_QUAD) ){
+                if( pa.flags & B(PF_QUAD) ){
                     val = va_arg(ap, u_numfull_t);
                 }else{
                     val = va_arg(ap, u_numstd_t);
                     /* sign extend */
-                    if( flags & B(PF_SIGNED)){
+                    if( pa.flags & B(PF_SIGNED)){
                         if( val & 0x80000000 )
                             val |= 0xFFFFFFFF00000000ULL;
                     }
                 }
 
-                pos += putnum(ofnc, arg, val, base, width, prec, flags);
+                pos += putnum(ofnc, arg, val, pa);
+                break;
+            case 'h':
+                pa.flags |= B(PF_ALT);
+                /* fallthru' */
+            case 'H':
+                s = va_arg(ap, char*);
+                pos += puthex(ofnc, arg, s, pa);
                 break;
 #ifndef NOPRINTFFLOAT
             case 'f': case 'F':
-                flags |= B(PF_FLT_F);
+                pa.flags |= B(PF_FLT_F);
                 goto doflt;
             case 'e': case 'E':
-                flags |= B(PF_FLT_E);
+                pa.flags |= B(PF_FLT_E);
                 /* fall through */
             case 'g': case 'G':
             doflt:
                 fval = va_arg(ap, double);
-                pos += putfloat(ofnc, arg, fval, width, prec, flags);
+                pos += putfloat(ofnc, arg, fval, pa);
                 break;
 #endif
             case '*':
-                width = va_arg(ap,int);
+                pa.width = va_arg(ap,int);
                 goto rflag;
-            case '.':
-                /* set prec */
+            case ',':
+                /* group digits with seperator ,<char><numchars|*> */
+                /* %09,_4x   => '0_1234_5678' */
+                pa.gchar = *++p;
                 if(*++p == '*'){
-                    prec = va_arg(ap, int);
+                    pa.group = va_arg(ap, int);
                     goto rflag;
                 }
                 n = 0;
@@ -309,7 +290,20 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                     n =  10*n + *p -'0';
                     p++;
                 }
-                prec = n;
+                pa.group = n > 0 ? n : 3;
+                goto reswitch;
+            case '.':
+                /* set prec */
+                if(*++p == '*'){
+                    pa.prec = va_arg(ap, int);
+                    goto rflag;
+                }
+                n = 0;
+                while( isdig(*p) ){
+                    n =  10*n + *p -'0';
+                    p++;
+                }
+                pa.prec = n;
                 goto reswitch;
             case '1': case '2': case '3':
             case '4': case '5': case '6':
@@ -320,15 +314,15 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
                     n = 10*n + *p - '0';
                     p++;
                 }
-                width = n;
+                pa.width = n;
                 goto reswitch;
 #if 0
 #ifndef TESTING
             case 'p':
                 /* spin */
-                while(prec--){
-                    (*ofnc)(arg, spinchar[prec%4]);
-                    msleep(width);
+                while(pa.prec--){
+                    (*ofnc)(arg, spinchar[pa.prec%4]);
+                    msleep(pa.width);
                     (*ofnc)(arg, '\b');
                 }
 #endif
@@ -337,21 +331,24 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
             case '\0':
                 return pos;
             case '#':
-                flags |= B(PF_ALT);
+                pa.flags |= B(PF_ALT);
                 goto rflag;
             case '0':
-                flags |= B(PF_ZERO);
+                pa.flags |= B(PF_ZERO);
                 goto rflag;
             case '+':
-                flags |= B(PF_SHOW_PLS);
+                pa.flags |= B(PF_SHOW_PLS);
                 goto rflag;
             case '-':
-                flags |= B(PF_LEFT);
+                pa.flags |= B(PF_LEFT);
+                goto rflag;
+            case ' ':
+                pa.flags |= B(PF_SPACE);
                 goto rflag;
 #ifndef NOPRINTF64
             case 'Q':
             case 'q':
-                flags |= B(PF_QUAD);
+                pa.flags |= B(PF_QUAD);
                 goto rflag;
 #endif
             default:
@@ -366,7 +363,7 @@ int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
 
 static inline void
 padding(int (*ofnc)(void*, char), void *arg, int n, int ch){
-    while( n-- ){
+    while( n-- > 0 ){
         (*ofnc)(arg, ch);
     }
 }
@@ -381,31 +378,30 @@ padding(int (*ofnc)(void*, char), void *arg, int n, int ch){
 #endif
 
 static int
-putnum(int (*ofnc)(void*, char), void *arg, u_numfull_t val, int base, int width, int prec, int flags){
+putnum(int (*ofnc)(void*, char), void *arg, u_numfull_t val, struct put_args pa){
     /* base must be: 2<=base<=36 */
 
     const char *chrs;
     char tbuf[NUMSZMAX+2];
-    int i=0, l, n, neg=0;
+    short i=0, vl, l, n, neg=0;
 
-    chrs = flags&B(PF_ALT)?Set_a:Set_A;
+    chrs = pa.flags&B(PF_ALT)?Set_a:Set_A;
 
-    if( prec > NUMSZMAX )
-        prec = NUMSZMAX;
-    if( width > NUMSZMAX )
-        width = NUMSZMAX;
-    if( base < 2 || base > 36 )
-        base = 10;
+    if( pa.prec  > NUMSZMAX ) pa.prec  = NUMSZMAX;
+    if( pa.width > NUMSZMAX ) pa.width = NUMSZMAX;
+    if( pa.base < 2 || pa.base > 36 )
+        pa.base = 10;
 
-    if( flags&B(PF_SIGNED) && (val > NUMTMAX || val < 0) ){
+    if( pa.flags&B(PF_SIGNED) && (val > NUMTMAX || val < 0) ){
         neg = 1;
         val = 0 - val;
     }
 
+
     /* convert to buffer (in reverse order) */
     do{
-        n = val % base;
-        val = val / base;
+        n = val % pa.base;
+        val = val / pa.base;
         if( n < 0 || n > 36 )
             tbuf[i++] = '*';
         else
@@ -413,53 +409,154 @@ putnum(int (*ofnc)(void*, char), void *arg, u_numfull_t val, int base, int width
     }while( val );
 
     /* add leading zeros */
-    while( i < prec ){
-        tbuf[i++] = flags&B(PF_ZERO) ? '0' : ' ';
+    while( i < pa.prec ){
+        tbuf[i++] = '0';
     }
+
+    if( pa.flags & B(PF_ZERO) ){
+        while( i < pa.width ){
+            tbuf[i++] = '0';
+        }
+    }
+
+    vl = i;
 
     /* add sign */
-    if( neg )
+    if( neg ){
         tbuf[i++] = '-';
-    if( !neg && flags&B(PF_SHOW_PLS) )
-        tbuf[i++] = '+';
+    }else{
+        if( pa.flags & B(PF_SHOW_PLS) )
+            tbuf[i++] = '+';
+        else if( pa.flags & B(PF_SPACE) )
+            tbuf[i++] = ' ';
+    }
 
     l = i;
-    width -= i;  /* amount of padding needed */
+    if( i >= pa.width ) pa.width = 0;
+    if( pa.width > 0 ) pa.width -= i;  /* amount of padding needed */
 
-#if 1
-    /* pad on left */
-    if( width > 0 && ! (flags&B(PF_LEFT)) ){
-        l += width;
-        n = 0;
-        padding(ofnc, arg, width, ' ');
+    if( pa.group && pa.width > 0 ){
+        int ngc = vl / pa.group;
+        if( ngc >= pa.width ) pa.width = 0;
+        if( pa.width > 0 ) pa.width -= ngc;
     }
-#endif
+
+
+    /* pad on left */
+    if( pa.width > 0 && ! (pa.flags&B(PF_LEFT)) ){
+        l += pa.width;
+        padding( ofnc, arg, pa.width, ' ');
+    }
+
     /* copy output */
     n = 0;
     while( i ){
         (*ofnc)(arg, tbuf[--i]);
+
+        if( pa.group && i && (i < vl) && (i % pa.group == 0) ){
+            (*ofnc)(arg, pa.gchar);
+            l ++;
+        }
     }
 
-#if 1
     /* pad on right */
-    if( width > 0 && (flags&B(PF_LEFT)) ){
-        l += width;
-        n = 0;
-        padding(ofnc, arg, width, ' ');
+    if( pa.width > 0 && (pa.flags&B(PF_LEFT)) ){
+        l += pa.width;
+        padding( ofnc, arg, pa.width, ' ');
     }
-#endif
+
+    return l;
+}
+
+static int
+putstr(int (*ofnc)(void*, char), void *arg, const char *s, struct put_args pa){
+
+    short n=0, l=0;
+
+    if( !s )
+        s = "(null)";
+
+    /* how much padding */
+    /* width is minlen, prec is maxlen */
+    if( pa.width ){
+        n = strlen(s);
+        if( pa.prec && (n > pa.prec) ){
+            /* longer than maxlen, no pad */
+            n = 0;
+        }else if( n >= pa.width )
+            /* longer than minlen, no pad */
+            n = 0;
+        else
+            n = pa.width - n;
+    }else{
+        n = 0;
+    }
+
+
+    if( !(pa.flags & B(PF_LEFT)) && n ){
+        /* add pad */
+        padding(ofnc, arg, n, ' ');
+        l += n;
+        n = 0;
+    }
+    while(*s){
+        (*ofnc)(arg, *s++);
+        l ++;
+        /* no more than prec chars out */
+        /* pad to width */
+        if(pa.prec && (l>=pa.prec)) break;
+    }
+
+    if( n ){
+        /* add pad */
+        padding(ofnc, arg, n, ' ');
+        l += n;
+        n = 0;
+    }
 
     return l;
 }
 
 
+/* mini-hexdump width bytes */
+static int
+puthex(int (*ofnc)(void*, char), void *arg, const char *buf, struct put_args pa){
+    short i, n, l=0;
+
+    if( pa.width <= 0 ) pa.width = 1;
+    const char *chrs = pa.flags&B(PF_ALT) ? Set_a : Set_A;
+
+    for(i=n=0; i<pa.width; i++){
+        l += 2;
+
+        (*ofnc)(arg, chrs[ (buf[i]>>4) & 0xF ]);
+        n ++;
+        if( pa.group && (n % pa.group == 0) ){
+            (*ofnc)(arg, pa.gchar);
+            l ++;
+        }
+
+        (*ofnc)(arg, chrs[ buf[i] & 0xF ]);
+        n ++;
+        if( pa.group && (i != pa.width-1) && (n % pa.group == 0) ){
+            (*ofnc)(arg, pa.gchar);
+            l ++;
+        }
+    }
+
+    return l;
+}
+
+
+
+
 #ifndef NOPRINTFFLOAT
 
 static int
-putfloat(int (*ofnc)(void*, char), void *arg, float_num_t val, int width, int prec, int flags){
+putfloat(int (*ofnc)(void*, char), void *arg, float_num_t val, struct put_args pa){
     const char *s = 0;
     int slen = 0;
-    if( !prec ) prec = 6;
+    if( !pa.prec ) pa.prec = 6;
 
     if( isnan(val) ){
         s = "NaN";
@@ -476,13 +573,13 @@ putfloat(int (*ofnc)(void*, char), void *arg, float_num_t val, int width, int pr
     }
 
     if( s ){
-        int pad = width - slen;
+        int pad = pa.width - slen;
         if( pad < 0 ) pad = 0;
-        if( !(flags & B(PF_LEFT)) )
+        if( !(pa.flags & B(PF_LEFT)) )
             padding(ofnc, arg, pad, ' ');
         // copy out
         while( *s ) (*ofnc)(arg, *s ++);
-        if( flags & B(PF_LEFT) )
+        if( pa.flags & B(PF_LEFT) )
             padding(ofnc, arg, pad, ' ');
 
         return slen + pad;
@@ -492,59 +589,59 @@ putfloat(int (*ofnc)(void*, char), void *arg, float_num_t val, int width, int pr
     if( val < 0 ){ sign = -1; val = - val; }
 
     // RSN - configurable option: use integer math, float, or double
-    // float pmul = powf(10, prec);
+    // float pmul = powf(10, pa.prec);
     int i;
     int pmul = 1;
-    for(i=0; i<prec; i++) pmul *= 10;
+    for(i=0; i<pa.prec; i++) pmul *= 10;
 
-    if( !(flags & B(PF_FLT_E)) && !(flags & B(PF_FLT_F)) ){
+    if( !(pa.flags & B(PF_FLT_E)) && !(pa.flags & B(PF_FLT_F)) ){
         /* %g => use %e or %f? */
-        if( val < 0.0001 || val > pmul ) flags |= B(PF_FLT_E);
+        if( val < 0.0001 || val > pmul ) pa.flags |= B(PF_FLT_E);
     }
 
     /* round */
     val += .5 / pmul;
 
 
-    if( flags & B(PF_FLT_E) ){
+    if( pa.flags & B(PF_FLT_E) ){
         int exp = floorf(log10f(val));
         val *= powf(10, -exp);
         int ipart   = val;
         int fpart   = (val - ipart) * pmul;
 
-        int tlen = putnum(ofnc, arg, sign*ipart, 10, 1, 1, flags);
+        int tlen = putnum(ofnc, arg, sign*ipart, (struct put_args){.base = 10, .width = 1, .prec = 1, .flags = pa.flags});
         (*ofnc)(arg, '.');
         tlen ++;
-        int flen = putnum(ofnc, arg, fpart, 10, prec, prec, B(PF_ZERO) | B(PF_SIGNED) | (flags&B(PF_SHOW_PLS)) );
+        int flen = putnum(ofnc, arg, fpart, (struct put_args){.base = 10, .width = pa.prec, .prec = pa.prec, .flags = B(PF_ZERO) | B(PF_SIGNED) | (pa.flags&B(PF_SHOW_PLS)) } );
         tlen += flen;
         (*ofnc)(arg, 'e');
         tlen ++;
-        tlen += putnum(ofnc, arg, exp, 10, 1, 1, B(PF_SIGNED)| (flags&B(PF_SHOW_PLS)) );
+        tlen += putnum(ofnc, arg, exp, (struct put_args){.base = 10, .width = 1, .prec = 1, .flags = B(PF_SIGNED)| (pa.flags&B(PF_SHOW_PLS))} );
 
-        if( tlen < width ){
+        if( tlen < pa.width ){
             // right pad
-            padding(ofnc, arg, width - tlen, ' ');
-            tlen = width;
+            padding(ofnc, arg, pa.width - tlen, ' ');
+            tlen = pa.width;
         }
 
         return tlen;
     }else{
         int ipart   = val;
         int fpart   = (val - ipart) * pmul;
-        int iwidth  = width - prec - 1;
-        int lwidth  = (flags & B(PF_LEFT)) ? 0 : iwidth;
+        int iwidth  = pa.width - pa.prec - 1;
+        int lwidth  = (pa.flags & B(PF_LEFT)) ? 0 : iwidth;
         //fprintf(STDERR, ">> %d,%d\n", ipart, fpart);
-        int tlen = putnum(ofnc, arg, sign*ipart, 10, lwidth, lwidth, flags);
+        int tlen = putnum(ofnc, arg, sign*ipart, (struct put_args){.base = 10, .width = lwidth, .prec = lwidth, .flags = pa.flags});
         (*ofnc)(arg, '.');
         tlen ++;
 
-        int flen = putnum(ofnc, arg, fpart, 10, prec, prec, B(PF_ZERO) | B(PF_SIGNED) | (flags&B(PF_SHOW_PLS)) );
+        int flen = putnum(ofnc, arg, fpart, (struct put_args){.base = 10, .width = pa.prec, .prec = pa.prec, .flags = B(PF_ZERO) | B(PF_SIGNED) | (pa.flags&B(PF_SHOW_PLS))} );
         tlen += flen;
 
-        if( tlen < width ){
+        if( tlen < pa.width ){
             // right pad
-            padding(ofnc, arg, width - tlen, ' ');
-            tlen = width;
+            padding(ofnc, arg, pa.width - tlen, ' ');
+            tlen = pa.width;
         }
 
         return tlen;
@@ -653,14 +750,22 @@ void main(void){
     for(i=0; i<128; i++) buffer[i]='a';
 
 
-    //snprintf(buffer, 128, "%d %c %s %02.2X\n", (int)324, (int)0x45, "foobar", (int)32);
-    snprintf(buffer, 128, "%d %d %d %x %x\n", (int)324, (int)0x45, (int)1234, (int)32, (int)4321);
+    snprintf(buffer, 128, "%d %c %s %02X", (int)324, (int)0x45, "foobar", (int)32);
     puts(buffer);
+
+    printf("%d\n", 123);
+    printf("%08x;\n", 0x12);
+    printf("%08,_3x;\n", 0x12);
+    printf("%032,_4b;\n", 0x12345678);
+    //printf(">%0=2 %04=2\n", 0x1234, 0x5);
+    printf("[%8,:4H]\n", "foobarbar");
+    printf("%5s;\n", "foo");
+    printf("%-5.5s;\n", "foo");
+    printf("%-5.5s;\n", "foobar");
 
     exit(0);
     //printf("%ld %c %s %02.2x\n",   (int)324, (int)0x45, "foobar", (int)32);
     //printf("%.6ld %c %s %02.2x\n", (int)324, (int)0x45, "foobar", (int)32);
-
 
 #ifndef NOPRINTFFLOAT
 
