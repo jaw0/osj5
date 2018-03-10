@@ -993,21 +993,21 @@ flfs_dir(MountEntry *me, int how){
         if( fc->type == FCT_BLANK || fc->type == FCT_UNUSED ){
             if(how & LSHOW_EXT){
                 if( !nblnk )
-                    printf("U %6.6x", offset);
+                    printf("U %6x", offset);
             }
             nblnk ++;
         }else{
             if( nblnk && (how & LSHOW_EXT) ){
-                printf(" %7.7d(%7.7d)\n", 0, nblnk * flfs->fblksize);
+                printf(" %7d(%7d)\n", 0, nblnk * flfs->fblksize);
             }
             nblnk = 0;
             if( how & LSHOW_EXT ){
-                printf("%c %6.6x %7.7d(%7.7d)",
+                printf("%c %6x %7d(%7d)",
                        (fc->type < 6) ?
                        "UD.F.C"[fc->type] : 'X',
                        offset, fc->cnklen, fc->totlen);
                 if( fc->type == FCT_FILE ){
-                    printf(" %-20T %3.3d    %s", ff->ctime, ff->attr, ff->name);
+                    printf(" %-20T %3d    %s", ff->ctime, ff->attr, ff->name);
                     nfiles ++;
                 }
                 printf("\n");
@@ -1015,13 +1015,13 @@ flfs_dir(MountEntry *me, int how){
                 if( fc->type == FCT_FILE ){
                     if( (how & LSHOW_ALL) || !(ff->attr & FFA_HIDDEN) ){
                         if( how & LSHOW_LONG ){
-                            printf("%-20T %c%c %7.7d bytes    %s\n",
+                            printf("%-20T %c%c %7d bytes    %s\n",
                                    ff->ctime,
                                    (ff->attr & FFA_READONLY) ? 'r' : '-',
                                    (ff->attr & FFA_HIDDEN)   ? 'h' : '-',
                                    (int)ff->filelen, ff->name);
                         }else{
-                            printf("%7.7d bytes    %s\n", (int)ff->filelen, ff->name);
+                            printf("%7d bytes    %s\n", (int)ff->filelen, ff->name);
                         }
                         nfiles ++;
                     }else{
@@ -1055,15 +1055,15 @@ flfs_dir(MountEntry *me, int how){
     }
 
     if( nblnk && (how & LSHOW_EXT) ){
-        printf(" %7.7d(%7.7d)\n", 0, flfs->totalsize - offset + nblnk * flfs->fblksize);
+        printf(" %7d(%7d)\n", 0, flfs->totalsize - offset + nblnk * flfs->fblksize);
     }
 
     printf("========================\n"
-           "  %3.3d Files = %8.8d bytes\n", nfiles, totinf);
+           "  %3d Files = %8d bytes\n", nfiles, totinf);
     if( nhidden)
-        printf("  %3.3d Hidden Files\n", nhidden);
-    printf("      Total = %8.8d bytes\n"
-           "      Free  = %8.8d bytes\n\n",
+        printf("  %3d Hidden Files\n", nhidden);
+    printf("      Total = %8d bytes\n"
+           "      Free  = %8d bytes\n\n",
            total, flfs->totalsize - total);
     free(buffer, flfs->fblksize);
     return 0;

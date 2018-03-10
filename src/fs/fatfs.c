@@ -320,12 +320,12 @@ fatfs_dir(MountEntry *me, int how, const char *dname){
 
         if( how & LSHOW_LONG ){
 
-            printf("%4d-%0.2d-%0.2d ",
+            printf("%4d-%02d-%02d ",
                    (fi.fdate>>9) + 1980,
                    (fi.fdate>>5) & 0xF,
                    (fi.fdate) & 0x1F);
 
-            printf("T%0.2d:%0.2d:%0.2d ",
+            printf("T%02d:%02d:%02d ",
                    (fi.ftime>>11),
                    (fi.ftime>>5) & 0x3F,
                    (fi.ftime) & 0x1F);
@@ -346,7 +346,7 @@ fatfs_dir(MountEntry *me, int how, const char *dname){
             col++;
             col %= 5;
         }else{
-            printf("%7.7d bytes    %s%c\n", fi.fsize, fi.fname, (fi.fattrib & AM_DIR)?'/': ' ');
+            printf("%7d bytes    %s%c\n", fi.fsize, fi.fname, (fi.fattrib & AM_DIR)?'/': ' ');
         }
 
         total += fi.fsize;
@@ -362,7 +362,7 @@ fatfs_dir(MountEntry *me, int how, const char *dname){
     }
 
     printf("========================\n"
-           "  %3.3d Files = %8.8qd bytes\n", files, total);
+           "  %3d Files = %8qd bytes\n", files, total);
 
     FATFS *fat;
     DWORD fre_clust;
@@ -370,8 +370,8 @@ fatfs_dir(MountEntry *me, int how, const char *dname){
     int tot_sect = (fat->n_fatent - 2) * fat->csize;
     int fre_sect = fre_clust * fat->csize;
 
-    printf("      Total = %8.8d kbytes\n"
-           "      Free  = %8.8d kbytes\n",
+    printf("      Total = %8d kbytes\n"
+           "      Free  = %8d kbytes\n",
            tot_sect / 2, fre_sect / 2);
 
     return 0;

@@ -66,67 +66,37 @@ static inline void serial_pins_init(int i, int altpins){
     }
 }
 
-static inline void
-serial_params(int i, USART_TypeDef**addr, int *irq, int *clock){
+
+static inline int
+serial_baudclock(int i){
 
     switch(i){
     case 0:
-        *addr  = USART1;
-        *clock = apb2_clock_freq();
-        *irq   = (int) IRQ_USART1;
-        break;
+        return apb2_clock_freq();
     case 1:
-        *addr  = USART2;
-        *clock = apb1_clock_freq();
-        *irq   = (int) IRQ_USART2;
-        break;
+        return apb1_clock_freq();
     case 2:
-        *addr  = USART3;
-        *clock = apb1_clock_freq();
-        *irq   = (int) IRQ_USART3;
-        break;
-#ifdef UART4
+        return apb1_clock_freq();
     case 3:
-        *addr  = UART4;
-        *irq   = (int) IRQ_UART4;
-        *clock = apb1_clock_freq();
-        break;
-#endif
-#ifdef UART5
+        return apb1_clock_freq();
     case 4:
-        *addr  = UART5;
-        *irq   = (int) IRQ_UART5;
-        *clock = apb1_clock_freq();
-        break;
-#endif
-#ifdef USART6
+        return apb1_clock_freq();
     case 5:
-        *addr  = USART6;
-        *irq   = (int) IRQ_USART6;
-        *clock = apb2_clock_freq();
-        break;
-#endif
-#ifdef UART7
+        return apb2_clock_freq();
     case 6:
-        *addr  = UART7;
-        *irq   = (int) IRQ_UART7;
-        *clock = apb1_clock_freq();
-        break;
-#endif
-#ifdef UART8
+        return apb1_clock_freq();
     case 7:
-        *addr  = UART8;
-        *irq   = (int) IRQ_UART8;
-        *clock = apb1_clock_freq();
-        break;
-#endif
+        return apb1_clock_freq();
+    case 8:
+        return apb1_clock_freq();
 
     default:
         PANIC("invalid serial");
         break;
-
     }
 }
+
+
 
 #endif /* __stm32l1_serial_impl_h__ */
 

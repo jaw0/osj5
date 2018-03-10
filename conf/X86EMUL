@@ -10,6 +10,7 @@ feature PROC
 feature NSTDIO
 feature ED			# text editor
 feature CLI			# command line interface
+feature DEBUGGER
 
 option  PROC_HIRES
 
@@ -30,6 +31,8 @@ option GETLINEHIST
 option FATFS_RENAMEFILE_ON_CREAT
 option FLFS_RENAMEFILE_ON_CREAT
 option ENOUGHALREADYHEURISTIC	64
+#option FLFS_64BIT
+
 ################################################################
 
 filesys flfs
@@ -41,6 +44,7 @@ device emulcon0                                         # emulation under UNIX
 #device pcterm0  port 0x60 addr 0xB8000 irq 1 flags 7   # flags are screen attr
 #device serial0  port 0x3F8 irq 4 baud 9600
 #device serial1  port 0x2F8 irq 3 baud 9600
+
 device console
 device flash
 device udsk

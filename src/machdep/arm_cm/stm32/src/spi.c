@@ -17,8 +17,9 @@
 #include <gpio.h>
 #include <stm32.h>
 #include <nvic.h>
+#include <spi_impl.h>
 
-#define SPIVERBOSE
+// #define SPIVERBOSE
 
 
 #define CR1_CRCEN	0x2000
@@ -93,41 +94,12 @@ _spi_drop_crumb(const char *event, u_long arg0, u_long arg1) {
 #define SPI_CRUMB(event, arg0, arg1)
 #endif
 
-#if defined(PLATFORM_STM32F1) || defined(PLATFORM_STM32L1)
-typedef DMA_Channel_TypeDef DMAC_T;
-#elif defined(PLATFORM_STM32F4) || defined(PLATFORM_STM32F7)
-typedef DMA_Stream_TypeDef DMAC_T;
-#endif
 
-
-struct SPIInfo {
-    const char		*name;
-    SPI_TypeDef 	*addr;
-    DMAC_T 		*rxdma, *txdma;
-
-    DMA_TypeDef		*dma;
-    u_char		dmachan;
-
-    u_char		dmanrx, dmantx;
-    u_char 	  	irq;
-    int			clock;
-
-    lock_t		lock;
-    int			state;
-    u_long		errorflags;
-
-    // currently doing:
-    spi_msg		*msg;
-    int			num_msg;
-    const struct SPIConf	*cf;
-    utime_t		timeout;
-
-} spiinfo[ N_SPI ];
+struct SPIInfo spiinfo[ N_SPI ];
 
 
 static int  _set_speed(struct SPIInfo *, int);
 static void _msg_next(struct SPIInfo *);
-
 
 
 int
@@ -135,226 +107,17 @@ spi_init(struct Device_Conf *dev){
     int unit = dev->unit;
     struct SPIInfo *ii = spiinfo + unit;
     SPI_TypeDef *addr;
-    int dmairqrx, dmairqtx, dmanrx, dmantx;
 
     bzero(ii, sizeof(struct SPIInfo));
 
-#if defined(PLATFORM_STM32F1)
-    switch(unit){
-    case 0:
-        // on ahb2, dma1 chan2+3
-        // CLK = A5, MISO = A6, MOSI = A7
-        ii->addr      = addr = SPI1;
-        ii->irq       = IRQ_SPI1;
-        ii->dma       = DMA;
-        ii->rxdma     = DMA_Channel2;
-        ii->txdma     = DMA_Channel3;
-        ii->clock     = APB2CLOCK;
-        dmairqrx      = IRQ_DMA1_CHANNEL2;
-        dmairqtx      = IRQ_DMA1_CHANNEL3;
-        ii->dmanrx    = 2;
-        ii->dmantx    = 3;
-        RCC->APB2ENR |= 1;	// AFI
-        RCC->APB2ENR |= 1<<12;	// spi
-        gpio_init( GPIO_A5, GPIO_AF_OUTPUT_PP | GPIO_OUTPUT_50MHZ );
-        gpio_init( GPIO_A6, GPIO_INPUT_FLOATING );
-        gpio_init( GPIO_A7, GPIO_AF_OUTPUT_PP | GPIO_OUTPUT_50MHZ );
-        break;
-    case 1:
-        // on ahb1, dma1 chan 4+5
-        // CLK = B13, MISO = B14, MOSI = B15
-        ii->addr      = addr = SPI2;
-        ii->irq       = IRQ_SPI2;
-        ii->dma       = DMA;
-        ii->rxdma     = DMA_Channel4;
-        ii->txdma     = DMA_Channel5;
-        ii->clock     = APB1CLOCK;
-        dmairqrx      = IRQ_DMA1_CHANNEL4;
-        dmairqtx      = IRQ_DMA1_CHANNEL5;
-        ii->dmanrx    = 4;
-        ii->dmantx    = 5;
-        RCC->APB2ENR |= 1;	// AFI
-        RCC->APB1ENR |= 1<<14;	// spi
-        gpio_init( GPIO_B13, GPIO_AF_OUTPUT_PP | GPIO_OUTPUT_50MHZ );
-        gpio_init( GPIO_B14, GPIO_INPUT_FLOATING );
-        gpio_init( GPIO_B15, GPIO_AF_OUTPUT_PP | GPIO_OUTPUT_50MHZ );
-        break;
-    default:
-        // ...
-        PANIC("invalid spi device");
-    }
+    _spi_dev_init(unit, ii);
+    addr = ii->addr;
 
-    RCC->AHBENR |= 1;	// DMA1
-
-#elif defined(PLATFORM_STM32F4)
-    switch(unit){
-    case 0:
-        // on ahb2, dma2 chan2+3
-        // CLK = A5, MISO = A6, MOSI = A7
-        ii->addr      = addr = SPI1;
-        ii->irq       = IRQ_SPI1;
-        ii->rxdma     = DMA2_Stream2;
-        ii->txdma     = DMA2_Stream3;
-        ii->dma	      = DMA2;
-        ii->clock     = APB2CLOCK;
-        dmairqrx      = IRQ_DMA2_STREAM2;
-        dmairqtx      = IRQ_DMA2_STREAM3;
-        ii->dmanrx    = 2;
-        ii->dmantx    = 3;
-        ii->dmachan   = 3;
-        RCC->APB2ENR |= 1<<12;	// spi
-        RCC->AHB1ENR |= 1<<22;	// DMA2
-        gpio_init( GPIO_A5, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
-        gpio_init( GPIO_A6, GPIO_AF(5) | GPIO_PULL_UP );
-        gpio_init( GPIO_A7, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
-        break;
-    case 1:
-        // on ahb1, dma1 chan 3+4
-        // CLK = B13, MISO = B14, MOSI = B15
-        ii->addr      = addr = SPI2;
-        ii->irq       = IRQ_SPI2;
-        ii->rxdma     = DMA1_Stream3;
-        ii->txdma     = DMA1_Stream4;
-        ii->dma	      = DMA1;
-        ii->clock     = APB1CLOCK;
-        dmairqrx      = IRQ_DMA1_STREAM3;
-        dmairqtx      = IRQ_DMA1_STREAM4;
-        ii->dmanrx    = 3;
-        ii->dmantx    = 4;
-        ii->dmachan   = 0;
-        RCC->APB1ENR |= 1<<14;	// spi
-        RCC->AHB1ENR |= 1<<21;	// DMA1
-        gpio_init( GPIO_B13, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
-        gpio_init( GPIO_B14, GPIO_AF(5) | GPIO_PULL_UP );
-        gpio_init( GPIO_B15, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
-        break;
-    case 2:
-        // on ahb1, dma1 chan 2+5
-        // CLK = B3, MISO = B4, MOSI = B5
-        ii->addr      = addr = SPI3;
-        ii->irq       = IRQ_SPI3;
-        ii->rxdma     = DMA1_Stream2;
-        ii->txdma     = DMA1_Stream5;
-        ii->dma	      = DMA1;
-        ii->clock     = APB2CLOCK;
-        dmairqrx      = IRQ_DMA1_STREAM2;
-        dmairqtx      = IRQ_DMA1_STREAM5;
-        ii->dmanrx    = 2;
-        ii->dmantx    = 5;
-        ii->dmachan   = 0;
-        RCC->APB1ENR |= 1<<15;	// spi
-        RCC->AHB1ENR |= 1<<21;	// DMA1
-        gpio_init( GPIO_B3, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
-        gpio_init( GPIO_B4, GPIO_AF(6) | GPIO_PULL_UP );
-        gpio_init( GPIO_B5, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
-        break;
-    default:
-        // ...
-        PANIC("invalid spi device");
-    }
-#elif defined(PLATFORM_STM32F7)
-    switch(unit){
-        // RSN ... 0,1,2 - same as F4
-        
-    case 3:
-        // on ahb2, dma2 chan2+3
-        // CLK = E12, MISO = E13, MOSI = E14
-        ii->addr      = addr = SPI4;
-        ii->irq       = SPI4_IRQn;
-        ii->rxdma     = DMA2_Stream0;
-        ii->txdma     = DMA2_Stream1;
-        ii->dma	      = DMA2;
-        ii->clock     = APB2CLOCK;
-        dmairqrx      = IRQ_DMA2_STREAM0;
-        dmairqtx      = IRQ_DMA2_STREAM1;
-        ii->dmanrx    = 0;
-        ii->dmantx    = 1;
-        ii->dmachan   = 4;
-        RCC->APB2ENR |= 1<<13;	// spi
-        RCC->AHB1ENR |= 1<<22;	// DMA2
-        gpio_init( GPIO_E12, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
-        gpio_init( GPIO_E13, GPIO_AF(5) | GPIO_PULL_UP );
-        gpio_init( GPIO_E14, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
-        break;
-    }
-#elif defined(PLATFORM_STM32L1)
-    switch(unit){
-    case 0:
-        // on ahb2, dma1 chan2+3
-        // CLK = A5, MISO = A6, MOSI = A7
-        ii->addr      = addr = SPI1;
-        ii->irq       = IRQ_SPI1;
-        ii->rxdma     = DMA1_Channel2;
-        ii->txdma     = DMA1_Channel3;
-        ii->dma       = DMA1;
-        ii->clock     = APB2CLOCK;
-        dmairqrx      = IRQ_DMA1_CHANNEL2;
-        dmairqtx      = IRQ_DMA1_CHANNEL3;
-        ii->dmanrx    = 2;
-        ii->dmantx    = 3;
-        RCC->APB2ENR |= 1<<12;	// spi
-        RCC->AHBENR  |= 1<<24;	// DMA1
-        gpio_init( GPIO_A5, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
-        gpio_init( GPIO_A6, GPIO_AF(5) | GPIO_PULL_UP );
-        gpio_init( GPIO_A7, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
-        break;
-    case 1:
-        // on ahb1, dma1 chan 3+4
-        // CLK = B13, MISO = B14, MOSI = B15
-        ii->addr      = addr = SPI2;
-        ii->irq       = IRQ_SPI2;
-        ii->rxdma     = DMA1_Channel4;
-        ii->txdma     = DMA1_Channel5;
-        ii->dma       = DMA1;
-        ii->clock     = APB1CLOCK;
-        dmairqrx      = IRQ_DMA1_CHANNEL4;
-        dmairqtx      = IRQ_DMA1_CHANNEL5;
-        ii->dmanrx    = 4;
-        ii->dmantx    = 5;
-        RCC->APB1ENR |= 1<<14;	// spi
-        RCC->AHBENR  |= 1<<24;	// DMA1
-        gpio_init( GPIO_B13, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
-        gpio_init( GPIO_B14, GPIO_AF(5) | GPIO_PULL_UP );
-        gpio_init( GPIO_B15, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
-        break;
-    case 2:
-        // on ahb1, dma2 chan 1+2
-        // CLK = B3, MISO = B4, MOSI = B5
-        ii->addr      = addr = SPI3;
-        ii->irq       = IRQ_SPI3;
-        ii->rxdma     = DMA2_Channel1;
-        ii->txdma     = DMA2_Channel2;
-        ii->dma       = DMA2;
-        ii->clock     = APB1CLOCK;
-        dmairqrx      = IRQ_DMA2_CHANNEL1;
-        dmairqtx      = IRQ_DMA2_CHANNEL2;
-        ii->dmanrx    = 1;
-        ii->dmantx    = 2;
-        RCC->APB1ENR |= 1<<15;	// spi
-        RCC->AHBENR  |= 1<<25;	// DMA2
-        gpio_init( GPIO_B3, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
-        gpio_init( GPIO_B4, GPIO_AF(6) | GPIO_PULL_UP );
-        gpio_init( GPIO_B5, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
-        break;
-    default:
-        // ...
-        PANIC("invalid spi device");
-    }
-#else
-#  error "unknown platform"
-#endif
-
-    addr->CR1 |= CR1_SSM | /*CR1_SSI | */ CR1_MSTR;
-    addr->CR2 &= ~0xE7;
-#ifdef PLATFORM_STM32F7
-    addr->CR2 |= 7<<8;
-#endif
+    addr->CR1 |= CR1_SSM | CR1_MSTR;
 
     int speed = _set_speed(ii, dev->baud);
 
     nvic_enable( ii->irq,  IPL_DISK );
-    nvic_enable( dmairqrx, IPL_DISK );
-    nvic_enable( dmairqtx, IPL_DISK );
 
     ii->name  = dev->name;
     ii->state = SPI_STATE_IDLE;
@@ -414,15 +177,7 @@ spi_cf_init(const struct SPIConf *cf){
     for(i=0; i<cf->nss; i++){
         p = cf->ss[i] & 0xFF;
 
-#if defined(PLATFORM_STM32F1)
-        gpio_init( p, GPIO_OUTPUT_PP | GPIO_OUTPUT_10MHZ );
-#elif defined(PLATFORM_STM32F4) || defined(PLATFORM_STM32F7)
-        gpio_init( p, GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_25MHZ );
-#elif defined(PLATFORM_STM32L1)
-        gpio_init( p, GPIO_OUTPUT | GPIO_PUSH_PULL | GPIO_SPEED_HIGH );
-#else
-# error "unknown platform"
-#endif
+        gpio_init( p, SPIGPIO_CONF );
     }
 
     gpio_set( cf->ss[0] & 0xFF );
@@ -462,12 +217,12 @@ _spi_rxtx1(SPI_TypeDef *dev, int val){
         if( sr & SR_TXE  ) break;
     }
 
-    dev->DR = val;
+    PUT_DR(dev, val);
 
     while(1){
         sr = dev->SR;
         if( sr & SR_RXNE ){
-            c = dev->DR;
+            c = GET_DR(dev);
             return c;
         }
     }
@@ -475,7 +230,7 @@ _spi_rxtx1(SPI_TypeDef *dev, int val){
 
 /****************************************************************/
 
-#if defined(PLATFORM_STM32F1) || defined(PLATFORM_STM32L1)
+#ifdef DMA_TYPE_1
 
 static inline void
 _disable_irq_dma(struct SPIInfo *ii){
@@ -524,7 +279,7 @@ _dma_enable_write(struct SPIInfo *ii){
 
 /****************************************************************/
 
-#elif defined(PLATFORM_STM32F4) || defined(PLATFORM_STM32F7)
+#elif defined(DMA_TYPE_2)
 
 static inline int
 _dma_isr_clear_irqs(DMA_TypeDef *dma, int dman){
@@ -594,7 +349,7 @@ _dma_enable_write(struct SPIInfo *ii){
 }
 
 #else
-#  error "unknown platform"
+#  error "unknown dma type"
 #endif
 
 /****************************************************************/
@@ -785,7 +540,7 @@ _irq_spidma_handler(int unit, int dman, DMAC_T *dmac){
     SPI_TypeDef *dev   = ii->addr;
     spi_msg *m = ii->msg;
 
-#if defined(PLATFORM_STM32F1) || defined(PLATFORM_STM32L1)
+#if defined(DMA_TYPE_1)
     // get status, clear irq
     int pos = 4 * (dman - 1);
     int isr = (ii->dma->ISR >> pos) & 0xF;
@@ -813,7 +568,7 @@ _irq_spidma_handler(int unit, int dman, DMAC_T *dmac){
             wakeup( ii );
         }
     }
-#elif defined(PLATFORM_STM32F4) || defined(PLATFORM_STM32F7)
+#elif defined(DMA_TYPE_2)
 
     int isr = _dma_isr_clear_irqs( ii->dma, dman );
     SPI_CRUMB("dma-irq", dman, isr);
@@ -837,7 +592,7 @@ _irq_spidma_handler(int unit, int dman, DMAC_T *dmac){
         }
     }
 #else
-#  error "unknown platform"
+#  error "unknown dma type"
 #endif
 }
 

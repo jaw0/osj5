@@ -221,3 +221,8 @@ init_hw2(void){
 
 }
 
+void
+power_down(void){
+    // RSN
+}
+
