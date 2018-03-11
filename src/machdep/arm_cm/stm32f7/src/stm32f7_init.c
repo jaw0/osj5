@@ -236,3 +236,17 @@ init_hw2(void){
 0x001: LQFP100 package 
  
 */
+
+
+/* enter low power standby mode */
+int
+power_down(void){
+
+    RCC->APB1ENR |= (1<<28);		// enable PWR system
+
+    PWR->CR2 |= 0x3F;	// clear WUFx
+    SCB->SCR |= 4;	// sleepdeep
+    PWR->CR1 |= 2;	// PDDS
+
+    __asm__("wfi");
+}
