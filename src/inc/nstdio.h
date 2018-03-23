@@ -124,6 +124,7 @@ extern void printf(const char *, ...);
 extern void fprintf(FILE*, const char *, ...);
 extern int  snprintf(char *, int, const char*, ...);
 extern void kprintf(const char *, ...);
+extern void bootmsg(const char *, ...);
 
 #if defined(USE_PROC) && defined(USE_NSTDIO)
 #  define STDIN		currproc->stdin
@@ -140,9 +141,6 @@ extern void kprintf(const char *, ...);
 #define GLF_HIST	2
 #define GLF_LEFT	4
 #define GLF_STARS	8
-
-/* #define bootmsg(f, args...)	fprintf(kconsole_port, f , ## args ) */
-#define bootmsg	kprintf
 
 
 #endif  /* __nstdio_h__ */

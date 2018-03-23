@@ -68,6 +68,7 @@ init(proc_t proc){
 
     autoconfig();
 
+
     kflush(0);	/* flush buffered output */
 
 #ifdef PROJECT_INIT

@@ -1007,7 +1007,7 @@ flfs_dir(MountEntry *me, int how){
                        "UD.F.C"[fc->type] : 'X',
                        offset, fc->cnklen, fc->totlen);
                 if( fc->type == FCT_FILE ){
-                    printf(" %-20T %3d    %s", ff->ctime, ff->attr, ff->name);
+                    printf(" %-20T %3d    %s", ff->ctime, (int)ff->attr, ff->name);
                     nfiles ++;
                 }
                 printf("\n");

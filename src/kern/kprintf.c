@@ -69,6 +69,7 @@ kflush(int colorp){
     int len = kbuflen;
     int i;
 
+#ifndef KBOOTQUIET
     if( ! kconsole_port )
         PANIC("kflush but no console\n");
 
@@ -83,6 +84,7 @@ kflush(int colorp){
     }
 
     if( !colorp ) red_off();
+#endif
 }
 
 
@@ -138,6 +140,22 @@ kprintffnc(void *a, char c){
     }
 }
 
+// only to buffer
+static int
+klogffnc(void *a, char c){
+
+    /* skip leading \n */
+    if( (c == '\n') && !kbufsz ) return;
+
+    if( kconsole_port ){
+        if( kbufsz < KBUF_MAX )
+            /* to buffer if room */
+            kprintffnc_buf(c);
+    }else{
+        kprintffnc_buf(c);
+    }
+}
+
 static int
 kcprintffnc(void *a, char c){
 
@@ -164,6 +182,23 @@ kprintf(const char *fmt, ...){
     vprintf(kprintffnc, 0, fmt, ap);
     va_end(ap);
     red_off();
+}
+
+void
+bootmsg(const char *fmt, ...){
+    va_list ap;
+
+#ifdef KBOOTQUIET
+    va_start(ap,fmt);
+    vprintf(klogffnc, 0, fmt, ap);
+    va_end(ap);
+#else
+    red_on();
+    va_start(ap,fmt);
+    vprintf(kprintffnc, 0, fmt, ap);
+    va_end(ap);
+    red_off();
+#endif
 }
 
 /* output to the console - no buffering, may block */

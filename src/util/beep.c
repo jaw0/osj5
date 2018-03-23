@@ -20,14 +20,23 @@ void
 set_volume(int v){
     if( v > 7 ) v = 7;
     volume_setting = v;
-    ivolume = volume = 1<<v;
-    if( ivolume < 2 ) ivolume = 2;
+    ivolume = volume = 1<<v - 1;
+#ifdef BEEP_MAXVOLUME
+    if( volume > BEEP_MAXVOLUME ) volume = BEEP_MAXVOLUME;
+#endif
+    if( ivolume < 1 ) ivolume = 1;
 }
 
 void
 beep_set(int freq, int vol){
-    if( vol > 128 ) vol = 128;
+
+    if( vol > 127 ) vol = 127;
     if( vol < 0  )  vol = 0;
+
+    if( freq <= 0 ){
+        freq = 1000;
+        vol = 0;
+    }
 
     freq_set(BEEP_TIMER, freq);
     pwm_set( BEEP_TIMER,  vol);
@@ -35,11 +44,7 @@ beep_set(int freq, int vol){
 
 void
 beep(int freq, int vol, int dur){
-    if( vol > 128 ) vol = 128;
-    if( vol < 1  )  vol = 1;
-
-    freq_set(BEEP_TIMER, freq);
-    pwm_set(BEEP_TIMER,  vol);
+    beep_set(freq, vol);
     usleep(dur);
     pwm_set(BEEP_TIMER,  0);
 }

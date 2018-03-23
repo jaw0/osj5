@@ -14,7 +14,7 @@
 #include <msgs.h>
 
 
-utime_t systime = 0;
+volatile utime_t systime = 0;
 
 void
 systime_tick(void){

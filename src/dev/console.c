@@ -87,7 +87,7 @@ console_init(struct Device_Conf *dev){
 
     kconsole_port->flags |= F_NONBLOCK;
 
-    kprintf("console installed on %s\n", n);
+    bootmsg("console installed on %s\n", n);
 
     return 0;
 }
@@ -111,7 +111,7 @@ set_console(const char *file){
     kconsole_port->flags |= F_NONBLOCK;
     splx(plx);
 
-    kprintf("console installed on %s\n", file);
+    bootmsg("console installed on %s\n", file);
 
     return 0;
 }

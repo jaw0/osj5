@@ -45,7 +45,7 @@ _dump_crumb(void){
         unsigned int dt = crumbs[n].when - wh;
         wh = crumbs[n].when;
 
-        kprintf("[" CRUMBS "] %d\t%s\t%x %x\n", dt, crumbs[n].event, crumbs[n].arg0, crumbs[n].arg1);
+        kprintf("[" CRUMBS "] %8d %-8s  %8x  %8x\n", dt, crumbs[n].event, crumbs[n].arg0, crumbs[n].arg1);
     }
 }
 # define DROP_CRUMB(event, arg0, arg1) _drop_crumb(event, (u_long)arg0, (u_long)arg1)

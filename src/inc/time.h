@@ -13,13 +13,13 @@
 typedef long long utime_t;
 
 /* microsecs since epoch */
-extern utime_t systime;
+extern volatile utime_t systime;
 
 extern void systime_tick(void);
 
 #define get_time()	(systime)
 
-extern utime_t get_hrtime(void);
+extern volatile utime_t get_hrtime(void);
 
 #define UT_ONESECOND	1000000
 #define EPOCH_YEAR	1970
