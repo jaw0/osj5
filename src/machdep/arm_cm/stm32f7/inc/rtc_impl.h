@@ -17,7 +17,7 @@ _rtc_init(int *pre_s, int *pre_a){
 
 #  ifdef LSECLOCK
     // QQQ - support other frequencies?
-    RCC->BDCR |= 3<<3;			// LSE - high drive
+    RCC->BDCR |= 3<<3;			// LSE - high drive?
     RCC->BDCR |= 1;			// enable LSE
     while( (RCC->BDCR & 2) == 0 ) {}	// wait for it
     RCC->BDCR |= 1<<8;			// src = lse

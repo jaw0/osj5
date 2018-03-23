@@ -245,7 +245,7 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
         unsigned long buf[2];
         unsigned long *dst = (unsigned long*)(d->addr + (offset & ~7));
 
-        kprintf("rmw: dst %x+%x\n", dst, offset&7);
+        // kprintf("rmw: len %d, dst %x+%x\n", len, dst, offset&7);
 
         // read
         memcpy((char*)buf, (char*)dst, 8);
@@ -253,7 +253,7 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
         for(i=0; i<len&7; i++){
             ((char*)buf)[i + (offset & 7)] = b[i];
         }
-        hexdump(buf, 8);
+        // hexdump(buf, 8);
         // write
         FLASH->CR |= 1;	// enable program
 

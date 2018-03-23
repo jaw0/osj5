@@ -27,7 +27,7 @@
 #  define PLLVCOMAX     432000000
 
 #else
-#  define SYSMAX	216000000
+#  define SYSMAX	180000000
 #  define AHBMAX   	180000000	/* with over-drive not enabled */
 #  define APB2MAX  	 90000000	/* "" */
 #  define APB1MAX  	 45000000	/* "" */
