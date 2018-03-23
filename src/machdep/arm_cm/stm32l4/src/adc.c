@@ -83,6 +83,10 @@ adc_init(int chan, int samp){
         ADC123_COMMON->CCR = (0<<16) | (0<<18) | (3 <<22);
 
         dev->ISR = 0;
+
+        ADC1->CR |= 1<<31; // calibrate
+        while( ADC1->CR & (1<<31) ){}
+        
         dev->CR |= CR_ADON;	/* enable */
         while( (dev->ISR & SR_ARDY) == 0 ){} // wait for it
     }
