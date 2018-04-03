@@ -26,6 +26,7 @@ epaper:         dev/epaper.cc  util/gfxdpy.cc
 sdcard:         dev/sdcard.c
 
 flfs:           fs/flfs.c
+flfs2:          fs/flfs2.c
 fatfs:          fs/fatfs.c
 fatfs:          fs/fatfs/ff.c
 
