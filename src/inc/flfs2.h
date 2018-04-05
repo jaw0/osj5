@@ -43,9 +43,11 @@ struct FSChunk {
 /* used as return values - not stored on device */
 #define FCT_EMPTY_INDEX	0xF1
 #define FCT_DELET_INDEX	0xF2
-#define FCT_ERROR	0xFF
+#define FCT_ERROR	0xFE
+#define FCT_BLANK1	0xFF	/* fct_blank in one byte */
 
     fs2_t next;		/* offset of next chunk in this file */
+    fs2_t intent;	/* for crash recovery */
 };
 
 struct FSIndex {
@@ -71,6 +73,9 @@ struct FSDir {
 #define FDT_ACTIVE	ALLONES		/* slots are available */
 #define FDT_FULL	1		/* all slots are in use */
 #define FDT_DELETED	0		/* all slots are deleted */
+
+    fs2_t intent;	/* for crash recovery */
+    fs2_t uid;		/* unique id */
 
     struct FSDirEnt dir[0];
 };

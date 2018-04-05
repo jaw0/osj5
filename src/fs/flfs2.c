@@ -33,6 +33,8 @@
 
 typedef char bool;
 
+#define USE_INDEX
+
 
 struct FLFS {
     MountEntry *me;
@@ -41,21 +43,23 @@ struct FLFS {
     offset_t write_size;
     offset_t erase_size;
 
-    lock_t lock;			/* we need to lock areas when the fs is in an inconsistant state */
+    lock_t lock;
     struct FileData *openforwrite;	/* list of files open for write */
 
+#ifdef USE_INDEX
     offset_t idxoff;
     struct FSIndex *idxbuf;
     bool   idxdirty;
+    int    nidxent;
+#endif
 
+    int block_shift;
     offset_t dirpos;			/* current active dir. 0=unknown, -1=need new one */
 
     offset_t lastfreeoffset;         	/* cache location of last available space found */
-    offset_t firstfileoffset;
     u_long flags;
 
     int    ndirent;
-    int    nidxent;
 };
 
 
@@ -100,7 +104,7 @@ static int flfs2_stat(FILE *, struct stat*);
 static int flfs2_deletefile(MountEntry *, const char *);
 
 static int write_flush_and_grow(struct FileData *);
-
+static void make_zero_empty_dir(struct FLFS *);
 
 const struct io_fs flfs2_iofs = {
     flfs2_putchar,
@@ -128,19 +132,35 @@ flfs2_init(MountEntry *me){
 
     struct stat s;
     fstat( me->fdev, &s );
-    flfs->total_size = s.size;
+    flfs->total_size = 16384; // s.size;
     flfs->flags      = s.flags;
 
     flfs->block_size = FBLOCKSIZE;	// MAX( FBLOCK, write_size )
     flfs->write_size = 8;
     flfs->erase_size = 2048;
 
-    flfs->ndirent = (flfs->block_size - sizeof(struct FSChunk)) / sizeof(struct FSDirEnt);
-    flfs->nidxent = (flfs->block_size - sizeof(struct FSChunk)) / sizeof(fs2_t);
+    flfs->ndirent = (flfs->block_size - sizeof(struct FSDir)) / sizeof(struct FSDirEnt);
+
+    int x = flfs->block_size;
+    while(x>1){
+        x >>= 1;
+        flfs->block_shift ++;
+    }
+
+
+#ifdef USE_INDEX
+    flfs->nidxent = flfs->block_size / sizeof(fs2_t);
+
+    // make sure there at least 2 index blocks - so we can gc
+    while( flfs->nidxent * flfs->block_size > flfs->total_size/2 )
+        flfs->nidxent /= 2;
+
     flfs->idxbuf  = alloc(flfs->block_size);
     flfs->idxoff  = -1;
+    kprintf("bksz %d ndir %d nidx %d shift %d\n", (int)flfs->block_size, (int)flfs->ndirent, (int)flfs->nidxent, (int)flfs->block_shift);
+#endif
 
-    // RSN - fsck
+    make_zero_empty_dir(flfs);
 
     return 0;
 }
@@ -149,7 +169,9 @@ int
 flfs2_unmount(MountEntry *me){
     struct FLFS * flfs = me->fsdat;
 
+#ifdef USE_INDEX
     free(flfs->idxbuf, flfs->block_size);
+#endif
     free(flfs, sizeof(struct FLFS));
 }
 
@@ -178,14 +200,15 @@ diskwrite(struct FLFS *flfs, offset_t off, const char *buf, int len){
 }
 
 static int
-diskerase(struct FLFS *flfs, offset_t off, char *buf, int len){
+diskerase(struct FLFS *flfs, offset_t off, offset_t len){
     offset_t i;
+    struct FSChunk fc;
 
-    memset(buf, 0xFF, flfs->block_size);
+    memset(&fc, 0xFF, sizeof(fc));
 
     if( flfs_erase_notneeded(flfs) ){
         for(i=0; i<len; i += flfs->block_size){
-            diskwrite(flfs, off + i, buf, sizeof(struct FSChunk));
+            diskwrite(flfs, off + i, &fc, sizeof(struct FSChunk));
         }
     }else{
         for(i=0; i<len; i += flfs->erase_size ){
@@ -194,6 +217,15 @@ diskerase(struct FLFS *flfs, offset_t off, char *buf, int len){
     }
 }
 
+static fs2_t
+uniqueid(){
+#ifdef FLFS_64BIT
+    return (random() << 32) | random();
+#else
+    return random();
+#endif
+
+}
 
 static void
 buffer_alloc(struct FileData *fd, int size){
@@ -269,27 +301,31 @@ check_block_pending(struct FLFS *flfs, offset_t off){
 }
 
 /****************************************************************/
+#ifdef USE_INDEX
 
 static inline offset_t
 index_offset_for(struct FLFS *flfs, offset_t off){
-    return ((off / flfs->block_size) / flfs->nidxent) * flfs->block_size * flfs->nidxent;
+    return off & ~ ((flfs->nidxent << flfs->block_shift) - 1);
 }
 static inline offset_t
 index_pos_for(struct FLFS *flfs, offset_t off){
-    return (off / flfs->block_size) % flfs->nidxent;
+    return (off >> flfs->block_shift) & (flfs->nidxent - 1);
 }
+#endif
 
 static int
 flush_index(struct FLFS *flfs){
 
+#ifdef USE_INDEX
     if( flfs->idxoff == -1 ) return 0;
     if( diskwrite(flfs, flfs->idxoff, flfs->idxbuf, flfs->block_size) <= 0 ) return -1;
     flfs->idxdirty = 0;
     debug("flush idx %x\n", (int)flfs->idxoff);
-
+#endif
     return 0;
 }
 
+#ifdef USE_INDEX
 static int
 read_index(struct FLFS *flfs, offset_t off){
     off = index_offset_for(flfs, off);
@@ -305,11 +341,12 @@ read_index(struct FLFS *flfs, offset_t off){
 
     return 0;
 }
-
+#endif
 
 static int
 update_index(struct FLFS *flfs, offset_t off, fs2_t type){
 
+#ifdef USE_INDEX
     if( read_index(flfs, off) ) return -1;
 
     int pos = index_pos_for(flfs, off);
@@ -330,19 +367,21 @@ update_index(struct FLFS *flfs, offset_t off, fs2_t type){
 
         flfs->idxbuf->cktype[0] = FCT_DELETED;
     }
-
+#endif
     return 0;
 }
 
 static int
 get_index_type(struct FLFS *flfs, offset_t off){
 
+#ifdef USE_INDEX
     if( read_index(flfs, off) ) return FCT_ERROR;
 
     int pos = index_pos_for(flfs, off);
     fs2_t r = flfs->idxbuf->cktype[pos];
 
     if( r > 4 && r != ALLONES ){
+        fsmsg("err? off %x pos %x, r = %x\n", (int)off, pos, r);
         hexdump(flfs->idxbuf, 80);
     }
 
@@ -352,7 +391,76 @@ get_index_type(struct FLFS *flfs, offset_t off){
     }
 
     return r;
+#else
+    fs2_t r;
+
+    if( diskread(flfs, off, &r, sizeof(r)) <= 0 ) return FCT_ERROR;
+    return r;
+
+#endif
 }
+
+/****************************************************************/
+
+static int
+clean_level1(struct FLFS *flfs){
+    offset_t ebk, cbk;
+    int ngc=0;
+
+    if( (flfs->erase_size > flfs->total_size) || (flfs->erase_size < 0) ) return 0;
+
+    // try to find deleted space to erase
+
+    for(ebk=0; ebk<flfs->total_size; ebk+=flfs->erase_size){
+        int nactive=0;
+        for(cbk=0; cbk<flfs->erase_size; cbk+=flfs->block_size){
+            int t = get_index_type(flfs, ebk+cbk);
+            switch(t){
+            case FCT_BLANK:
+            case FCT_DELETED:
+            case FCT_EMPTY_INDEX:
+            case FCT_DELET_INDEX:
+                break;
+            default:
+                nactive ++;
+                break;
+            }
+        }
+
+        if( nactive ) break;
+
+        // erase
+        debug("gc erase %x\n", (int)ebk);
+        diskerase(flfs, ebk, flfs->erase_size);
+        if( !ebk ) make_zero_empty_dir(flfs);
+        ngc ++;
+    }
+
+    return ngc;
+}
+
+// clean level 2 - move data?
+// need a way to recover from crash mid move
+//
+// do clean 2 -
+//  upon first allocation from an index
+//  upon file delete, where file has data in a different index than the currently active
+
+static int
+clean_level2(struct FLFS *flfs){
+
+    if( (flfs->erase_size > flfs->total_size/2) || (flfs->erase_size < 0) ) return 0;
+
+
+}
+
+static void
+fsck(struct FLFS *flfs){
+
+
+
+}
+
 
 /****************************************************************/
 
@@ -413,28 +521,32 @@ findfile(struct FLFSBuf *fb, const char *name){
 
 static int
 is_available(struct FLFS *flfs, offset_t pos ){
-    struct FSChunk fc;
+    fs2_t t;
 
     if( check_block_pending(flfs, pos) ) return 0;
 
-    if( get_index_type(flfs, pos) != FCT_BLANK ) return 0;
+    t = get_index_type(flfs, pos);
+    debug(" [%x %d]", pos, t);
+    if( t != FCT_BLANK ) return 0;
 
+#ifdef USE_INDEX
     /* index says it is ok, verify */
-    if( diskread(flfs, pos, &fc, sizeof(struct FSChunk)) <= 0 ) return 0;
-    if( fc.type == FCT_BLANK ) return 1;
+    if( diskread(flfs, pos, &t, sizeof(t)) <= 0 ) return 0;
+    if( t == FCT_BLANK ) return 1;
 
     /* index is out of wack - fix */
-    update_index(flfs, pos, fc.type);
+    update_index(flfs, pos, t);
+#endif
 
+    if( t == FCT_BLANK ) return 1;
     return 0;
 }
 
 static offset_t
-find_available(struct FLFS *flfs){
+search_available(struct FLFS *flfs){
     offset_t pos=flfs->lastfreeoffset;
 
     while( pos < flfs->total_size ){
-        debug(" [%x]", pos);
         if( is_available(flfs, pos) ){
             flfs->lastfreeoffset = pos;
             return pos;
@@ -445,6 +557,22 @@ find_available(struct FLFS *flfs){
 
     return -1;
 }
+
+static offset_t
+find_available(struct FLFS *flfs){
+    offset_t r;
+
+    debug("find avail");
+    r = search_available(flfs);
+    if( r != -1 ) return r;
+
+    // can we make space?
+    clean_level1(flfs);
+
+    flfs->lastfreeoffset = 0;
+    return search_available(flfs);
+}
+
 
 static int
 release_block(struct FLFS *flfs, offset_t off, char *buf){
@@ -531,6 +659,7 @@ get_open_dir_slot(struct FLFSBuf *fb){
     memset( fb->buffer, 0xFF, flfs->block_size );
     struct FSDir *dir = (struct FSDir*)fb->buffer;
     dir->type = FCT_DIR;
+    dir->uid  = uniqueid();
     update_index(flfs, offset, FCT_DIR);
 
     debug("dir new %x -> 0\n", (int)offset);
@@ -538,11 +667,22 @@ get_open_dir_slot(struct FLFSBuf *fb){
     return 0;
 }
 
-//XXXstatic int
-//XXXget_open_dir_slot(struct FileData *fd){
-//XXX    // NB: fills in cnkstart + buffer
-//XXX    return find_open_dir_slot(fd->flfs, fd->buffer, &fd->cnkstart);
-//XXX}
+// if it is avail, make block 0 a directory
+static void
+make_zero_empty_dir(struct FLFS *flfs){
+
+#ifndef USE_INDEX
+    fs2_t t;
+
+    t = get_index_type(flfs, 0);
+    if( t != FCT_BLANK ) return;
+
+    t = FCT_DIR;
+    diskwrite(flfs, 0, &t, sizeof(t));
+#endif
+
+}
+
 
 /****************************************************************/
 
@@ -618,8 +758,8 @@ flfs2_open_w(struct FLFS *flfs, const char *name){
 
     sync_lock( &flfs->lock, "flfs.L" );
 
-    debug("finding");
     offset = find_available(flfs);
+
     debug(" avail %x\n", offset);
 
     if( offset == -1 ){
@@ -677,10 +817,9 @@ write_flush_and_grow(struct FileData *fd){
 
     fd->cnkstart = more;
     fd->bufpos   = sizeof(struct FSChunk);
-    sync_unlock( &flfs->lock );
 
-    sync_lock( &flfs->lock, "flfs.L" );
-    update_index(flfs, fd->cnkstart, fc->type);
+
+    update_index(flfs, ochunk, fc->type);
     sync_unlock( &flfs->lock );
 
     // init new block
@@ -780,7 +919,7 @@ read_next_chunk(struct FileData *fd){
 
     struct FSChunk* fc = (struct FSChunk*)fd->buffer;
 
-    if( (fc->type != FCT_DATA) && (fc->type != FCT_FIRST) ){
+    if( (fc->type != FCT_DATA) && (fc->type != FCT_FIRST) && (fc->type != FCT_DELETED) ){
         fsmsg("read %s,%d corrupt (type %x)\n", fd->flfs->me->name, (int)fd->cnknext, fc->type);
         return -1;
     }
@@ -964,7 +1103,6 @@ flfs2_dir(MountEntry *me, int how){
 
     sync_lock( &flfs->lock, "flfs.L" );
 
-    debug("dir\n");
     for(offset=0; offset<flfs->total_size; offset += flfs->block_size){
 
         fs2_t t = get_index_type(flfs, offset);
@@ -1042,13 +1180,14 @@ flfs2_format(MountEntry *me, char *flfsname){
 
     sync_lock( &flfs->lock,    "flfs.L" );
 
-    diskerase( flfs, 0, buffer, flfs->total_size );
+    diskerase( flfs, 0, flfs->total_size );
 
+#ifdef USE_INDEX
     memset( flfs->idxbuf, 0xFF, flfs->block_size );
     flfs->idxdirty = 0;
+#endif
     flfs->dirpos = -1;
     flfs->lastfreeoffset = 0;
-    flfs->firstfileoffset = 0;
 
     sync_unlock( &flfs->lock );
 
