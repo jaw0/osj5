@@ -29,7 +29,7 @@
 
 
 #define fsmsg(f, args...)		fprintf(STDERR, f , ## args )
-#define debug(f, args...)		fprintf(STDERR, f , ## args )
+#define debug(f, args...)		/*fprintf(STDERR, f , ## args )*/
 
 typedef char bool;
 
@@ -142,12 +142,14 @@ flfs2_init(MountEntry *me){
 
     struct stat s;
     fstat( me->fdev, &s );
+    // XXX
     flfs->total_size = 16384; // s.size;
-    flfs->flags      = s.flags | SSF_NOERASE;
-
-    flfs->block_size = FBLOCKSIZE;	// MAX( FBLOCK, write_size )
     flfs->write_size = 8;
     flfs->erase_size = 2048;
+    flfs->flags      = s.flags;
+
+    flfs->block_size = FBLOCKSIZE;
+    if( flfs->write_size > flfs->block_size ) flfs->block_size = flfs->write_size;
 
     flfs->ndirent = (flfs->block_size - sizeof(struct FSDir)) / sizeof(struct FSDirEnt);
 
@@ -232,6 +234,7 @@ diskerase(struct FLFS *flfs, offset_t off, offset_t len){
     }
 }
 
+// QQQ - or scan all blocks for current highest on init, and ++
 static fs2_t
 uniqueid(){
 #ifdef FLFS_64BIT
@@ -432,19 +435,27 @@ fsck(struct FLFS *flfs){
 
 }
 
+/****************************************************************/
+#if 0
+// level1 region = erase_size region
+
 static int
 clean_level1_region(struct FLFS *flfs, offset_t region){
     offset_t cbk;
-    int nactive=0;
+    int nactive=0, nerase=0, ntot=0;
 
     debug("gc/1 %x\n", (int)region);
 
     for(cbk=0; cbk<flfs->erase_size; cbk+=flfs->block_size){
         int t = get_index_type(flfs, region+cbk);
         debug("  gc1 %x -> %d\n", (int)(region+cbk), t);
+        ntot ++;
+
         switch(t){
-        case FCT_INDEX:
         case FCT_BLANK:
+            nerase ++;
+            break;
+        case FCT_INDEX:
         case FCT_DELETED:
         case FCT_EMPTY_INDEX:
         case FCT_DELET_INDEX:
@@ -455,11 +466,9 @@ clean_level1_region(struct FLFS *flfs, offset_t region){
         }
     }
 
-    debug("nact: %d\n", nactive);
-    if( nactive ) return 0;
+    if( nactive ) return 0;		// contains active data
+    // if( nerase == ntot ) return 1;	// already erased
 
-    // XXX - erase unless already erased
-    
     // erase
     debug("gc erase %x\n", (int)region);
     diskerase(flfs, region, flfs->erase_size);
@@ -469,6 +478,8 @@ clean_level1_region(struct FLFS *flfs, offset_t region){
 
 }
 
+// level1 - erase deleted or unneeded blocks
+
 static int
 clean_level1(struct FLFS *flfs){
     offset_t ebk;
@@ -477,23 +488,41 @@ clean_level1(struct FLFS *flfs){
     if( (flfs->erase_size > flfs->total_size) || (flfs->erase_size < 0) ) return 0;
 
     // try to find deleted space to erase
-
     for(ebk=0; ebk<flfs->total_size; ebk+=flfs->erase_size){
         ngc += clean_level1_region(flfs, ebk);
     }
 
     return ngc;
 }
+#endif
+
+/****************************************************************/
+
+static void
+revert_relocate_file(struct FLFSBuf *fb, offset_t newstart){
+    struct FSChunk  *fc = (struct FSChunk*)fb->buffer;
+
+    while(1){
+        int t = get_index_type(fb->flfs, newstart);
+        if( t == FCT_BLANK ) break;
+
+        if( diskread(fb->flfs, newstart, fb->buffer, fb->flfs->block_size) <= 0 ) return;
+        fb->offset = newstart;
+        newstart = fc->next;
+        release_block(fb);
+    }
+}
+
 
 // are any of this file's blocks in the cleaning region?
 static int
 file_in_cleaning_region(struct FLFS *flfs, offset_t off){
 
     while(1){
-        if( (off & (flfs->cleaning_size - 1)) == flfs->cleaningregion )
+        if( (off & ~(flfs->cleaning_size - 1)) == flfs->cleaningregion )
             return 1;
 
-        if( diskread(flfs, off + offsetof(struct FSChunk, next), &off, sizeof(off)) <= 0) return 0;
+        if( diskread(flfs, off + offsetof(struct FSChunk, next), &off, sizeof(off)) <= 0) return -1;
         if( off == FCT_BLANK ) return 0;
     }
     return 0;
@@ -510,23 +539,32 @@ relocate_file(struct FLFSBuf *fb, int de){
     fs2_t intent = fb->offset + de;
 
 
+    debug("reloc file %s\n", dent.name);
+
     if( dent.start != ALLONES ){
         newstart = newnext = find_available(fb->flfs);
         if( newstart == -1 ) return 0;
     }
     oldnext = dent.start;
 
-    debug("reloc file %s\n", dent.name);
-
     // copy data
     while(oldnext != ALLONES){
         oldcurr = oldnext;
         newcurr = newnext;
-        diskread(fb->flfs, oldcurr, fb->buffer, fb->flfs->block_size);
+
+        if( diskread(fb->flfs, oldcurr, fb->buffer, fb->flfs->block_size) <= 0 ){
+            revert_relocate_file(fb, newstart);
+            return 0;
+        }
 
         oldnext = fc->next;
         if( oldnext != ALLONES ){
             newnext = find_available(fb->flfs);
+            if( newnext == -1 ){
+                // device full. cannot relocate
+                revert_relocate_file(fb, newstart);
+                return 0;
+            }
             fc->next = newnext;
         }
 
@@ -534,26 +572,43 @@ relocate_file(struct FLFSBuf *fb, int de){
         if( fc->type == FCT_FIRST )
             fc->intent = intent;
 
-        diskwrite(fb->flfs, newcurr, fb->buffer, fb->flfs->block_size);
-
+        if( diskwrite(fb->flfs, newcurr, fb->buffer, fb->flfs->block_size) <= 0 ){
+                revert_relocate_file(fb, newstart);
+                return 0;
+        }
         update_index(fb->flfs, newcurr, fc->type);
     }
 
     // copy + update dir
-    de = get_open_dir_slot(fb);
-    // -1
-    db->dir[de] = dent;
-    db->dir[de].start = newstart;
+    int nde = get_open_dir_slot(fb);
+    if( nde == -1 ){
+        // device full. cannot relocate
+        revert_relocate_file(fb, newstart);
+        return 0;
+    }
 
-    diskwrite(fb->flfs, fb->offset, fb->buffer, fb->flfs->block_size);
+    db->dir[nde] = dent;
+    db->dir[nde].start = newstart;
 
+    if( diskwrite(fb->flfs, fb->offset, fb->buffer, fb->flfs->block_size) <= 0 ){
+        revert_relocate_file(fb, newstart);
+        return 0;
+    }
 
     // delete old
-    diskread(fb->flfs, olddir, fb->buffer, fb->flfs->block_size);
-    deletefile_from(fb, &dent);
+    if( diskread(fb->flfs, olddir, fb->buffer, fb->flfs->block_size) <= 0 ){
+        revert_relocate_file(fb, newstart);
+        return 0;
+    }
+
+    debug("delete old %s @ %x + %d\n", dent.name, dent.start, de);
+    fb->offset = olddir;
+    deletefile_from(fb, &db->dir[de]);
 
     if( newstart != ALLONES )
         update_intent(fb->flfs, newstart, 0);
+
+    return 1;
 }
 
 static int
@@ -562,7 +617,7 @@ relocate_dir(struct FLFSBuf *fb){
     offset_t newoff;
     int i,j;
 
-    debug("reloc dir x", (int)fb->offset);
+    debug("reloc dir %x", (int)fb->offset);
 
     // prune deleted entries
     for(i=j=0; i<fb->flfs->ndirent; i++){
@@ -576,11 +631,23 @@ relocate_dir(struct FLFSBuf *fb){
     }
 
     if( j ){
+        // clear the remaing direntries
+        for(i=j; i<fb->flfs->ndirent; i++){
+            memset(db->dir + i, 0xFF, sizeof(struct FSDirEnt));
+        }
+
         db->intent = fb->offset;
         newoff = find_available(fb->flfs);
         debug(" -> %x", newoff);
 
-        diskwrite(fb->flfs, newoff, fb->buffer, fb->flfs->block_size);
+        if( newoff == -1 ){
+            // device full. cannot relocate
+            return 0;
+        }
+
+        if( diskwrite(fb->flfs, newoff, fb->buffer, fb->flfs->block_size) <= 0){
+            return 0;
+        }
 
         update_index(fb->flfs, newoff, FCT_DIR);
     }
@@ -597,42 +664,37 @@ relocate_dir(struct FLFSBuf *fb){
 }
 
 
-// clean level 2 - move data?
-// need a way to recover from crash mid move
+// clean level 2 - relocate data + erase
 //
 
 static void
 clean_level2_region(struct FLFS *flfs, offset_t region){
     offset_t off;
     struct FLFSBuf fb;
-    int i, ncl=0;
+    int i, ncl=0, nerase=0, ntot=0;
 
     debug("gc/2? %x\n", (int)region);
     if( (flfs->erase_size > flfs->total_size/2) || (flfs->erase_size < 0) ) return 0;
 
-    debug("gc/2 %x\n", (int)region);
-
-    // RSN - optimize: is this region already erased?
+    // is this region already erased?
     for(off=region; off<region+flfs->cleaning_size; off += flfs->block_size){
         int t = get_index_type(flfs, off);
+        ntot ++;
+        if( (t == FCT_BLANK) || (t == FCT_EMPTY_INDEX) ) nerase ++;
         debug("  %x => %x\n", (int)off, t);
     }
+    if( nerase == ntot ) return;
 
-    
     fb.buffer = alloc(flfs->block_size);
     fb.flfs = flfs;
     flfs->cleaningregion = region;
 
     struct FSDir *db = (struct FSDir*)fb.buffer;
 
-    // iter all blocks
-    // dir? in region? move
-    //      iter all files. in region?
-
+    // look for files in the cleaning region - move them
     for(off=0; off<flfs->total_size; off+= flfs->block_size){
         int t = get_index_type(flfs, off);
 
-        debug("..%x -> %d\n", (int)off, t);
         if( t != FCT_DIR ) continue;
         if( diskread(flfs, off, fb.buffer, flfs->block_size) <= 0 ) continue;
         if( db->flag == FDT_DELETED ) continue;
@@ -641,32 +703,49 @@ clean_level2_region(struct FLFS *flfs, offset_t region){
         for(i=0; i<flfs->ndirent; i++){
             if( db->dir[i].start == FDS_EMPTY )   continue;
             if( db->dir[i].start == FDS_DELETED ) continue;
-            if( !file_in_cleaning_region(flfs, db->dir[i].start) ) continue;
-            fb.offset = off;
-            relocate_file(&fb, i);
-            // buffer was overwritten - refetch
-            diskread(flfs, off, fb.buffer, flfs->block_size);
-            ncl ++;
-        }
 
-        // flag may have changed
+            int x = file_in_cleaning_region(flfs, db->dir[i].start);
+            debug("  file %s x %d\n", db->dir[i].name, x);
+            if( x == -1 ) break;	// error
+            if( !x ) continue;		// not in region
+
+            fb.offset = off;
+            // move file somewhere else
+            relocate_file(&fb, i);
+            // dir buffer was overwritten - refetch
+            if( diskread(flfs, off, fb.buffer, flfs->block_size) <= 0 ) break;
+        }
+    }
+
+    // look for dirs in the cleaning region - move or remove them
+    // check directories after moving files, moving files may have emptied the dir
+    int nactive=0;
+    for(off=region; off<region + flfs->cleaning_size; off += flfs->block_size){
+        int t = get_index_type(flfs, off);
+
+        if( (t == FCT_FIRST) || (t == FCT_DATA) ) nactive ++;
+
+        if( t != FCT_DIR ) continue;
+        if( diskread(flfs, off, fb.buffer, flfs->block_size) <= 0 ) continue;
+
         if( db->flag == FDT_DELETED ) continue;
 
         debug("=> dir %x\n", (int)off);
-        // dir in region?
         fb.offset = off;
-        if( (off & ~(flfs->cleaning_size - 1)) == flfs->cleaningregion ){
-            relocate_dir(&fb);
-            ncl ++;
-        }
-
+        // move dir somewhere else
+        if( !relocate_dir(&fb) ) nactive ++;
     }
 
     free(fb.buffer, flfs->block_size);
-    if( ncl ){
-        for(off=region; off<region+flfs->cleaning_size; off += flfs->erase_size){
-            clean_level1_region(flfs, off);
-        }
+
+    if( !nactive ){
+        debug("erasing\n");
+        diskerase(flfs, region, flfs->cleaning_size);
+#ifdef USE_INDEX
+        flfs->idxoff = -1;
+#endif
+    }else{
+        debug("nactive %d\n", nactive);
     }
 
     flfs->cleaningregion = -1;
@@ -799,12 +878,17 @@ find_available(struct FLFS *flfs){
 
     flfs->lastfreeoffset = 0;
     r = search_available(flfs);
-    if(r == -1) PANIC("full!"); // XXX
-    if( r != -1) return r;
+    if( r != -1 ) return r;
 
-    // can we make space?
-    clean_level1(flfs);
+#if 0
+    for(r=0; r<flfs->total_size; r+=flfs->cleaning_size)
+        clean_level2_region(flfs, r);
+
     r = search_available(flfs);
+
+    if(r == -1) PANIC("full!"); // XXX
+#endif
+
     return r;
 }
 
@@ -836,7 +920,7 @@ get_open_dir_slot_from(struct FLFSBuf *fb, offset_t offset){
     // search
 
     fb->offset = offset;
-    diskread(fb->flfs, offset, fb->buffer, fb->flfs->block_size);
+    if( diskread(fb->flfs, offset, fb->buffer, fb->flfs->block_size) <= 0) return -1;
     if( dir->type != FCT_DIR )    return -1;
     if( dir->flag != FDT_ACTIVE ) return -1;
 
@@ -992,6 +1076,10 @@ flfs2_open_w(struct FLFS *flfs, const char *name){
     name = basenameoffile(name);
 
     sync_lock( &flfs->lock, "flfs.L" );
+
+    offset_t cleanme = (flfs->lastfreeoffset + flfs->cleaning_size - 1) & ~(flfs->cleaning_size - 1);
+    cleanme &= flfs->total_size - 1;
+    clean_level2_region(flfs, cleanme);
 
     offset = find_available(flfs);
 
@@ -1354,6 +1442,10 @@ flfs2_dir(MountEntry *me, int how){
             break;
         }
 
+        if(how & LSHOW_EXT){
+            printf("dir %x\n", (int)offset);
+        }
+
         for(i=0; i<flfs->ndirent; i++){
             struct FSDirEnt *d = dir->dir + i;
 
@@ -1362,6 +1454,7 @@ flfs2_dir(MountEntry *me, int how){
             if( (d->start == FDS_DELETED) && !(how & LSHOW_EXT) ) continue;
 
             if(how & LSHOW_EXT){
+                printf("%2d ", i);
                 if( d->start == FDS_DELETED )
                     printf("X");
                 else if( d->attr & FFA_HIDDEN ){
@@ -1449,8 +1542,8 @@ check_dir_all_deleted(struct FLFS *flfs, offset_t off, struct FSDir *d){
 
 static void
 delete_dir_entry(struct FLFS *flfs, offset_t off, struct FSDir *d, struct FSDirEnt *de){
-    int i;
 
+    debug("rm dirent %x; buf %x de %x\n", (int)off, d, de);
     de->start = FDS_DELETED;
     check_dir_all_deleted(flfs, off, d);
 
