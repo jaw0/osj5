@@ -29,14 +29,18 @@ stflash_flashinfo(){
 
     finfo[0].addr = 0x08020000;
     finfo[0].blockno = 5;
-    finfo[0].blocksize = 128;
+    finfo[0].block_size = 128;
+    finfo[0].erase_size = 128 * 1024;
+    finfo[0].write_size = 4;
     finfo[0].nblocks = (size == 512) ? 3 : 7;
     finfo[1].addr = 0;
 
     if( size == 2048 ){
         finfo[1].addr = 0x08120000;
         finfo[1].blockno = 17;
-        finfo[1].blocksize = 128;
+        finfo[1].block_size = 128;
+        finfo[1].erase_size = 128 * 1024;
+        finfo[1].write_size = 4;
         finfo[1].nblocks = 7;
 
         finfo[2].addr = 0;

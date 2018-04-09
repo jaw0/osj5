@@ -251,17 +251,25 @@ flash_bwrite(FILE *f, const char *b, int len, offset_t offset){
 
 int
 flash_ioctl(FILE* f, int cmd, void* a){
+    offset_t *o = a;
 
-    if( (cmd >> 8) & 0xF != 'm' )
+    if( ((cmd >> 8) & 0xFF) != 'm' )
         return -1;
 
-    switch( cmd & 0xF ){
+    switch( cmd & 0xFF ){
 
     case 'e':		/* erase */
         return erase(f->d, (int)a);
         break;
 
+    case 'i':		/* flash info */
+        // QQQ?
+        o[0] = 4;
+        o[1] = 256;
+        return 0;
+
     default:
+        kprintf("ioxx\n");
         return -1;
     }
 }

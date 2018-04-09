@@ -14,6 +14,7 @@
 
 
 #define IOC_ERASE	_IOC('m', 'e')		/* param = offset to erase */
+#define IOC_FLINFO	_IOC('m', 'i')		/* get flash info [write size, erase size] */
 
 #define IOC_RDBLK	_IOC('d', 'r')		/* read block */
 #define IOC_WRBLK	_IOC('d', 'w')		/* write block */

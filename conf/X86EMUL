@@ -35,7 +35,8 @@ option ENOUGHALREADYHEURISTIC	64
 
 ################################################################
 
-filesys flfs
+#filesys flfs
+filesys flfs2
 filesys fatfs
 
 ################################################################
@@ -64,8 +65,8 @@ disk ud0a:       type fatfs on ud unit 0 partition -1
 
 ################################################################
 
-flashdev flash:   type flfs  @ 0  size 1048576  block 512
-flashdev ram:     type flfs  @ 0  size 1048576  block 512  flags SSF_NOERASE
+#flashdev flash:   type flfs  @ 0  size 1048576  block 512
+flashdev ram:     type flfs2 @ 0  size 1048576  block 512  flags SSF_NOERASE
 
 config  root on flash:  startup in startup.rc
 

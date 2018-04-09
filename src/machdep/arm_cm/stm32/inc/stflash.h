@@ -6,7 +6,9 @@
 struct Flash_Info {
     u_int addr;
     short blockno;
-    int   blocksize;
+    int   block_size;	// in kB
+    int	  write_size;
+    int   erase_size;
     int   nblocks;
 };
 

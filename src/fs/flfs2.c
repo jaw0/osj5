@@ -141,11 +141,14 @@ flfs2_init(MountEntry *me){
     me->fsdat = flfs;
 
     struct stat s;
+    offset_t o[2];
+    o[0] = o[1] = 0;
     fstat( me->fdev, &s );
-    // XXX
-    flfs->total_size = 16384; // s.size;
-    flfs->write_size = 8;
-    flfs->erase_size = 2048;
+    fioctl(me->fdev, IOC_FLINFO, (void*)o);
+
+    flfs->total_size = s.size;
+    flfs->write_size = o[0] ? o[0] : 1;
+    flfs->erase_size = o[1];
     flfs->flags      = s.flags;
 
     flfs->block_size = FBLOCKSIZE;
@@ -162,6 +165,8 @@ flfs2_init(MountEntry *me){
         flfs->block_shift ++;
     }
 
+    // bootmsg("wsize %d, esize %d, tsize %d\n", (int)flfs->write_size, (int)flfs->erase_size, (int)flfs->total_size);
+
 
 #ifdef USE_INDEX
     flfs->nidxent = flfs->block_size / sizeof(fs2_t);
@@ -176,7 +181,7 @@ flfs2_init(MountEntry *me){
     if( flfs->nidxent * flfs->block_size > flfs->cleaning_size )
         flfs->cleaning_size = flfs->nidxent * flfs->block_size;
 
-    kprintf("bksz %d ndir %d nidx %d shift %d\n", (int)flfs->block_size, (int)flfs->ndirent, (int)flfs->nidxent, (int)flfs->block_shift);
+    // bootmsg("bksz %d ndir %d nidx %d shift %d\n", (int)flfs->block_size, (int)flfs->ndirent, (int)flfs->nidxent, (int)flfs->block_shift);
 #endif
 
     make_zero_empty_dir(flfs);

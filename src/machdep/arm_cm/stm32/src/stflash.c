@@ -23,6 +23,7 @@
 
 #include <stm32.h>
 
+#define SMALLBLOCK	2048
 
 extern struct Flash_Conf flash_device[];
 extern FILE *flfs_open(MountEntry *, const char *, const char *);
@@ -78,7 +79,7 @@ stflash_init(struct Device_Conf *dev){
 
     for(n=0; fi[n].addr; n++){
         nfi ++;
-        bksz = fi[n].blocksize * 1024;
+        bksz = fi[n].block_size * 1024;
     }
 
     if( !nfi ){
@@ -137,6 +138,7 @@ stflash_init(struct Device_Conf *dev){
         f->nblocks = size / bksz;
         if( f->nblocks + bkoff > bank->nblocks ) f->nblocks = bank->nblocks - bkoff;
         f->totalsize = f->nblocks * bksz;
+        f->info = fi;
 
 
         finit( & fldsk[i].file );
@@ -260,8 +262,8 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
         for(i=0; i<2; i++){
             wait_not_busy();
             dst[i] = buf[i];
-        
-            if( FLASH->SR & 0xF2 ) kprintf("err: %x; @ %x, cr %x\n", FLASH->SR, dst + i, FLASH->CR);
+
+            if( FLASH->SR & 0xF2 ) kprintf("err: len %d %x; @ %x, cr %x\n", len, FLASH->SR, dst + i, FLASH->CR);
             //if( dst[i] != buf[i] ) kprintf("err @%x: %x != %x\n", dst + i, dst[i], buf[i]);
         }
 #else
@@ -287,7 +289,11 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
         for(i=0; i<wlen; i++){
 #  ifdef PLATFORM_STM32L4
             // has ECC, can only overwrite with all 0s
-            if( !(i&1) && src[i]==0xFFFFFFFF && src[i+1]==0xFFFFFFFF ){
+            if( !(i&1) && (src[i]==0xFFFFFFFF) && (src[i+1]==0xFFFFFFFF) ){
+                i ++;
+                continue;
+            }
+            if( !(i&1) && (src[i] == dst[i]) && (src[i+1] == dst[i+1]) ){
                 i ++;
                 continue;
             }
@@ -295,7 +301,7 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
 
             wait_not_busy();
             dst[i] = src[i];
-            if( FLASH->SR & 0xF2 ) kprintf("err: %x; @ %x, cr %x\n", FLASH->SR, dst + i, FLASH->CR);
+            if( FLASH->SR & 0xF2 ) kprintf("err: len %d, %x; @ %x, cr %x [src %x dst %x] \n", len, FLASH->SR, dst + i, FLASH->CR, src[i], dst[i]);
             //if( dst[i] != src[i] ) kprintf("err @%x: %x != %x\n", dst + i, dst[i], src[i]);
         }
     }
@@ -311,6 +317,8 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
 
 int
 stflash_ioctl(FILE* f, int cmd, void* a){
+    struct Flash_Disk *fdk = f->d;
+    offset_t *o = a;
 
     if( ((cmd >> 8) & 0xFF) != 'm' )
         return -1;
@@ -319,6 +327,10 @@ stflash_ioctl(FILE* f, int cmd, void* a){
     case 'e':		/* erase */
         return erase(f->d, (int)a);
         break;
+    case 'i':		/* flash info */
+        o[0] = fdk->info->write_size;
+        o[1] = fdk->info->erase_size;
+        return 0;
 
     default:
         return -1;
@@ -330,9 +342,9 @@ static int
 erase(struct Flash_Disk *fdk, int a){
 
     int blk  = a / fdk->blocksize;
-    int sect = fdk->info->blockno + blk;
+    int sect = fdk->blockno + blk;
 
-    kprintf("stm32 flash erase (sect %d)\n", sect);
+    // kprintf("stm32 flash erase a %x b %x (sect %x)\n", a, blk, sect);
 
     ststart(fdk);
     wait_not_busy();

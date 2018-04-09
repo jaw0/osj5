@@ -47,19 +47,25 @@ stflash_flashinfo(){
     if( dualboot_enabled() ){
         finfo[0].addr = 0x08020000;
         finfo[0].blockno = 5;
-        finfo[0].blocksize = 128;
+        finfo[0].block_size = 128;
+        finfo[0].erase_size = 128 * 1024;
+        finfo[0].write_size = 4;
         finfo[0].nblocks = (size == 2048) ? 7 : 3;
 
         finfo[1].addr = 0x08120000;
         finfo[1].blockno = 5 | (1<<4);
-        finfo[1].blocksize = 128;
+        finfo[1].block_size = 128;
+        finfo[1].erase_size = 128 * 1024;
+        finfo[1].write_size = 4;
         finfo[1].nblocks = (size == 2048) ? 7 : 3;
 
         finfo[2].addr = 0;
     }else{
         finfo[0].addr = 0x08040000;
         finfo[0].blockno = 5;
-        finfo[0].blocksize = 256;
+        finfo[0].block_size = 256;
+        finfo[0].erase_size = 256 * 1024;
+        finfo[0].write_size = 4;
         finfo[0].nblocks = (size == 2048) ? 7 : 3;
 
         finfo[1].addr = 0;

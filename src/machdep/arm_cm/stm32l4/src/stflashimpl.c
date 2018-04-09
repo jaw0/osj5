@@ -26,8 +26,10 @@ stflash_flashinfo(){
 
     finfo[0].addr = 0x08000000;
     finfo[0].blockno = 0;
-    finfo[0].blocksize = 2;
+    finfo[0].block_size = 2;
     finfo[0].nblocks = size / 2;
+    finfo[0].erase_size = 2048;
+    finfo[0].write_size = 8;
     finfo[1].addr = 0;
 
     return finfo;
