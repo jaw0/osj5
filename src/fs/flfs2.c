@@ -171,8 +171,8 @@ flfs2_init(MountEntry *me){
 #ifdef USE_INDEX
     flfs->nidxent = flfs->block_size / sizeof(fs2_t);
 
-    // make sure there at least 2 index blocks - so we can gc
-    while( flfs->nidxent * flfs->block_size > flfs->total_size/2 )
+    // make sure there at least 4 index blocks - so we can gc
+    while( flfs->nidxent * flfs->block_size > flfs->total_size/4 )
         flfs->nidxent /= 2;
 
     flfs->idxbuf  = alloc(flfs->block_size);
