@@ -21,15 +21,19 @@
 #ifndef FLFS_64BIT
 typedef u_long fs2_t;
 # define ALLONES 	0xFFFFFFFF
+# ifndef FLFS_NAMELEN
+#  define FLFS_NAMELEN	32
+# endif
+
 #else
+
 typedef u_int64_t fs2_t;
 # define ALLONES 	0xFFFFFFFFFFFFFFFF
+# ifndef FLFS_NAMELEN
+#  define FLFS_NAMELEN	24
+# endif
 #endif
 
-// make sizeof(fsfile) a multiple of 8
-#ifndef FLFS_NAMELEN
-# define FLFS_NAMELEN	32
-#endif
 
 
 struct FSChunk {
@@ -60,10 +64,11 @@ struct FSIndex {
 struct FSDirEnt {
     fs2_t   start;			/* start offset */
 #define FDS_EMPTY	ALLONES		/* slot is available for use */
-#define FDS_DELETED	0		/* slot in no longer valid */
+    fs2_t   attr;			/* <delete flag: valid=allones, deleted=0><attr 16bit> */
+#define FLFS_ATTR_MASK 0xFFFF
+#define FDA_DELETED	0		/* slot in no longer valid */
     utime_t ctime;
     u_long  filelen;
-    u_long  attr;
     char    name[FLFS_NAMELEN]; /* null terminated */
 };
 
