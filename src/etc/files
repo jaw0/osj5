@@ -36,4 +36,6 @@ debugger:       util/debugger.c
 play:           util/play.c
 beep:           util/beep.c
 
+usbd:           usb/usbd.c
+
 
