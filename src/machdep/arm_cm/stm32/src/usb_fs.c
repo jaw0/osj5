@@ -22,7 +22,7 @@
 
 
 #define CRUMBS "usb"
-#define NR_CRUMBS 1024
+#define NR_CRUMBS 512
 #include <crumbs.h>
 
 
@@ -52,7 +52,6 @@ static const uint16_t* usbepr[NUMENDPOINTS] = {
 typedef struct {
     usbd_t *usbd;
     int     bufnext;
-    int     bufsize[NUMENDPOINTS];
 
 } usbfs_t;
 
@@ -86,6 +85,8 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
 
     nvic_enable( 67, IPL_DISK );
 
+    bootmsg("usb device full-speed\n");
+
     return usb + i;
 }
 
@@ -96,7 +97,8 @@ usb_serialnumber(void){
 
 int
 usb_connect(usbd_t *u){
-    USB->CNTR = USB_CNTR_CTRM | USB_CNTR_RESETM | USB_CNTR_ERRM | USB_CNTR_PMAOVRM;
+    u->curr_state = USBD_STATE_CONNECT;
+    USB->CNTR = USB_CNTR_CTRM | USB_CNTR_RESETM; //QQQ - | USB_CNTR_ERRM | USB_CNTR_PMAOVRM;
     USB->BCDR = USB_BCDR_DPPU;
 }
 
@@ -104,6 +106,7 @@ int
 usb_disconnect(usbd_t *u){
     USB->CNTR = 0;
     USB->BCDR = 0;
+    u->curr_state = USBD_STATE_INACTIVE;
 }
 
 void
@@ -114,12 +117,12 @@ usb_enable_suspend(usbd_t *u){
 void
 usb_set_addr(usbd_t *u, int addr){
     USB->DADDR = USB_DADDR_EF | (addr & 0x7F);
+    RESET_CRUMBS();
 }
 
 void
 usb_stall(usbd_t *u, int ep){
-    int epa = ep & 7;
-    uint16_t *epr = usbepr[epa];
+    uint16_t *epr = usbepr[ep & 7];
 
     if( ep & 0x80 ){
         EP_TX_STALL(*epr);
@@ -130,12 +133,11 @@ usb_stall(usbd_t *u, int ep){
 
 void
 usb_unstall(usbd_t *u, int ep){
-    int epa = ep & 7;
-    uint16_t *epr = usbepr[epa];
+    uint16_t *epr = usbepr[ep & 7];
 
-    if (ep & 0x80) {
+    if( ep & 0x80 ){
         EP_TX_UNSTALL(*epr);
-    } else {
+    }else{
         EP_RX_UNSTALL(*epr);
     }
 }
@@ -144,13 +146,12 @@ int
 usb_isstalled(usbd_t *u, int ep){
     uint16_t *epr = usbepr[ep & 7];
 
-    if (ep & 0x80) {
+    if( ep & 0x80 ){
         return (*epr & USB_EPTX_STAT) == USB_EP_TX_STALL;
     }
     return (*epr & USB_EPRX_STAT) == USB_EP_RX_STALL;
 
 }
-
 
 static int
 pma_alloc(usbfs_t *u, int size){
@@ -194,10 +195,11 @@ pma_write(struct bufdesc *b, const char *src, int len){
 }
 
 static int
-pma_read(struct bufdesc *b, char *dst){
-    int len = b->count & 0x3FF;
+pma_read(struct bufdesc *b, char *dst, int len){
+    int l = b->count & 0x3FF;
+    if( l < len ) len = l;
     pma_copy(b->addr + (char*)USB_PMAADDR, dst, len);
-    return len;
+    return l;
 }
 
 
@@ -230,7 +232,7 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
     }
 
     //DROP_CRUMB("epr/1", *epr, USB->CNTR);
-    fs->bufsize[epa] = size;
+    u->epd[epa].bufsize = size;
 
     // TX or control
     if( (ep & 0x80) || (type == UE_CONTROL) ){
@@ -273,13 +275,14 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
     return 0;
 }
 
+
 int
 usb_send(usbd_t *u, int ep, const char *buf, int len){
     usbfs_t *fs = u->dev;
     int epa = ep & 7;
     volatile uint16_t *epr = usbepr[epa];
 
-    if( len > fs->bufsize[epa] ) len = fs->bufsize[epa];
+    if( len > u->epd[epa].bufsize ) len = u->epd[epa].bufsize;
 
     int type = *epr & (USB_EPTX_STAT | USB_EP_T_FIELD | USB_EP_KIND);
 
@@ -319,22 +322,46 @@ usb_send(usbd_t *u, int ep, const char *buf, int len){
 
 static void
 usb_recv(usbfs_t *u, int ep){
-        uint16_t *epr = usbepr[ep];
-        struct bufdesc *bd;
+    uint16_t *epr = usbepr[ep];
+    struct bufdesc *bd;
 
-        if( (*epr & USB_EP_T_FIELD) == USB_EP_ISOCHRONOUS ){
-            if( *epr & USB_EP_DTOG_TX )
-                bd = & USBPMA->desc[ep].tx;
-            else
-                bd = & USBPMA->desc[ep].rx;
-        }else{
-            bd = & USBPMA->desc[ep].rx;
-        }
-
-        if( (*epr & USB_EP_SETUP) && !ep )
-            usbd_cb_recv_setup(u->usbd, (char*)USB_PMAADDR + bd->addr, bd->count & 0x3FFF );
+    if( (*epr & USB_EP_T_FIELD) == USB_EP_ISOCHRONOUS ){
+        if( *epr & USB_EP_DTOG_TX )
+            bd = & USBPMA->desc[ep].tx;
         else
-            usbd_cb_recv(u->usbd, ep, (char*)USB_PMAADDR + bd->addr, bd->count & 0x3FFF );
+            bd = & USBPMA->desc[ep].rx;
+    }else{
+        bd = & USBPMA->desc[ep].rx;
+    }
+
+    if( (*epr & USB_EP_SETUP) && !ep )
+        usbd_cb_recv_setup(u->usbd, (char*)USB_PMAADDR + bd->addr, bd->count & 0x3FFF );
+    else
+        usbd_cb_recv(u->usbd, ep, (char*)USB_PMAADDR + bd->addr, bd->count & 0x3FFF );
+}
+
+void
+usb_recv_ack(usbd_t *u, int ep){
+    uint16_t *epr = usbepr[ep & 7];
+
+    EP_RX_VALID(*epr);
+}
+
+int
+usb_read(usbd_t *u, int ep, const char *buf, int len){
+    uint16_t *epr = usbepr[ep & 7];
+    struct bufdesc *bd;
+
+    if( (*epr & USB_EP_T_FIELD) == USB_EP_ISOCHRONOUS ){
+        if( *epr & USB_EP_DTOG_TX )
+            bd = & USBPMA->desc[ep].tx;
+        else
+            bd = & USBPMA->desc[ep].rx;
+    }else{
+        bd = & USBPMA->desc[ep].rx;
+    }
+
+    return pma_read(bd, buf, len);
 }
 
 
@@ -345,15 +372,15 @@ usb_ctr_handler(usbfs_t *u){
     for(i=0; i<N_ENDPOINT; i++){
         uint16_t *epr = usbepr[i];
 
-        if( *epr & USB_EP_CTR_RX ){
-            usb_recv(u, i);
-            *epr &= USB_EPREG_MASK & ~USB_EP_CTR_RX;
-            EP_RX_VALID(*epr);
+        if( *epr & USB_EP_CTR_TX ){
+            *epr &= USB_EPREG_MASK & ~USB_EP_CTR_TX;
+            usbd_cb_send_complete(u->usbd, i);
         }
 
-        if( *epr & USB_EP_CTR_TX ){
-            usbd_cb_send_complete(u->usbd, i);
-            *epr &= USB_EPREG_MASK & ~USB_EP_CTR_TX;
+        if( *epr & USB_EP_CTR_RX ){
+            *epr &= USB_EPREG_MASK & ~USB_EP_CTR_RX;
+            EP_RX_VALID(*epr);
+            usb_recv(u, i);
         }
     }
 }
@@ -367,6 +394,7 @@ usb_reset_handler(usbfs_t *u){
     }
 
     USB->BTABLE = 0;
+    USB->CNTR &= ~USB_CNTR_FSUSP;
 
     u->bufnext = sizeof(USB_BufferDescr);
 
@@ -441,7 +469,7 @@ DEFUN(usbtest, "usb test")
 
     printf("ncr %d\n", cur_crumb);
     usbd_dump_crumbs();
-    // DUMP_CRUMBS();
+    DUMP_CRUMBS();
 
     return  0;
 }

@@ -87,7 +87,7 @@
 #define USB_DTYPE_CS_INTERFACE      0x24
 #define USB_DTYPE_CS_ENDPOINT       0x25
 
-
+#define USB_NO_DESCRIPTOR	    0
 
 typedef struct {
         uint8_t           bmRequestType;

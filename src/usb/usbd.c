@@ -17,7 +17,7 @@
 #include <userint.h>
 
 #define CRUMBS "usbd"
-#define NR_CRUMBS 128
+#define NR_CRUMBS 512
 #include <crumbs.h>
 
 
@@ -50,18 +50,18 @@ static const usb_config_descriptor_t x_test_conf_desc = {
     .bMaxPower           = 250,
 };
 
-static const usb_wdata_descriptor_t lang_desc    = { 4,  USB_DTYPE_STRING, 0x0409 };
+static const usb_wdata_descriptor_t lang_desc    = { 4,  USB_DTYPE_STRING, USB_LANG_EN_US };
 static const usb_wdata_descriptor_t x_manuf_desc = { 12, USB_DTYPE_STRING, u"OS/J5" };
 static const usb_wdata_descriptor_t x_prod_desc  = { 10, USB_DTYPE_STRING, u"test"  };
 
  const usbd_config_t x_test_config = {
     .dmap = {
-        { (USB_DTYPE_DEVICE<<8),	&x_test_dev_desc },
-        { (USB_DTYPE_CONFIGURATION<<8),	&x_test_conf_desc },
-        { (USB_DTYPE_STRING<<8) | 0,    &lang_desc },
-        { (USB_DTYPE_STRING<<8) | 1,	&x_manuf_desc },
-        { (USB_DTYPE_STRING<<8) | 2,	&x_prod_desc },
-        {0, 0},
+        { (USB_DTYPE_DEVICE<<8),	0, &x_test_dev_desc },
+        { (USB_DTYPE_CONFIGURATION<<8),	0, &x_test_conf_desc },
+        { (USB_DTYPE_STRING<<8) | 0,    0, &lang_desc },
+        { (USB_DTYPE_STRING<<8) | 1,	0, &x_manuf_desc },
+        { (USB_DTYPE_STRING<<8) | 2,	0, &x_prod_desc },
+        {0, 0, 0},
     }
 };
 
@@ -74,8 +74,31 @@ usbd_init(struct Device_Conf *dev){
 
     usbd[i].dev = usb;
     usbd[i].cf = &x_test_config;	// XXX
+
 }
 
+usbd_t *
+usbd_get(int idx){
+    return usbd + idx;
+}
+
+void
+usbd_configure(usbd_t *u, const usbd_config_t *cf){
+
+    u->cf = cf;
+
+    if( (u->curr_state & 0x7F) >= USBD_STATE_RESET ){
+        if( cf->cb_reset ) cf->cb_reset(u);
+    }
+
+    if( (u->curr_state & 0x7F) >= USBD_STATE_ACTIVE ){
+        if( cf->cb_configure ) cf->cb_configure(u);
+    }
+
+}
+
+
+/****************************************************************/
 
 static const char serialdigits[] = "0123456789abcdefghjkmnprstuvwxyz";
 static int
@@ -97,15 +120,6 @@ usbd_serial_descr(char *buf){
     return d->bLength;
 }
 
-DEFUN(usbserialtest, "test")
-{
-    char buf[32];
-
-    int l = usbd_serial_descr(buf);
-    hexdump(buf, l);
-    return 0;
-}
-
 /****************************************************************/
 
 void
@@ -115,21 +129,33 @@ usbd_cb_reset(usbd_t *u){
     for(i=0; i<NUMENDPOINTS; i++){
         u->epd[i].wpending = 0;
     }
+
+    u->curr_config = 0;
+    u->curr_state  = USBD_STATE_RESET;
+
+    if( u->cf->cb_reset )
+        u->cf->cb_reset(u);
 }
 
 void
 usbd_cb_suspend(usbd_t *u){
+    u->curr_state  |= USBD_STATE_SUSPEND;
 
 }
 void
 usbd_cb_wakeup(usbd_t *u){
+    u->curr_state  &= ~USBD_STATE_SUSPEND;
 
 }
 
 void
 usbd_cb_recv(usbd_t *u, int ep, const char *buf, int len){
 
+    ep &= 0x7f;
+    if( ep >= NUMENDPOINTS ) return;
 
+    if( u->cf->cb_recv[ep] )
+        u->cf->cb_recv[ep](u, ep, buf, len);
 }
 
 /****************************************************************/
@@ -143,12 +169,13 @@ usbd_reply_descr(usbd_t *u, const char *buf){
     // search for requested descriptor
     while(1){
         struct usbd_config_dmap *dm = u->cf->dmap + i;
-        DROP_CRUMB("dm", dm->num, dm->desc);
         if( ! dm->desc ) break;
         if( dm->num == req->wValue ){
             usb_descriptor_t *d = dm->desc;
+            int len = dm->len ? dm->len : d->bLength;
 
-            usbd_reply(u, 0, d, d->bLength, req->wLength);
+            DROP_CRUMB("got/desc", len, 0);
+            usbd_reply(u, 0, d, len, req->wLength);
             return 1;
         }
 
@@ -161,6 +188,14 @@ usbd_reply_descr(usbd_t *u, const char *buf){
 
 /****************************************************************/
 
+static void
+_configure(usbd_t *u){
+
+    if( u->cf->cb_configure )
+        u->cf->cb_configure(u);
+}
+
+
 static int
 usbd_ctl_dev(usbd_t *u, const char *buf, int len){
     usb_device_request_t *req = buf;
@@ -170,7 +205,7 @@ usbd_ctl_dev(usbd_t *u, const char *buf, int len){
     switch (req->bRequest) {
 
     case USB_REQ_GET_DESCRIPTOR:
-        DROP_CRUMB("get/desc", req->wValue, 0);
+        DROP_CRUMB("get/desc", req->wValue, req->wLength);
 
         if( req->wValue == ((USB_DTYPE_STRING << 8) | SERIALNO_IDX) ){
             int l = usbd_serial_descr(u->ctlres);
@@ -180,6 +215,7 @@ usbd_ctl_dev(usbd_t *u, const char *buf, int len){
 
         if( usbd_reply_descr(u, buf) ) return 1;
         break;
+
     case USB_REQ_GET_STATUS:
         usbd_reply(u, 0, "\0\0", 2, req->wLength);
         return 1;
@@ -190,10 +226,13 @@ usbd_ctl_dev(usbd_t *u, const char *buf, int len){
         return 1;
 
     case USB_REQ_GET_CONFIG:
-        usbd_reply(u, 0, "\0", 1, req->wValue);
+        usbd_reply(u, 0, & u->curr_config, 1, req->wValue);
         return 1;
     case USB_REQ_SET_CONFIG:
+        u->curr_config = req->wValue;
+        u->curr_state  = USBD_STATE_ACTIVE;
         usbd_reply(u, 0, "", 0, 0);
+        _configure(u);
         return 1;
 
     case USB_REQ_SET_DESCRIPTOR:
@@ -280,6 +319,11 @@ usbd_cb_recv_setup(usbd_t *u, const char *buf, int len){
 
     if(r) return;
 
+    if( u->cf->cb_recv_setup )
+        r = u->cf->cb_recv_setup(u, buf, len);
+
+    if( r ) return;
+
     DROP_CRUMB("ctl/unk", req->bRequest, 0);
     usbd_write(u, 0, "", 0, 1);
 }
@@ -305,7 +349,9 @@ usbd_send_more(usbd_t *u, int ep){
         u->epd[ep].wlen -= l;
     }
 
-    if( u->epd[ep].wlen <= 0 ) u->epd[ep].wpending = 0;
+    if( u->epd[ep].wlen <= 0 ){
+        u->epd[ep].wpending = 0;
+    }
 }
 
 
@@ -324,27 +370,63 @@ usbd_write(usbd_t *u, int ep, const char *buf, int len, int wzlp){
     return len;
 }
 
+/*
+  9.3.5 wLength
+
+  This field specifies the length of the data transferred during the
+second phase of the control transfer. The direction of data transfer
+(host-to-device or device-to-host) is indicated by the Direction bit
+of the bmRequestType field. If this field is zero, there is no data
+transfer phase.
+
+On an input request, a device must never return more data than is
+indicated by the wLength value; it may return less. On an output
+request, wLength will always indicate the exact amount of data to be
+sent by the host. Device behavior is undefined if the host should send
+more data than is specified in wLength.
+
+*/
+
 int
 usbd_reply(usbd_t *u, int ep, const char *buf, int len, int rlen){
 
     if( rlen && (rlen <= len) ){
-        // send (possibly truncated) reply, no zlp
+        // send (possibly truncated) reply, equal to requested size, no zlp
         return usbd_write(u, ep, buf, rlen, 0);
+    }
+
+    if( len & (u->epd[ep].bufsize - 1) ){
+        // final packet will be partially filled, no zlp
+        return usbd_write(u, ep, buf, len, 0);
     }
 
     // full reply, with zlp
     return usbd_write(u, ep, buf, len, 1);
 }
 
+static void
+_set_addr(usbd_t *u){
+
+    usb_set_addr(u, u->setaddrreq & 0xFF );
+    DROP_CRUMB("addr/set", u->setaddrreq & 0xFF, 0);
+
+    u->setaddrreq = 0;
+    u->curr_state = USBD_STATE_ADDRESS;
+    usb_enable_suspend(u);
+}
+
 void
 usbd_cb_send_complete(usbd_t *u, int ep){
 
     DROP_CRUMB("send/c", u->epd[ep].wpending, u->setaddrreq );
-    if( u->setaddrreq && ! u->epd[ep].wpending ){
-        usb_set_addr(u, u->setaddrreq & 0xFF );
-        DROP_CRUMB("addr/set", u->setaddrreq & 0xFF, 0);
-        u->setaddrreq = 0;
+
+    if( ! u->epd[ep].wpending ){
+        if( u->setaddrreq )
+            _set_addr(u);
+
+        if( u->cf->cb_tx_complete ) u->cf->cb_tx_complete(u, ep);
     }
+
     usbd_send_more(u, ep);
 }
 

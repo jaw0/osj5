@@ -12,17 +12,34 @@
 #include <usb_conf_impl.h>
 
 
-#define MAX_RESPONSE	256
+#define MAX_RESPONSE	64
 #define SERIALNO_IDX	0xFE
+
+#define USBD_STATE_INACTIVE	0
+#define USBD_STATE_CONNECT	1
+#define USBD_STATE_RESET	2
+#define USBD_STATE_ADDRESS	3
+#define USBD_STATE_ACTIVE	4
+
+#define USBD_STATE_SUSPEND	0x80
+
 
 struct usbd_config_dmap {
     uint16_t	num;
+    uint16_t    len;
     const void *desc;
 };
 
+struct _usbd;
+
 typedef struct {
-    int _x;
     // callbacks
+    void (*cb_reset)(struct _usbd *);
+    void (*cb_configure)(struct _usbd *);
+    int  (*cb_recv_setup)(struct _usbd *, const char *, int);
+    void (*cb_tx_complete)(struct _usbd *, int);
+    void (*cb_recv[NUMENDPOINTS])(struct _usbd *, int, const char *, int);
+
     // ...
 
     struct usbd_config_dmap dmap[];
@@ -32,6 +49,7 @@ typedef struct {
 
 
 struct usbd_epd {
+    int  bufsize;
     // data being sent
     const char *wbuf;
     int  wlen;
@@ -40,17 +58,24 @@ struct usbd_epd {
 
 };
 
-typedef struct {
+typedef struct _usbd {
     void      *dev;
+
+    uint8_t curr_state;
+    uint8_t curr_config;
 
     int setaddrreq;
     usbd_config_t *cf;
 
-    char ctlreq[8];
-    char ctlres[MAX_RESPONSE];
     struct usbd_epd epd[NUMENDPOINTS];
 
+    char ctlreq[8];
+    char ctlres[MAX_RESPONSE];
+
 } usbd_t;
+
+
+#define usbd_isactive(u)	((u)->curr_state == USBD_ACTIVE)
 
 // provided by periph driver
 extern void *usb_init(struct Device_Conf *, usbd_t *);
