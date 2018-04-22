@@ -317,7 +317,7 @@ usbd_cb_recv_setup(usbd_t *u, const char *buf, int len){
         break;
     default:
         DROP_CRUMB("ctl/x", req->bmRequestType, req->bRequest);
-
+        break;
     }
 
     if(r) return;

@@ -116,7 +116,7 @@ static const struct cdc_config cdc_config = {
         .bLength             = sizeof(usb_cdc_acm_descriptor_t),
         .bDescriptorType     = USB_DTYPE_CS_INTERFACE,
         .bDescriptorSubtype  = UDESCSUB_CDC_ACM,
-        .bmCapabilities      = 6, // QQQ - 0,
+        .bmCapabilities      = 6,
     },
     .cdc_union               = {
         .bLength             = sizeof(usb_cdc_union_descriptor_t),
@@ -268,6 +268,14 @@ vcp_init(struct Device_Conf *dev){
 }
 
 static void
+chkq(struct queue *q){
+
+    if( q->len ) return;
+    if( q->head == q->tail ) return;
+    kprintf("* %d %d %d\n", q->len, q->head, q->tail);
+}
+
+static void
 vcp_configure(struct VCP *p){
 
     usb_config_ep( p->usbd, CDC_RXD_EP, UE_BULK, CDC_SIZE );
@@ -285,17 +293,24 @@ vcp_recv_setup(struct VCP *p, const char *buf, int len){
 
     switch (req->bRequest) {
     case UCDC_SET_CONTROL_LINE_STATE:
+        usbd_reply(p->usbd, 0, "", 0, 0);
         return 1;
     case UCDC_SET_LINE_CODING:
-        memcpy( &p->line_state, buf, len );
+        if( len != sizeof(p->line_state) )
+            kprintf("line coding? %d %d\n", len, sizeof(p->line_state));
+        memcpy( &p->line_state, buf, sizeof(p->line_state) );
+        usbd_reply(p->usbd, 0, "", 0, 0);
         return 1;
     case UCDC_GET_LINE_CODING:
         usbd_reply(p->usbd, 0, &p->line_state, sizeof(p->line_state), req->wLength);
         return 1;
+    case UCDC_SEND_BREAK:
+        usbd_reply(p->usbd, 0, "", 0, 0);
+        return 1;
     }
 
 
-    kprintf("cdc/ctl %x %c\n", req->bmRequestType, req->bRequest);
+    kprintf("cdc/ctl %x %x\n", req->bmRequestType, req->bRequest);
 
     return 0;
 }
@@ -389,13 +404,6 @@ vcp_putchar(FILE *f, char ch){
     return 1;
 }
 
-
-/*
-  rx - copy to buffer. maybe dq
-  maybe dq - room in queue? move. ack.
-  getchar - maybe dq
-
- */
 
 static void
 maybe_dequeue(struct VCP* p){

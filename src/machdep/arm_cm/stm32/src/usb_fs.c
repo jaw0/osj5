@@ -64,12 +64,7 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
     bzero(usb + i, sizeof(usbfs_t));
     usb[i].usbd = usbd;
 
-    RCC->APB1ENR1  |= 1<<26;	// usb
-    RCC->APB1ENR1  |= 1<<28;	// pwr
-    PWR->CR2 |= 1<<10;
-
-    gpio_init( GPIO_A11, GPIO_AF(10) | GPIO_PUSH_PULL | GPIO_SPEED_100MHZ );
-    gpio_init( GPIO_A12, GPIO_AF(10) | GPIO_PUSH_PULL | GPIO_SPEED_100MHZ );
+    _usb_fs_init();
 
     USB->CNTR = USB_CNTR_FRES;
     // This circuit has a defined startup time (tSTARTUP specified in the datasheet) during which the behavior
@@ -99,13 +94,13 @@ int
 usb_connect(usbd_t *u){
     u->curr_state = USBD_STATE_CONNECT;
     USB->CNTR = USB_CNTR_CTRM | USB_CNTR_RESETM; //QQQ - | USB_CNTR_ERRM | USB_CNTR_PMAOVRM;
-    USB->BCDR = USB_BCDR_DPPU;
+    _usb_fs_pullup_enable();
 }
 
 int
 usb_disconnect(usbd_t *u){
     USB->CNTR = 0;
-    USB->BCDR = 0;
+    _usb_fs_pullup_disable();
     u->curr_state = USBD_STATE_INACTIVE;
 }
 
@@ -209,9 +204,6 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
     int epa = ep & 7;
     volatile uint16_t *epr = usbepr[epa];
 
-    //DROP_CRUMB("cf/ep", ep, type);
-    //DROP_CRUMB("epr", *epr, epr);
-
     switch(type){
     case UE_CONTROL:
         *epr = USB_EP_CONTROL | epa;
@@ -231,7 +223,6 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
         return -1;
     }
 
-    //DROP_CRUMB("epr/1", *epr, USB->CNTR);
     u->epd[epa].bufsize = size;
 
     // TX or control
@@ -401,7 +392,7 @@ usb_reset_handler(usbfs_t *u){
     usb_config_ep(u->usbd, 0, UE_CONTROL, CONTROLSIZE);
 
     usbd_cb_reset(u->usbd);
-    DROP_CRUMB("reset", USB->EP0R, USB->CNTR); // USBPMA->desc[0].rx.count );
+    DROP_CRUMB("reset", USB->EP0R, USB->CNTR);
 }
 
 static void
@@ -414,6 +405,7 @@ usb_suspend_handler(usbfs_t *u){
     USB->CNTR |= USB_CNTR_FSUSP;
     // QQQ - LPMODE ?
 }
+
 static void
 usb_wakeup_handler(usbfs_t *u){
 
@@ -476,6 +468,19 @@ DEFUN(usbtest, "usb test")
 
     return  0;
 }
+
+DEFUN(usbinfo, "usb test")
+{
+
+    usbd_dump_crumbs();
+    DUMP_CRUMBS();
+
+    RESET_CRUMBS();
+    usbd_reset_crumbs();
+
+    return 0;
+}
+
 
 // 8408 =>len = 8
 // 40006C80:  00 05  05 00  00 00 00 00   ea ea 00 00  00 00 00 00  ................
