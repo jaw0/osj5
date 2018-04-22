@@ -33,12 +33,12 @@ struct usbd_config_dmap {
 struct _usbd;
 
 typedef struct {
-    // callbacks
-    void (*cb_reset)(struct _usbd *);
-    void (*cb_configure)(struct _usbd *);
-    int  (*cb_recv_setup)(struct _usbd *, const char *, int);
-    void (*cb_tx_complete)(struct _usbd *, int);
-    void (*cb_recv[NUMENDPOINTS])(struct _usbd *, int, const char *, int);
+    // callbacks - passed cbarg
+    void (*cb_reset)(void *);
+    void (*cb_configure)(void *);
+    int  (*cb_recv_setup)(void *, const char *, int);
+    void (*cb_tx_complete[NUMENDPOINTS])(void *, int);
+    void (*cb_recv[NUMENDPOINTS])(void *, int, const char *, int);
 
     // ...
 
@@ -54,6 +54,7 @@ struct usbd_epd {
     const char *wbuf;
     int  wlen;
     char wpending;
+    char wbusy;
     char wzlp;
 
 };
@@ -65,7 +66,8 @@ typedef struct _usbd {
     uint8_t curr_config;
 
     int setaddrreq;
-    usbd_config_t *cf;
+    const usbd_config_t *cf;
+    const void *cbarg;
 
     struct usbd_epd epd[NUMENDPOINTS];
 
@@ -75,7 +77,8 @@ typedef struct _usbd {
 } usbd_t;
 
 
-#define usbd_isactive(u)	((u)->curr_state == USBD_ACTIVE)
+#define usbd_isactive(u)	((u)->curr_state == USBD_STATE_ACTIVE)
+#define usbd_isbusy(u,ep)	((u)->epd[(ep) & 0x7f].wbusy)
 
 // provided by periph driver
 extern void *usb_init(struct Device_Conf *, usbd_t *);

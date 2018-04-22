@@ -83,16 +83,17 @@ usbd_get(int idx){
 }
 
 void
-usbd_configure(usbd_t *u, const usbd_config_t *cf){
+usbd_configure(usbd_t *u, const usbd_config_t *cf, const void *cbarg){
 
     u->cf = cf;
+    u->cbarg = cbarg;
 
     if( (u->curr_state & 0x7F) >= USBD_STATE_RESET ){
-        if( cf->cb_reset ) cf->cb_reset(u);
+        if( cf->cb_reset ) cf->cb_reset(u->cbarg);
     }
 
     if( (u->curr_state & 0x7F) >= USBD_STATE_ACTIVE ){
-        if( cf->cb_configure ) cf->cb_configure(u);
+        if( cf->cb_configure ) cf->cb_configure(u->cbarg);
     }
 
 }
@@ -128,13 +129,14 @@ usbd_cb_reset(usbd_t *u){
 
     for(i=0; i<NUMENDPOINTS; i++){
         u->epd[i].wpending = 0;
+        u->epd[i].wbusy    = 0;
     }
 
     u->curr_config = 0;
     u->curr_state  = USBD_STATE_RESET;
 
     if( u->cf->cb_reset )
-        u->cf->cb_reset(u);
+        u->cf->cb_reset(u->cbarg);
 }
 
 void
@@ -155,7 +157,7 @@ usbd_cb_recv(usbd_t *u, int ep, const char *buf, int len){
     if( ep >= NUMENDPOINTS ) return;
 
     if( u->cf->cb_recv[ep] )
-        u->cf->cb_recv[ep](u, ep, buf, len);
+        u->cf->cb_recv[ep](u->cbarg, ep, buf, len);
 }
 
 /****************************************************************/
@@ -174,7 +176,7 @@ usbd_reply_descr(usbd_t *u, const char *buf){
             usb_descriptor_t *d = dm->desc;
             int len = dm->len ? dm->len : d->bLength;
 
-            DROP_CRUMB("got/desc", len, 0);
+            DROP_CRUMB("got/desc", req->wValue, len);
             usbd_reply(u, 0, d, len, req->wLength);
             return 1;
         }
@@ -192,7 +194,7 @@ static void
 _configure(usbd_t *u){
 
     if( u->cf->cb_configure )
-        u->cf->cb_configure(u);
+        u->cf->cb_configure(u->cbarg);
 }
 
 
@@ -200,12 +202,12 @@ static int
 usbd_ctl_dev(usbd_t *u, const char *buf, int len){
     usb_device_request_t *req = buf;
 
-    DROP_CRUMB("ctl/dev", req->bRequest, 0);
+    DROP_CRUMB("ctl/dev", req->bRequest, req->wLength);
 
     switch (req->bRequest) {
 
     case USB_REQ_GET_DESCRIPTOR:
-        DROP_CRUMB("get/desc", req->wValue, req->wLength);
+        //DROP_CRUMB("get/desc", req->wValue, req->wLength);
 
         if( req->wValue == ((USB_DTYPE_STRING << 8) | SERIALNO_IDX) ){
             int l = usbd_serial_descr(u->ctlres);
@@ -226,7 +228,7 @@ usbd_ctl_dev(usbd_t *u, const char *buf, int len){
         return 1;
 
     case USB_REQ_GET_CONFIG:
-        usbd_reply(u, 0, & u->curr_config, 1, req->wValue);
+        usbd_reply(u, 0, & u->curr_config, 1, req->wLength);
         return 1;
     case USB_REQ_SET_CONFIG:
         u->curr_config = req->wValue;
@@ -296,10 +298,11 @@ usbd_cb_recv_setup(usbd_t *u, const char *buf, int len){
         buf = u->ctlreq;
     }
 
+    usb_recv_ack(u, 0);
     usb_device_request_t *req = buf;
 
-    DROP_CRUMB("ctl", req->bmRequestType, len);
-    hexdump(req, 8);
+    //DROP_CRUMB("ctl", req->bmRequestType, len);
+    //hexdump(req, 8);
 
     switch (req->bmRequestType & ~USB_REQ_TYPE_READ){
 
@@ -319,12 +322,14 @@ usbd_cb_recv_setup(usbd_t *u, const char *buf, int len){
 
     if(r) return;
 
+    DROP_CRUMB("ctl..?", req->bmRequestType, req->bRequest);
+
     if( u->cf->cb_recv_setup )
-        r = u->cf->cb_recv_setup(u, buf, len);
+        r = u->cf->cb_recv_setup(u->cbarg, buf, len);
 
     if( r ) return;
 
-    DROP_CRUMB("ctl/unk", req->bRequest, 0);
+    DROP_CRUMB("ctl/unk", req->bmRequestType, req->bRequest);
     usbd_write(u, 0, "", 0, 1);
 }
 
@@ -332,41 +337,44 @@ usbd_cb_recv_setup(usbd_t *u, const char *buf, int len){
 
 static void
 usbd_send_more(usbd_t *u, int ep){
+    int epa = ep & 0x7F;
 
-    if( ! u->epd[ep].wpending ) return;
+    if( ! u->epd[epa].wpending ) return;
 
-    if( (u->epd[ep].wlen != 0) || u->epd[ep].wzlp ){
-        int l = usb_send(u, ep, u->epd[ep].wbuf, u->epd[ep].wlen);
-        DROP_CRUMB("send", ep, l);
+    if( (u->epd[epa].wlen != 0) || u->epd[epa].wzlp ){
+        int l = usb_send(u, ep, u->epd[epa].wbuf, u->epd[epa].wlen);
+
+        //DROP_CRUMB("send", ep, l);
 
         if( l == -1 ){
             // error
-            u->epd[ep].wpending = 0;
+            u->epd[epa].wpending = 0;
             return;
         }
 
-        u->epd[ep].wbuf += l;
-        u->epd[ep].wlen -= l;
+        u->epd[epa].wbuf += l;
+        u->epd[epa].wlen -= l;
     }
 
-    if( u->epd[ep].wlen <= 0 ){
-        u->epd[ep].wpending = 0;
+    if( u->epd[epa].wlen <= 0 ){
+        u->epd[epa].wpending = 0;
     }
 }
 
 
 int
 usbd_write(usbd_t *u, int ep, const char *buf, int len, int wzlp){
+    int epa = ep & 0x7F;
 
-    if( u->epd[ep].wpending ) return -1;	// already underway
+    if( u->epd[epa].wpending ) return -1;	// already underway
 
-    u->epd[ep].wbuf = buf;
-    u->epd[ep].wlen = len;
-    u->epd[ep].wpending = 1;
-    u->epd[ep].wzlp = wzlp;
+    u->epd[epa].wbuf = buf;
+    u->epd[epa].wlen = len;
+    u->epd[epa].wpending = 1;
+    u->epd[epa].wzlp = wzlp;
+    u->epd[epa].wbusy = 1;
 
     usbd_send_more(u, ep);
-    hexdump(buf, len);
     return len;
 }
 
@@ -389,13 +397,14 @@ more data than is specified in wLength.
 
 int
 usbd_reply(usbd_t *u, int ep, const char *buf, int len, int rlen){
+    int epa = ep & 0x7F;
 
     if( rlen && (rlen <= len) ){
         // send (possibly truncated) reply, equal to requested size, no zlp
         return usbd_write(u, ep, buf, rlen, 0);
     }
 
-    if( len & (u->epd[ep].bufsize - 1) ){
+    if( len & (u->epd[epa].bufsize - 1) ){
         // final packet will be partially filled, no zlp
         return usbd_write(u, ep, buf, len, 0);
     }
@@ -418,13 +427,15 @@ _set_addr(usbd_t *u){
 void
 usbd_cb_send_complete(usbd_t *u, int ep){
 
-    DROP_CRUMB("send/c", u->epd[ep].wpending, u->setaddrreq );
+    //DROP_CRUMB("send/c", u->epd[ep].wpending, u->setaddrreq );
 
     if( ! u->epd[ep].wpending ){
-        if( u->setaddrreq )
-            _set_addr(u);
+        u->epd[ep].wbusy = 0;
 
-        if( u->cf->cb_tx_complete ) u->cf->cb_tx_complete(u, ep);
+        if( u->setaddrreq ) _set_addr(u);
+        if( u->cf->cb_tx_complete[ep] ) u->cf->cb_tx_complete[ep](u->cbarg, ep);
+
+        return;
     }
 
     usbd_send_more(u, ep);

@@ -335,9 +335,9 @@ usb_recv(usbfs_t *u, int ep){
     }
 
     if( (*epr & USB_EP_SETUP) && !ep )
-        usbd_cb_recv_setup(u->usbd, (char*)USB_PMAADDR + bd->addr, bd->count & 0x3FFF );
+        usbd_cb_recv_setup(u->usbd, (char*)USB_PMAADDR + bd->addr, bd->count & 0x3FF );
     else
-        usbd_cb_recv(u->usbd, ep, (char*)USB_PMAADDR + bd->addr, bd->count & 0x3FFF );
+        usbd_cb_recv(u->usbd, ep, (char*)USB_PMAADDR + bd->addr, bd->count & 0x3FF );
 }
 
 void
@@ -379,7 +379,6 @@ usb_ctr_handler(usbfs_t *u){
 
         if( *epr & USB_EP_CTR_RX ){
             *epr &= USB_EPREG_MASK & ~USB_EP_CTR_RX;
-            EP_RX_VALID(*epr);
             usb_recv(u, i);
         }
     }
@@ -458,11 +457,15 @@ OTG_FS_IRQHandler(void){
 DEFUN(usbtest, "usb test")
 {
     printf("usb: %x pma: %x\n", USB, USBPMA, usb);
+
+    usb_disconnect(usb[0].usbd );
+    sleep(1);
+
     RESET_CRUMBS();
     usbd_reset_crumbs();
     usb_connect( usb[0].usbd );
 
-    usleep(5000000);
+    usleep(10000000);
     printf(".\n");
     usb_disconnect( usb[0].usbd );
     usleep(1000);

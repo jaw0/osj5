@@ -6,6 +6,11 @@
 
 */
 
+#ifndef __usbdef_h__
+#define __usbdef_h__
+
+#define PACKED			__attribute__((packed))
+
 #define USB_LANG_EN_US		0x0409
 
 
@@ -95,24 +100,24 @@ typedef struct {
         uint16_t          wValue;
         uint16_t          wIndex;
         uint16_t          wLength;
-} usb_device_request_t;
+} PACKED usb_device_request_t;
 
 typedef struct {
         uint8_t           bLength;
         uint8_t           bDescriptorType;
-}  usb_descriptor_t;
+} PACKED usb_descriptor_t;
 
 typedef struct {
         uint8_t           bLength;
         uint8_t           bDescriptorType;
         char 		  bData[0];
-}  usb_data_descriptor_t;
+} PACKED usb_data_descriptor_t;
 
 typedef struct {
         uint8_t           bLength;
         uint8_t           bDescriptorType;
         uint16_t	  wData[0];
-}  usb_wdata_descriptor_t;
+} PACKED usb_wdata_descriptor_t;
 
 
 typedef struct {
@@ -133,7 +138,7 @@ typedef struct {
         uint8_t           iProduct;
         uint8_t           iSerialNumber;
         uint8_t           bNumConfigurations;
-}  usb_device_descriptor_t;
+} PACKED usb_device_descriptor_t;
 #define USB_DEVICE_DESCRIPTOR_SIZE 18
 
 typedef struct {
@@ -149,7 +154,7 @@ typedef struct {
 #define UC_REMOTE_WAKEUP        0x20
         uint8_t           bMaxPower; /* max current in 2 mA units */
 #define UC_POWER_FACTOR 2
-}  usb_config_descriptor_t;
+} PACKED usb_config_descriptor_t;
 #define USB_CONFIG_DESCRIPTOR_SIZE 9
 
 typedef struct {
@@ -162,7 +167,7 @@ typedef struct {
         uint8_t           bInterfaceSubClass;
         uint8_t           bInterfaceProtocol;
         uint8_t           iInterface;
-}  usb_interface_descriptor_t;
+} PACKED usb_interface_descriptor_t;
 #define USB_INTERFACE_DESCRIPTOR_SIZE 9
 
 typedef struct {
@@ -191,14 +196,14 @@ typedef struct {
 #define UE_GET_TRANS(a)         (((a) >> 11) & 0x3)
 #define UE_GET_SIZE(a)          ((a) & 0x7ff)
         uint8_t           bInterval;
-}  usb_endpoint_descriptor_t;
+} PACKED usb_endpoint_descriptor_t;
 #define USB_ENDPOINT_DESCRIPTOR_SIZE 7
 
 typedef struct {
         uint8_t           bLength;
         uint8_t           bDescriptorType;
         uint16_t          bString[126];
-}  usb_string_descriptor_t;
+} PACKED usb_string_descriptor_t;
 #define USB_MAX_STRING_LEN 128
 #define USB_LANGUAGE_TABLE 0    /* # of the string language id table */
 #define USB_MAX_ENCODED_STRING_LEN (USB_MAX_STRING_LEN * 3) /* UTF8 */
@@ -215,7 +220,7 @@ typedef struct {
         uint8_t           bMaxPacketSize0;
         uint8_t           bNumConfigurations;
         uint8_t           bReserved;
-}  usb_device_qualifier_t;
+} PACKED usb_device_qualifier_t;
 #define USB_DEVICE_QUALIFIER_SIZE 10
 
 typedef struct {
@@ -224,7 +229,7 @@ typedef struct {
         uint8_t           bmAttributes;
 #define UOTG_SRP        0x01
 #define UOTG_HNP        0x02
-}  usb_otg_descriptor_t;
+} PACKED usb_otg_descriptor_t;
 
 /* OTG feature selectors */
 #define UOTG_B_HNP_ENABLE       3
@@ -238,6 +243,8 @@ typedef struct {
 #define UDS_REMOTE_WAKEUP               0x0002
 /* Endpoint status flags */
 #define UES_HALT                        0x0001
-}  usb_status_t;
+} PACKED usb_status_t;
 
+
+#endif /* __usbdef_h__ */
 

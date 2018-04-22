@@ -6,3 +6,27 @@ abort(){
     PANIC("abort");
 }
 
+
+unsigned int
+djb2_hash(const unsigned char *src, int len){
+    unsigned long hash = 5381;
+
+    for( ; len; len--)
+        hash = (33 * hash) ^ (*src++);
+
+    return hash;
+}
+
+unsigned int
+fnv1a_hash(const unsigned char *src, int len){
+    unsigned long hash = 2166136261;
+    int c;
+
+    for( ; len; len--){
+        hash ^= *src++;
+        hash *= 16777619;
+    }
+
+    return hash;
+}
+

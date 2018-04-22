@@ -14,11 +14,14 @@
 
 static int tick_base;
 
+#define nvic_setprio(irq, prio) NVIC_SetPriority((irq), (prio)>>4)
+
 // NB: nvic handles external interrupts only, not internal exceptions
 void
 nvic_enable(int irq, int prio){
+
     NVIC_EnableIRQ(irq);
-    NVIC_SetPriority(irq, prio);
+    nvic_setprio(irq, prio);
 }
 
 void
@@ -30,8 +33,8 @@ nvic_clearpending(int irq){
 
 void
 armcm_init(void){
-    NVIC_SetPriority(PendSV_IRQn,  IPL_PROC);
-    NVIC_SetPriority(SVCall_IRQn,  IPL_PROC);
+    nvic_setprio(PendSV_IRQn,  IPL_PROC);
+    nvic_setprio(SVCall_IRQn,  IPL_PROC);
 }
 
 /****************************************************************/
@@ -45,7 +48,7 @@ tick_init(int freq, int ext){
     SysTick->LOAD = counter;
     SysTick->CTRL = ext ? 3 : 7;
 
-    NVIC_SetPriority(SysTick_IRQn, IPL_CLOCK);
+    nvic_setprio(SysTick_IRQn, IPL_CLOCK);
     //bootmsg("systick f %d, L %d\n", freq, counter);
 }
 
