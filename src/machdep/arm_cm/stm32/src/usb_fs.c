@@ -14,15 +14,15 @@
 #include <dev.h>
 #include <stm32.h>
 #include <gpio.h>
+#include <usbfs_impl.h>
 #include <usbfs.h>
 #include <usbd.h>
 #include <usbdef.h>
-#include <usbfs_impl.h>
 #include <userint.h>
 
 
 #define CRUMBS "usb"
-#define NR_CRUMBS 512
+#define NR_CRUMBS 128
 #include <crumbs.h>
 
 
@@ -78,7 +78,7 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
     USB->ISTR   = 0;
     USB->BTABLE = 0;
 
-    nvic_enable( 67, IPL_DISK );
+    nvic_enable( USB_IRQN, IPL_DISK );
 
     bootmsg("usb device full-speed\n");
 
@@ -152,7 +152,10 @@ static int
 pma_alloc(usbfs_t *u, int size){
     int p = u->bufnext;
     u->bufnext += size;
-    if( u->bufnext >= USBPMASIZE ) return -1;
+    if( u->bufnext >= USBPMASIZE ){
+        kprintf("pma full! size %d, nxt %x\n", size, u->bufnext);
+        return -1;
+    }
     return p;
 }
 
@@ -230,6 +233,7 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
         int buf = pma_alloc(u->dev, size);
         if( buf == - 1 ) return -1;
 
+        kprintf("txb %d %x\n", size, buf);
         set_pma_tx( epa, buf, 0 );
 
         if( type == UE_ISOCHRONOUS ){
@@ -249,6 +253,7 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
         int buf = pma_alloc(u->dev, size);
         if( buf == - 1 ) return -1;
 
+        kprintf("rxb %d %x\n", size, buf);
         set_pma_rx( epa, buf, pma_rx_blkr(size) );
 
         if( type == UE_ISOCHRONOUS ){
@@ -325,6 +330,7 @@ usb_recv(usbfs_t *u, int ep){
         bd = & USBPMA->desc[ep].rx;
     }
 
+    DROP_CRUMB("recv", bd->addr, bd->count);
     if( (*epr & USB_EP_SETUP) && !ep )
         usbd_cb_recv_setup(u->usbd, (char*)USB_PMAADDR + bd->addr, bd->count & 0x3FF );
     else
@@ -414,7 +420,8 @@ usb_wakeup_handler(usbfs_t *u){
 
 
 void
-OTG_FS_IRQHandler(void){
+USB_IRQ_HANDLER(void){
+
     int isr = USB->ISTR;
     usbfs_t *u = usb + 0;
 
@@ -459,10 +466,9 @@ DEFUN(usbtest, "usb test")
 
     usleep(10000000);
     printf(".\n");
-    usb_disconnect( usb[0].usbd );
+    //usb_disconnect( usb[0].usbd );
     usleep(1000);
 
-    printf("ncr %d\n", cur_crumb);
     usbd_dump_crumbs();
     DUMP_CRUMBS();
 
@@ -480,11 +486,4 @@ DEFUN(usbinfo, "usb test")
 
     return 0;
 }
-
-
-// 8408 =>len = 8
-// 40006C80:  00 05  05 00  00 00 00 00   ea ea 00 00  00 00 00 00  ................
-//          type req value  index leng
-//40006C80:   80 06  00 01  00 00 08 00
-// get descr
 

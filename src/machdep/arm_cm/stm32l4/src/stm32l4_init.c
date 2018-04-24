@@ -66,7 +66,7 @@ also_adc_clk(void){
 static inline void
 also_hsi48(void){
     // needed for usb, rng, sdio
-#if defined(USE_USB) || defined(USE_RNG) || defined(USE_SDIO)
+#if defined(USE_USBD) || defined(USE_RNG) || defined(USE_SDIO)
     RCC->CRRCR |= 1;	// HSI48_ON
     while( RCC->CRRCR & (1<<1) == 0 ) {}	// wait until ready
 #endif

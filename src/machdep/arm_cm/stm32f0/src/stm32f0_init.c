@@ -118,6 +118,19 @@ clock_init(void){
 
     set_clocksrc(clksrc);
 
+#ifdef USE_USBD
+#  if defined(HSECLOCK) && (SYSCLOCK == USBFREQ)
+    // use sysclock as usb
+    RCC->CFGR3 |= 1<<7;
+#  else
+    // enable hsi48
+    RCC->CR2 |= 1<<16;
+    while( RCC->CR2 & (1<<17) == 0 ){} /* wait for it */
+    // enable crs
+    RCC->APB1ENR |= 1<<27;
+#  endif
+#endif
+
 }
 
 /****************************************************************/
@@ -165,4 +178,16 @@ __sync_lock_test_and_set_4(int *l, int v){
     *l = v;
     splx(plx);
     return c;
+}
+
+int
+power_down(void){
+
+    RCC->APB1ENR |= 1<<28;	// pwr enable
+
+    PWR->CR  |= 1<<2;	// clear WUF
+    PWR->CR  |= 2;	// PDDS
+    SCB->SCR |= 4;      // sleepdeep
+
+    __asm__("wfi");
 }

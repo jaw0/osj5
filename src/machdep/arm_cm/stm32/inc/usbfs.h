@@ -6,11 +6,10 @@
 
 */
 
-
+#ifndef __usbfs_h__
+#define __usbfs_h__
 
 #define N_ENDPOINT	8
-#define USBPMASIZE	      1024
-
 
 typedef struct
 {
@@ -60,11 +59,7 @@ typedef struct {
 } USB_BufferDescr;
 
 
-
-#define USB_BASE              (APB1PERIPH_BASE + 0x6800U)  /*!< USB_IP Peripheral Registers base address */
-#define USB_PMAADDR           (APB1PERIPH_BASE + 0x6C00U)  /*!< USB_IP Packet Memory Area base address */
-
-#define USB                   ((USB_TypeDef *) USB_BASE)
+#define USB                   ((USB_TypeDef *)USB_BASE)
 #define USBPMA		      ((USB_BufferDescr *)USB_PMAADDR)
 
 /****************************************************************/
@@ -188,3 +183,4 @@ typedef struct {
 #define USB_LPMCSR_REMWAKE                       ((uint16_t)0x0008U)           /*!< bRemoteWake value received with last ACKed LPM Token */
 #define USB_LPMCSR_BESL                          ((uint16_t)0x00F0U)           /*!< BESL value received with last ACKed LPM Token  */
 
+#endif /* __usbfs_h__ */

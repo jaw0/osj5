@@ -17,8 +17,6 @@
 #include <usbdef.h>
 #include <usbcdc.h>
 #include <userint.h>
-#include <stm32.h> // XXX
-#include <usbfs.h> // XXX
 
 //#define CRUMBS "vcp"
 //#define NR_CRUMBS 128
@@ -43,10 +41,9 @@
 # define USB_PRODUCT 1
 #endif
 
+#define ALIGN2 __attribute__ ((aligned (2)))
 
-
-
-static const usb_device_descriptor_t cdc_dev_desc = {
+static const usb_device_descriptor_t cdc_dev_desc ALIGN2  = {
     .bLength            = sizeof(usb_device_descriptor_t),
     .bDescriptorType    = USB_DTYPE_DEVICE,
     .bcdUSB             = UD_USB_2_0,
@@ -76,7 +73,7 @@ struct cdc_config {
     usb_endpoint_descriptor_t   data_eptx;
 };
 
-static const struct cdc_config cdc_config = {
+static const struct cdc_config cdc_config ALIGN2 = {
 
     .config                  = {
         .bLength             = sizeof(usb_config_descriptor_t),
@@ -171,9 +168,9 @@ static void vcp_recv_chars(struct VCP*, int, const char *, int);
 static void vcp_configure(struct VCP *);
 static int  vcp_recv_setup(struct VCP*, const char *, int);
 
-static const usb_wdata_descriptor_t lang_desc    = { 4,  USB_DTYPE_STRING, USB_LANG_EN_US };
-static const usb_wdata_descriptor_t cdc_manuf_desc = { 12, USB_DTYPE_STRING, u"OS/J5" };
-static const usb_wdata_descriptor_t cdc_prod_desc  = { 14, USB_DTYPE_STRING, u"gadget"  };
+static const usb_wdata_descriptor_t lang_desc      ALIGN2 = { 4,  USB_DTYPE_STRING, USB_LANG_EN_US };
+static const usb_wdata_descriptor_t cdc_manuf_desc ALIGN2 = { 12, USB_DTYPE_STRING, u"OS/J5" };
+static const usb_wdata_descriptor_t cdc_prod_desc  ALIGN2 = { 14, USB_DTYPE_STRING, u"gadget"  };
 
 static const usbd_config_t cdc_usbd_config = {
     .cb_configure   = vcp_configure,
@@ -479,7 +476,7 @@ DEFUN(vcpinfo, "test")
     printf("txq %d; %d - %d\n", v->txq.len, v->txq.head, v->txq.tail);
     printf("rxb %d\n", v->rblen);
     printf("txb %d\n", v->tblen);
-    printf("ep1 %x\n", USB->EP1R);
+    //printf("ep1 %x\n", USB->EP1R);
 
 
     return 0;

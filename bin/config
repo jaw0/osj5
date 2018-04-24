@@ -26,6 +26,7 @@ my %fileconf;
 my %usefiles;
 my @appfiles;
 my @appdirs;
+my @makeopt;
 my($arch, $variant);
 
 my $ident   = $confile;
@@ -134,6 +135,7 @@ if( -f "../src/machdep/$arch/$variant/etc/makefile.inc" ){
 for my $dir (@appdirs){
     print CONFM "INCL_FLAGS += -I$dir\n";
 }
+print CONFM $_ for @makeopt;
 
 
 my @objs;
@@ -238,6 +240,10 @@ sub process_file {
 
         if( $cmd eq "option" ){
             print CONFH "#define $f[1] $f[2]\n";
+        }
+        elsif( $cmd eq 'makeopt' ){
+            shift @f;
+            push @makeopt, "@f\n";
         }
         elsif( $cmd eq 'include' ){
             process_file( $f[1] );

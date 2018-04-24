@@ -19,12 +19,15 @@ struct crumb {
     int arg1;
 };
 
-#define NR_CRUMBS       128
+#ifndef NR_CRUMBS
+# define NR_CRUMBS       128
+#endif
 static struct crumb crumbs[NR_CRUMBS];
 static u_long cur_crumb = 0;
 
 static inline void
 _drop_crumb(const char *event, u_long arg0, u_long arg1) {
+    if( cur_crumb >= NR_CRUMBS ) return;
     struct crumb *crumb = &crumbs[cur_crumb % NR_CRUMBS];
     crumb->event = event;
     crumb->when  = get_hrtime();

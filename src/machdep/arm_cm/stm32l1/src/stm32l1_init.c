@@ -40,6 +40,7 @@
 
 unsigned long bootflags = 0;
 void stm32_putchar(int);
+uint32_t *r_unique;
 
 int freq_sys=MSIDEFAULT;
 
@@ -201,28 +202,34 @@ init_hw2(void){
     int ram = (&_estack - &_sdata)/1024;
     int id  = DBGMCU->IDCODE & 0xFFF;
     unsigned short *fl=0;
-    unsigned long  *uid=0;
 
     switch( id ){
     case 0x416:	// cat.1
     case 0x429: // cat.2
         fl  = R_FLASHKB_C1;
-        uid = R_UNIQUE_C1;
+        r_unique = R_UNIQUE_C1;
         break;
     default:	// cat.3,4,5,6
         fl  = R_FLASHKB_CX;
-        uid = R_UNIQUE_CX;
+        r_unique = R_UNIQUE_CX;
         break;
     }
 
     bootmsg("bootflags = 0x%x, cpuid %x/%x, %dk flash, %dk RAM\n", bootflags, SCB->CPUID, id, *fl, ram);
     bootmsg("clocks: sys %dMHz\n", freq_sys/1000000);
-    bootmsg("uid %x-%x-%x\n", uid[0], uid[1], uid[2]);
+    bootmsg("uid %x-%x-%x\n", r_unique[0], r_unique[1], r_unique[2]);
 
 }
 
 void
 power_down(void){
-    // RSN
+
+    RCC->APB1ENR |= 1<<28;	// pwr enable
+
+    PWR->CR  |= 1<<2;	// clear WUF
+    PWR->CR  |= 2;	// PDDS
+    SCB->SCR |= 4;      // sleepdeep
+
+    __asm__("wfi");
 }
 

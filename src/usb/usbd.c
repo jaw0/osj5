@@ -17,7 +17,7 @@
 #include <userint.h>
 
 #define CRUMBS "usbd"
-#define NR_CRUMBS 512
+#define NR_CRUMBS 64
 #include <crumbs.h>
 
 
@@ -292,16 +292,18 @@ usbd_cb_recv_setup(usbd_t *u, const char *buf, int len){
 
     // copy packet to faster memory
     if( len <= sizeof(u->ctlreq)){
-        for(i=0; i<len; i++){
-            u->ctlreq[i] = buf[i];
-        }
+        usb_read(u, 0, u->ctlreq, len);
+        //for(i=0; i<len; i++){
+        //    u->ctlreq[i] = buf[i];
+        //}
         buf = u->ctlreq;
     }
 
     usb_recv_ack(u, 0);
     usb_device_request_t *req = buf;
 
-    //DROP_CRUMB("ctl", req->bmRequestType, len);
+    DROP_CRUMB("ctl", req->bmRequestType, len);
+    DROP_CRUMB("ctl+", req->bRequest, buf);
     //hexdump(req, 8);
 
     switch (req->bmRequestType & ~USB_REQ_TYPE_READ){
