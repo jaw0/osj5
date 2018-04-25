@@ -1133,6 +1133,7 @@ typedef struct
   * @}
   */
 
+#if 0
 /**
   * @brief USB_OTG_Core_Registers
   */
@@ -1255,6 +1256,7 @@ typedef struct
 /**
   * @}
   */
+#endif
 
 /**
   * @brief JPEG Codec

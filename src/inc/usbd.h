@@ -12,7 +12,7 @@
 #include <usb_conf_impl.h>
 
 
-#define MAX_RESPONSE	64
+#define MAX_RESPONSE	16
 #define SERIALNO_IDX	0xFE
 
 #define USBD_STATE_INACTIVE	0
@@ -38,7 +38,7 @@ typedef struct {
     void (*cb_configure)(void *);
     int  (*cb_recv_setup)(void *, const char *, int);
     void (*cb_tx_complete[NUMENDPOINTS])(void *, int);
-    void (*cb_recv[NUMENDPOINTS])(void *, int, const char *, int);
+    void (*cb_recv[NUMENDPOINTS])(void *, int, int);
 
     // ...
 
@@ -62,10 +62,10 @@ struct usbd_epd {
 typedef struct _usbd {
     void      *dev;
 
-    uint8_t curr_state;
-    uint8_t curr_config;
+    uint8_t  curr_state;
+    uint8_t  curr_config;
+    uint16_t setaddrreq;
 
-    int setaddrreq;
     const usbd_config_t *cf;
     const void *cbarg;
 
@@ -98,7 +98,7 @@ extern void usbd_cb_reset(usbd_t *);
 extern void usbd_cb_suspend(usbd_t *);
 extern void usbd_cb_wakeup(usbd_t *);
 extern void usbd_cb_send_complete(usbd_t *, int);
-extern void usbd_cb_recv(usbd_t*, int, const char *, int);
-extern void usbd_cb_recv_setup(usbd_t*, const char *, int);
+extern void usbd_cb_recv(usbd_t*, int, int);
+extern void usbd_cb_recv_setup(usbd_t*, int);
 
 #endif /* __usbd_h__ */

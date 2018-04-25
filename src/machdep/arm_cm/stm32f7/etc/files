@@ -21,23 +21,5 @@ sdio:   machdep/arm_cm/stm32f4/src/sdio.c
 stflash:        machdep/arm_cm/stm32/src/stflash.c
 stflash:        machdep/arm_cm/stm32f7/src/stflashimpl.c
 
-usb:    machdep/arm_cm/stm32/usb/usb_bsp.c
-usb:    machdep/arm_cm/stm32/usb/usb_core.c
-usb:    machdep/arm_cm/stm32/usb/usb_dcd.c
-usb:    machdep/arm_cm/stm32/usb/usb_dcd_int.c
-usb:    machdep/arm_cm/stm32/usb/usbd_core.c
-usb:    machdep/arm_cm/stm32/usb/usbd_ioreq.c
-usb:    machdep/arm_cm/stm32/usb/usbd_req.c
-
-usbvcp:    machdep/arm_cm/stm32/usb/usbd_cdc_core.c
-usbvcp:    machdep/arm_cm/stm32/usb/usbd_cdc_if.c
-usbvcp:    machdep/arm_cm/stm32/usb/usbd_desc.c
-usbvcp:    machdep/arm_cm/stm32/usb/usbd_usr.c
-usbvcp:    machdep/arm_cm/stm32/src/usb_vcp.c
-
-usbmsc:    machdep/arm_cm/stm32/usb/usbd_msc_bot.c
-usbmsc:    machdep/arm_cm/stm32/usb/usbd_msc_core.c
-usbmsc:    machdep/arm_cm/stm32/usb/usbd_msc_data.c
-usbmsc:    machdep/arm_cm/stm32/usb/usbd_msc_scsi.c
-
+usbd:   machdep/arm_cm/stm32/src/usb_otg.c
 

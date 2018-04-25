@@ -151,13 +151,13 @@ usbd_cb_wakeup(usbd_t *u){
 }
 
 void
-usbd_cb_recv(usbd_t *u, int ep, const char *buf, int len){
+usbd_cb_recv(usbd_t *u, int ep, int len){
 
     ep &= 0x7f;
     if( ep >= NUMENDPOINTS ) return;
 
     if( u->cf->cb_recv[ep] )
-        u->cf->cb_recv[ep](u->cbarg, ep, buf, len);
+        u->cf->cb_recv[ep](u->cbarg, ep, len);
 }
 
 /****************************************************************/
@@ -287,24 +287,17 @@ usbd_ctl_ept(usbd_t *u, const char *buf, int len){
 
 
 void
-usbd_cb_recv_setup(usbd_t *u, const char *buf, int len){
+usbd_cb_recv_setup(usbd_t *u, int len){
     int i, r = 0;
-
-    // copy packet to faster memory
-    if( len <= sizeof(u->ctlreq)){
-        usb_read(u, 0, u->ctlreq, len);
-        //for(i=0; i<len; i++){
-        //    u->ctlreq[i] = buf[i];
-        //}
-        buf = u->ctlreq;
-    }
-
-    usb_recv_ack(u, 0);
+    char *buf = u->ctlreq;
     usb_device_request_t *req = buf;
+
+    // copy packet + ack
+    usb_read(u, 0, buf, sizeof(u->ctlreq));
+    usb_recv_ack(u, 0);
 
     DROP_CRUMB("ctl", req->bmRequestType, len);
     DROP_CRUMB("ctl+", req->bRequest, buf);
-    //hexdump(req, 8);
 
     switch (req->bmRequestType & ~USB_REQ_TYPE_READ){
 

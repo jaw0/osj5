@@ -11,11 +11,10 @@
 
 extern uint32_t r_unique;
 #define R_UNIQUE	r_unique
-
 #define USBPMASIZE	512
-
+#define PMASHIFT	1
 #define USB_IRQN	20
-#define USB_IRQ_HANDLER CAN1_RX0_IRQHandler
+#define USB_IRQ_HANDLER USB_LP_IRQHandler
 
 #ifndef APB1PERIPH_BASE
 # define APB1PERIPH_BASE PERIPH_BASE

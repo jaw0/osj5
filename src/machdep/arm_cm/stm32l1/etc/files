@@ -1,5 +1,5 @@
 
-kern:   machdep/arm_cm/stm32/src/vectors.S
+kern:   machdep/arm_cm/stm32l1/src/vectors.S
 kern:   machdep/arm_cm/stm32/src/stm32_init.c
 kern:   machdep/arm_cm/stm32l1/src/stm32l1_init.c
 kern:   machdep/arm_cm/stm32l1/src/stm32l1_asm.S

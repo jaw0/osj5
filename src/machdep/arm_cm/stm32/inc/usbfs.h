@@ -46,10 +46,19 @@ typedef struct
 } USB_TypeDef;
 
 
+#if PMASHIFT == 1
+struct bufdesc {
+    uint16_t addr;
+    uint16_t _dummy1;
+    uint16_t count;
+    uint16_t _dummy2;
+};
+#else
 struct bufdesc {
     uint16_t addr;
     uint16_t count;
 };
+#endif
 
 typedef struct {
     struct {

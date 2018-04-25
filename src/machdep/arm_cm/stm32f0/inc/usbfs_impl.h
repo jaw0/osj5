@@ -11,6 +11,7 @@
 
 #define R_UNIQUE	((unsigned long*)(0x1FFFF7AC))
 #define USBPMASIZE	1024
+#define PMASHIFT	0
 #define USB_IRQN	31
 #define USB_IRQ_HANDLER USB_IRQHandler
 

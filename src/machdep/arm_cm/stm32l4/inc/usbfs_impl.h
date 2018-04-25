@@ -10,8 +10,8 @@
 #define __stm32l4_usbfs_impl_h__
 
 #define R_UNIQUE	((unsigned long*)(0x1FFF7590))
-
 #define USBPMASIZE	1024
+#define PMASHIFT	0
 #define USB_IRQN	67
 #define USB_IRQ_HANDLER OTG_FS_IRQHandler
 
@@ -34,7 +34,6 @@ _usb_fs_init(void){
 
 #define _usb_fs_pullup_enable()	 (USB->BCDR = USB_BCDR_DPPU)
 #define _usb_fs_pullup_disable() (USB->BCDR = 0)
-
 
 
 #endif /* __stm32l4_usbfs_impl_h__ */

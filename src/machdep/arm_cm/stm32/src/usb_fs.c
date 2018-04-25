@@ -151,9 +151,9 @@ usb_isstalled(usbd_t *u, int ep){
 static int
 pma_alloc(usbfs_t *u, int size){
     int p = u->bufnext;
-    u->bufnext += size;
-    if( u->bufnext >= USBPMASIZE ){
-        kprintf("pma full! size %d, nxt %x\n", size, u->bufnext);
+    u->bufnext += size << PMASHIFT;
+    if( u->bufnext >= (USBPMASIZE << PMASHIFT) ){
+        kprintf("usb pma full! size %d, nxt %x\n", size, u->bufnext);
         return -1;
     }
     return p;
@@ -161,12 +161,12 @@ pma_alloc(usbfs_t *u, int size){
 
 static inline void
 set_pma_tx(int epa, int addr, int cnt){
-    USBPMA->desc[ epa ].tx.addr  = addr;
+    USBPMA->desc[ epa ].tx.addr  = addr >> PMASHIFT;
     USBPMA->desc[ epa ].tx.count = cnt;
 }
 static inline void
 set_pma_rx(int epa, int addr, int cnt){
-    USBPMA->desc[ epa ].rx.addr  = addr;
+    USBPMA->desc[ epa ].rx.addr  = addr >> PMASHIFT;
     USBPMA->desc[ epa ].rx.count = cnt;
 }
 
@@ -179,24 +179,33 @@ pma_rx_blkr(int size){
     return (((size - 1) & ~0x1F) << 5) | 0x8000;
 }
 
-static void
-pma_copy(const uint16_t *src, uint16_t *dst, int len){
-    for(; len>0; len-=2)
-        *dst++ = *src++;
-}
-
 static int
 pma_write(struct bufdesc *b, const char *src, int len){
-    pma_copy(src, b->addr + (char*)USB_PMAADDR, len);
+    int i, j = b->addr;
+
+    for(i=0; i<len; i+=2){
+        ((uint16_t*)USB_PMAADDR)[j] = src[i] | (src[i+1]<<8);
+        j += 1<<PMASHIFT;
+    }
+
     b->count = len;
     return len;
 }
 
 static int
 pma_read(struct bufdesc *b, char *dst, int len){
+    int i, j = b->addr;
+
     int l = b->count & 0x3FF;
     if( l < len ) len = l;
-    pma_copy(b->addr + (char*)USB_PMAADDR, dst, len);
+
+    for(i=0; i<l; i+=2){
+        int v = ((uint16_t*)USB_PMAADDR)[j];
+        dst[i] = v & 0xFF;
+        dst[i+1] = v >> 8;
+        j += 1<<PMASHIFT;
+    }
+
     return l;
 }
 
@@ -210,7 +219,7 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
     switch(type){
     case UE_CONTROL:
         *epr = USB_EP_CONTROL | epa;
-        //DROP_CRUMB("epr/ctl", *epr, 0);
+        DROP_CRUMB("epr/ctl", *epr, epr);
         break;
     case UE_ISOCHRONOUS:
         *epr = USB_EP_ISOCHRONOUS | epa;
@@ -233,7 +242,6 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
         int buf = pma_alloc(u->dev, size);
         if( buf == - 1 ) return -1;
 
-        kprintf("txb %d %x\n", size, buf);
         set_pma_tx( epa, buf, 0 );
 
         if( type == UE_ISOCHRONOUS ){
@@ -253,7 +261,6 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
         int buf = pma_alloc(u->dev, size);
         if( buf == - 1 ) return -1;
 
-        kprintf("rxb %d %x\n", size, buf);
         set_pma_rx( epa, buf, pma_rx_blkr(size) );
 
         if( type == UE_ISOCHRONOUS ){
@@ -331,10 +338,11 @@ usb_recv(usbfs_t *u, int ep){
     }
 
     DROP_CRUMB("recv", bd->addr, bd->count);
-    if( (*epr & USB_EP_SETUP) && !ep )
-        usbd_cb_recv_setup(u->usbd, (char*)USB_PMAADDR + bd->addr, bd->count & 0x3FF );
+    // XXX L152 - no setup?
+    if( /*(*epr & USB_EP_SETUP) &&*/ !ep )
+        usbd_cb_recv_setup(u->usbd, bd->count & 0x3FF);
     else
-        usbd_cb_recv(u->usbd, ep, (char*)USB_PMAADDR + bd->addr, bd->count & 0x3FF );
+        usbd_cb_recv(u->usbd, ep, bd->count & 0x3FF );
 }
 
 void
@@ -385,7 +393,7 @@ static void
 usb_reset_handler(usbfs_t *u){
     int i;
 
-    for(i=0; i<512; i++){
+    for(i=0; i<USBPMASIZE << PMASHIFT; i++){
         ((short*)USB_PMAADDR)[i] = 0;
     }
 
@@ -441,6 +449,7 @@ USB_IRQ_HANDLER(void){
         usb_suspend_handler(u);
         USB->ISTR = ~USB_ISTR_SUSP;
     }
+
     if( isr & USB_ISTR_WKUP ){
         usb_wakeup_handler(u);
         USB->ISTR = ~USB_ISTR_WKUP;
