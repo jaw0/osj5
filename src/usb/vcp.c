@@ -164,7 +164,7 @@ static const struct cdc_config cdc_config ALIGN2 = {
 
 struct VCP;
 static void vcp_tx_complete(struct VCP *, int);
-static void vcp_recv_chars(struct VCP*, int, const char *, int);
+static void vcp_recv_chars(struct VCP*, int, int);
 static void vcp_configure(struct VCP *);
 static int  vcp_recv_setup(struct VCP*, const char *, int);
 
@@ -293,8 +293,9 @@ vcp_recv_setup(struct VCP *p, const char *buf, int len){
         usbd_reply(p->usbd, 0, "", 0, 0);
         return 1;
     case UCDC_SET_LINE_CODING:
-        if( len != sizeof(p->line_state) )
-            kprintf("line coding? %d %d\n", len, sizeof(p->line_state));
+        // QQQ - 8 != 7 ?
+        //if( len != sizeof(p->line_state) )
+        //    kprintf("line coding? %d %d\n", len, sizeof(p->line_state));
         memcpy( &p->line_state, buf, sizeof(p->line_state) );
         usbd_reply(p->usbd, 0, "", 0, 0);
         return 1;
@@ -455,11 +456,11 @@ vcp_getchar(FILE *f){
 }
 
 static void
-vcp_recv_chars(struct VCP *p, int ep, const char *buf, int len){
+vcp_recv_chars(struct VCP *p, int ep, int len){
 
     // copy to buffer
-    usb_read(p->usbd, ep, p->rxbuf, len);
-    p->rblen = len;
+    int l = usb_read(p->usbd, ep, p->rxbuf, sizeof(p->rxbuf));
+    p->rblen = l;
 
     maybe_dequeue(p);
     maybe_tx(p);

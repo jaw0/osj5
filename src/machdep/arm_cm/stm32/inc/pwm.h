@@ -48,6 +48,66 @@
 #define TIMER_8_3	0x82
 #define TIMER_8_4	0x83
 
+#define TIMER_9_1       0x90
+#define TIMER_9_2       0x91
+#define TIMER_9_3       0x92
+#define TIMER_9_4       0x93
+
+#define TIMER_10_1      0xa0
+#define TIMER_10_2      0xa1
+#define TIMER_10_3      0xa2
+#define TIMER_10_4      0xa3
+
+#define TIMER_11_1      0xb0
+#define TIMER_11_2      0xb1
+#define TIMER_11_3      0xb2
+#define TIMER_11_4      0xb3
+
+#define TIMER_12_1      0xc0
+#define TIMER_12_2      0xc1
+#define TIMER_12_3      0xc2
+#define TIMER_12_4      0xc3
+
+#define TIMER_13_1      0xd0
+#define TIMER_13_2      0xd1
+#define TIMER_13_3      0xd2
+#define TIMER_13_4      0xd3
+
+#define TIMER_14_1      0xe0
+#define TIMER_14_2      0xe1
+#define TIMER_14_3      0xe2
+#define TIMER_14_4      0xe3
+
+#define TIMER_15_1      0xf0
+#define TIMER_15_2      0xf1
+#define TIMER_15_3      0xf2
+#define TIMER_15_4      0xf3
+
+#define TIMER_16_1      0x100
+#define TIMER_16_2      0x101
+#define TIMER_16_3      0x102
+#define TIMER_16_4      0x103
+
+#define TIMER_17_1      0x110
+#define TIMER_17_2      0x111
+#define TIMER_17_3      0x112
+#define TIMER_17_4      0x113
+
+#define TIMER_18_1      0x120
+#define TIMER_18_2      0x121
+#define TIMER_18_3      0x122
+#define TIMER_18_4      0x123
+
+#define TIMER_19_1      0x130
+#define TIMER_19_2      0x131
+#define TIMER_19_3      0x132
+#define TIMER_19_4      0x133
+
+#define TIMER_20_1      0x140
+#define TIMER_20_2      0x141
+#define TIMER_20_3      0x142
+#define TIMER_20_4      0x143
+
 extern void pwm_init(int, int, int);
 extern void pwm_set(int, int);
 extern void tone_set(int, int);

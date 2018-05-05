@@ -222,7 +222,8 @@ usbd_ctl_dev(usbd_t *u, const char *buf, int len){
         usbd_reply(u, 0, "\0\0", 2, req->wLength);
         return 1;
     case USB_REQ_SET_ADDRESS:
-        DROP_CRUMB("addr", req->wValue, 0);
+        DROP_CRUMB("addr/set1", req->wValue, 0);
+        usb_set_addr1(u, req->wValue);
         u->setaddrreq = req->wValue | 0x8000;
         usbd_reply(u, 0, "", 0, 0);
         return 1;
@@ -411,8 +412,8 @@ usbd_reply(usbd_t *u, int ep, const char *buf, int len, int rlen){
 static void
 _set_addr(usbd_t *u){
 
-    usb_set_addr(u, u->setaddrreq & 0xFF );
-    DROP_CRUMB("addr/set", u->setaddrreq & 0xFF, 0);
+    usb_set_addr2(u, u->setaddrreq & 0xFF);
+    DROP_CRUMB("addr/set2", u->setaddrreq & 0xFF, 0);
 
     u->setaddrreq = 0;
     u->curr_state = USBD_STATE_ADDRESS;

@@ -109,8 +109,12 @@ usb_enable_suspend(usbd_t *u){
     USB->CNTR |= USB_CNTR_SUSPM | USB_CNTR_WKUPM;
 }
 
+void usb_set_addr1(usbd_t *u, int addr){
+    // nop
+}
+
 void
-usb_set_addr(usbd_t *u, int addr){
+usb_set_addr2(usbd_t *u, int addr){
     USB->DADDR = USB_DADDR_EF | (addr & 0x7F);
     RESET_CRUMBS();
 }
@@ -179,12 +183,20 @@ pma_rx_blkr(int size){
     return (((size - 1) & ~0x1F) << 5) | 0x8000;
 }
 
+static void
+pma_copy(const uint16_t *src, uint16_t *dst, int len){
+    for(; len>0; len-=2)
+        *dst++ = *src++;
+}
+
 static int
 pma_write(struct bufdesc *b, const char *src, int len){
-    int i, j = b->addr;
 
-    for(i=0; i<len; i+=2){
-        ((uint16_t*)USB_PMAADDR)[j] = src[i] | (src[i+1]<<8);
+    int i, j;
+    uint16_t* dst = (uint16_t*)(((char*)USB_PMAADDR) + b->addr);
+
+    for(i=j=0; i<len; i+=2){
+        dst[j] = src[i] | (src[i+1]<<8);
         j += 1<<PMASHIFT;
     }
 
@@ -194,13 +206,14 @@ pma_write(struct bufdesc *b, const char *src, int len){
 
 static int
 pma_read(struct bufdesc *b, char *dst, int len){
-    int i, j = b->addr;
+    int i, j;
+    uint16_t* src = (uint16_t*)(((char*)USB_PMAADDR) + b->addr);
 
     int l = b->count & 0x3FF;
     if( l < len ) len = l;
 
-    for(i=0; i<l; i+=2){
-        int v = ((uint16_t*)USB_PMAADDR)[j];
+    for(i=j=0; i<l; i+=2){
+        int v = src[j];
         dst[i] = v & 0xFF;
         dst[i+1] = v >> 8;
         j += 1<<PMASHIFT;
@@ -339,7 +352,7 @@ usb_recv(usbfs_t *u, int ep){
 
     DROP_CRUMB("recv", bd->addr, bd->count);
     // XXX L152 - no setup?
-    if( /*(*epr & USB_EP_SETUP) &&*/ !ep )
+    if( (*epr & USB_EP_SETUP) && !ep )
         usbd_cb_recv_setup(u->usbd, bd->count & 0x3FF);
     else
         usbd_cb_recv(u->usbd, ep, bd->count & 0x3FF );
@@ -393,7 +406,7 @@ static void
 usb_reset_handler(usbfs_t *u){
     int i;
 
-    for(i=0; i<USBPMASIZE << PMASHIFT; i++){
+    for(i=0; i<(USBPMASIZE>>1) << PMASHIFT; i++){
         ((short*)USB_PMAADDR)[i] = 0;
     }
 
