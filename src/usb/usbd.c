@@ -17,7 +17,7 @@
 #include <userint.h>
 
 #define CRUMBS "usbd"
-#define NR_CRUMBS 64
+#define NR_CRUMBS 512
 #include <crumbs.h>
 
 
@@ -340,7 +340,7 @@ usbd_send_more(usbd_t *u, int ep){
     if( (u->epd[epa].wlen != 0) || u->epd[epa].wzlp ){
         int l = usb_send(u, ep, u->epd[epa].wbuf, u->epd[epa].wlen);
 
-        //DROP_CRUMB("send", ep, l);
+        DROP_CRUMB("send", ep, l);
 
         if( l == -1 ){
             // error
@@ -423,7 +423,7 @@ _set_addr(usbd_t *u){
 void
 usbd_cb_send_complete(usbd_t *u, int ep){
 
-    //DROP_CRUMB("send/c", u->epd[ep].wpending, u->setaddrreq );
+    DROP_CRUMB("send/c", ep, u->epd[ep].wpending);
 
     if( ! u->epd[ep].wpending ){
         u->epd[ep].wbusy = 0;
