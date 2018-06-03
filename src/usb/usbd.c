@@ -16,9 +16,8 @@
 #include <usbdef.h>
 #include <userint.h>
 
-#define CRUMBS "usbd"
-#define NR_CRUMBS 512
-#include <crumbs.h>
+#define TRACE
+#include <trace.h>
 
 
 static usbd_t usbd[N_USBD];
@@ -176,7 +175,7 @@ usbd_reply_descr(usbd_t *u, const char *buf){
             usb_descriptor_t *d = dm->desc;
             int len = dm->len ? dm->len : d->bLength;
 
-            DROP_CRUMB("got/desc", req->wValue, len);
+            trace_crumb2("usbd", "got/desc", req->wValue, len);
             usbd_reply(u, 0, d, len, req->wLength);
             return 1;
         }
@@ -184,7 +183,7 @@ usbd_reply_descr(usbd_t *u, const char *buf){
         i++;
     }
 
-    DROP_CRUMB("!descr", req->wValue, 0);
+    trace_crumb1("usbd", "!descr", req->wValue);
     return 0;
 }
 
@@ -202,12 +201,12 @@ static int
 usbd_ctl_dev(usbd_t *u, const char *buf, int len){
     usb_device_request_t *req = buf;
 
-    DROP_CRUMB("ctl/dev", req->bRequest, req->wLength);
+    trace_crumb2("usbd", "ctl/dev", req->bRequest, req->wLength);
 
     switch (req->bRequest) {
 
     case USB_REQ_GET_DESCRIPTOR:
-        //DROP_CRUMB("get/desc", req->wValue, req->wLength);
+        //trace_crumb2("usbd", "get/desc", req->wValue, req->wLength);
 
         if( req->wValue == ((USB_DTYPE_STRING << 8) | SERIALNO_IDX) ){
             int l = usbd_serial_descr(u->ctlres);
@@ -222,7 +221,7 @@ usbd_ctl_dev(usbd_t *u, const char *buf, int len){
         usbd_reply(u, 0, "\0\0", 2, req->wLength);
         return 1;
     case USB_REQ_SET_ADDRESS:
-        DROP_CRUMB("addr/set1", req->wValue, 0);
+        trace_crumb1("usbd", "addr/set1", req->wValue);
         usb_set_addr1(u, req->wValue);
         u->setaddrreq = req->wValue | 0x8000;
         usbd_reply(u, 0, "", 0, 0);
@@ -251,7 +250,7 @@ static int
 usbd_ctl_int(usbd_t *u, const char *buf, int len){
     usb_device_request_t *req = buf;
 
-    DROP_CRUMB("ctl/int", req->bRequest, 0);
+    trace_crumb2("usbd", "ctl/int", req->bRequest, req->wLength);
 
     switch (req->bRequest) {
     case USB_REQ_GET_STATUS:
@@ -266,7 +265,7 @@ static int
 usbd_ctl_ept(usbd_t *u, const char *buf, int len){
     usb_device_request_t *req = buf;
 
-    DROP_CRUMB("ctl/ept", req->bRequest, 0);
+    trace_crumb2("usbd", "ctl/ept", req->bRequest, req->wLength);
 
     switch (req->bRequest) {
 
@@ -297,8 +296,7 @@ usbd_cb_recv_setup(usbd_t *u, int len){
     usb_read(u, 0, buf, sizeof(u->ctlreq));
     usb_recv_ack(u, 0);
 
-    DROP_CRUMB("ctl", req->bmRequestType, len);
-    DROP_CRUMB("ctl+", req->bRequest, buf);
+    trace_fdata("usbd", "ctl type %x, req %x, len %d, wlen %d", 4, req->bmRequestType, req->bRequest, len, req->wLength);
 
     switch (req->bmRequestType & ~USB_REQ_TYPE_READ){
 
@@ -312,20 +310,18 @@ usbd_cb_recv_setup(usbd_t *u, int len){
         r = usbd_ctl_ept(u, buf, len);
         break;
     default:
-        DROP_CRUMB("ctl/x", req->bmRequestType, req->bRequest);
+        trace_crumb2("usbd", "ctl/x", req->bmRequestType, req->bRequest);
         break;
     }
 
     if(r) return;
-
-    DROP_CRUMB("ctl..?", req->bmRequestType, req->bRequest);
 
     if( u->cf->cb_recv_setup )
         r = u->cf->cb_recv_setup(u->cbarg, buf, len);
 
     if( r ) return;
 
-    DROP_CRUMB("ctl/unk", req->bmRequestType, req->bRequest);
+    trace_crumb2("usbd", "ctl/unk", req->bmRequestType, req->bRequest);
     usbd_write(u, 0, "", 0, 1);
 }
 
@@ -340,7 +336,7 @@ usbd_send_more(usbd_t *u, int ep){
     if( (u->epd[epa].wlen != 0) || u->epd[epa].wzlp ){
         int l = usb_send(u, ep, u->epd[epa].wbuf, u->epd[epa].wlen);
 
-        DROP_CRUMB("send", ep, l);
+        trace_crumb2("usbd", "send", ep, l);
 
         if( l == -1 ){
             // error
@@ -413,7 +409,7 @@ static void
 _set_addr(usbd_t *u){
 
     usb_set_addr2(u, u->setaddrreq & 0xFF);
-    DROP_CRUMB("addr/set2", u->setaddrreq & 0xFF, 0);
+    trace_crumb1("usbd", "addr/set2", u->setaddrreq & 0xFF);
 
     u->setaddrreq = 0;
     u->curr_state = USBD_STATE_ADDRESS;
@@ -423,7 +419,7 @@ _set_addr(usbd_t *u){
 void
 usbd_cb_send_complete(usbd_t *u, int ep){
 
-    DROP_CRUMB("send/c", ep, u->epd[ep].wpending);
+    trace_crumb2("usbd", "send/c", ep, u->epd[ep].wpending);
 
     if( ! u->epd[ep].wpending ){
         u->epd[ep].wbusy = 0;
@@ -437,15 +433,4 @@ usbd_cb_send_complete(usbd_t *u, int ep){
     usbd_send_more(u, ep);
 }
 
-
-
-void
-usbd_dump_crumbs(){
-    DUMP_CRUMBS();
-}
-
-void
-usbd_reset_crumbs(){
-    RESET_CRUMBS();
-}
 

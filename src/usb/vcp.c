@@ -18,9 +18,9 @@
 #include <usbcdc.h>
 #include <userint.h>
 
-//#define CRUMBS "vcp"
-//#define NR_CRUMBS 128
-//#include <crumbs.h>
+#define TRACE
+#include <trace.h>
+
 
 
 #define CDC_SIZE	      64	/* usb cdc packet size (see also usbd_conf.h) */
@@ -290,16 +290,16 @@ vcp_recv_setup(struct VCP *p, const char *buf, int len){
 
     switch (req->bRequest) {
     case UCDC_SET_CONTROL_LINE_STATE:
+        trace_crumb1("usbvcp", "set/state", 0);
         usbd_reply(p->usbd, 0, "", 0, 0);
         return 1;
     case UCDC_SET_LINE_CODING:
-        // QQQ - 8 != 7 ?
-        //if( len != sizeof(p->line_state) )
-        //    kprintf("line coding? %d %d\n", len, sizeof(p->line_state));
+        trace_crumb2("usbvcp", "set/lcod", len, req->wLength);
         memcpy( &p->line_state, buf, sizeof(p->line_state) );
         usbd_reply(p->usbd, 0, "", 0, 0);
         return 1;
     case UCDC_GET_LINE_CODING:
+        trace_crumb2("usbvcp", "get/lcod", len, req->wLength);
         usbd_reply(p->usbd, 0, &p->line_state, sizeof(p->line_state), req->wLength);
         return 1;
     case UCDC_SEND_BREAK:

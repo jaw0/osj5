@@ -20,11 +20,8 @@
 #include <usbdef.h>
 #include <userint.h>
 
-
-#define CRUMBS "usb"
-#define NR_CRUMBS 128
-#include <crumbs.h>
-
+#define TRACE
+#include <trace.h>
 
 
 #define EP_TOGGLE_SET(epr, bits, mask) (epr) = ((epr) ^ (bits)) & (USB_EPREG_MASK | (mask))
@@ -232,7 +229,7 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
     switch(type){
     case UE_CONTROL:
         *epr = USB_EP_CONTROL | epa;
-        DROP_CRUMB("epr/ctl", *epr, epr);
+        trace_crumb2("usbfs", "epr/ctl", *epr, epr);
         break;
     case UE_ISOCHRONOUS:
         *epr = USB_EP_ISOCHRONOUS | epa;
@@ -244,7 +241,7 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
         *epr = USB_EP_INTERRUPT | epa;
         break;
     default:
-        DROP_CRUMB("err/type", type, 0);
+        trace_crumb1("usbfs", "err/type", type);
         return -1;
     }
 
@@ -300,6 +297,8 @@ usb_send(usbd_t *u, int ep, const char *buf, int len){
 
     if( len > u->epd[epa].bufsize ) len = u->epd[epa].bufsize;
 
+    trace_crumb2("usbfs", "send", ep, len);
+
     int type = *epr & (USB_EPTX_STAT | USB_EP_T_FIELD | USB_EP_KIND);
 
     switch( type ){
@@ -350,8 +349,8 @@ usb_recv(usbfs_t *u, int ep){
         bd = & USBPMA->desc[ep].rx;
     }
 
-    DROP_CRUMB("recv", bd->addr, bd->count);
-    // XXX L152 - no setup?
+    trace_crumb2("usbfs", "recv", bd->addr, bd->count);
+
     if( (*epr & USB_EP_SETUP) && !ep )
         usbd_cb_recv_setup(u->usbd, bd->count & 0x3FF);
     else
@@ -419,7 +418,7 @@ usb_reset_handler(usbfs_t *u){
     usb_config_ep(u->usbd, 0, UE_CONTROL, CONTROLSIZE);
 
     usbd_cb_reset(u->usbd);
-    DROP_CRUMB("reset", USB->EP0R, USB->CNTR);
+    trace_crumb2("usbfs", "reset", USB->EP0R, USB->CNTR);
 }
 
 static void
@@ -427,7 +426,7 @@ usb_suspend_handler(usbfs_t *u){
 
     if( !(USB->CNTR & USB_CNTR_SUSPM) ) return;
 
-    DROP_CRUMB("susp", 0, 0);
+    trace_crumb1("usbfs", "susp", 0);
     usbd_cb_suspend(u->usbd);
     USB->CNTR |= USB_CNTR_FSUSP;
     // QQQ - LPMODE ?
@@ -446,7 +445,7 @@ USB_IRQ_HANDLER(void){
     int isr = USB->ISTR;
     usbfs_t *u = usb + 0;
 
-    DROP_CRUMB( "irq!", isr, 0 );
+    trace_crumb1("usbfs",  "irq!", isr);
 
     if( isr & USB_ISTR_RESET ){
         usb_reset_handler(u);
@@ -482,8 +481,7 @@ DEFUN(usbtest, "usb test")
     usb_disconnect(usb[0].usbd );
     sleep(1);
 
-    RESET_CRUMBS();
-    usbd_reset_crumbs();
+    trace_reset();
     usb_connect( usb[0].usbd );
 
     usleep(10000000);
@@ -491,8 +489,7 @@ DEFUN(usbtest, "usb test")
     //usb_disconnect( usb[0].usbd );
     usleep(1000);
 
-    usbd_dump_crumbs();
-    DUMP_CRUMBS();
+    trace_dump();
 
     return  0;
 }
@@ -500,11 +497,8 @@ DEFUN(usbtest, "usb test")
 DEFUN(usbinfo, "usb test")
 {
 
-    usbd_dump_crumbs();
-    DUMP_CRUMBS();
-
-    RESET_CRUMBS();
-    usbd_reset_crumbs();
+    trace_dump();
+    trace_reset();
 
     return 0;
 }

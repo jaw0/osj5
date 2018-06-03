@@ -20,10 +20,9 @@
 #include <usbd.h>
 #include <userint.h>
 
+#define TRACE
+#include <trace.h>
 
-#define CRUMBS "usb"
-#define NR_CRUMBS 512
-#include <crumbs.h>
 
 #define CONTROL_SIZE	64
 #define RX_FIFO_SIZE	256
@@ -123,6 +122,8 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
 
     bootmsg("usb otg device %s", name);
 
+    trace_init( 64 * 1024 ); // XXX
+
     return usb + i;
 }
 
@@ -142,7 +143,7 @@ static inline void
 set_pma_tx(usbotg_t *u, int epa, int addr, int cnt){
 
     u->otg->g.DIEPTXF[epa - 1] = ((cnt & ~3) << 14) | addr;
-    DROP_CRUMB("pma", epa, addr);
+    trace_crumb2("usbotg", "pma", epa, addr);
 }
 
 int
@@ -173,7 +174,9 @@ usb_set_addr1(usbd_t *u, int addr){
     usbotg_t * usb = u->dev;
 
     usb->otg->d.DCFG = (usb->otg->d.DCFG & ~USB_OTG_DCFG_DAD) | (addr << 4);
-    //RESET_CRUMBS();
+
+    // trace_reset();
+    trace_crumb1( "usbotg", "addr", addr );
 }
 
 void
@@ -239,9 +242,11 @@ int
 usb_config_ep(usbd_t *u, int ep, int type, int size){
     usbotg_t *usb = u->dev;
     USB_OTG_t *otg = usb->otg;
-    int epa = ep & 7;
+    int epa = ep & 0xF;
 
     u->epd[epa].bufsize = size;
+
+    trace_fdata("usbotg", "epcf %d type %d size %d", 3, ep, type, size);
 
     if (ep & 0x80) {
         int buf;
@@ -312,9 +317,7 @@ usb_send(usbd_t *u, int ep, const char *buf, int len){
 
     uint32_t *fifo = get_fifo(usb, ep);
 
-    DROP_CRUMB("txr", otg->epi[ep].DIEPINT, otg->epi[ep].DTXFSTS);
-    // -> 20d0        10
-    // -> 20d1        10
+    trace_fdata("usbotg", "send %d len %d; diepint %x, dtxfsts %x", 4, ep, len, otg->epi[ep].DIEPINT, otg->epi[ep].DTXFSTS);
 
     otg->epi[ep].DIEPTSIZ = 0;
     otg->epi[ep].DIEPTSIZ = (1 << 19) | len;
@@ -325,7 +328,6 @@ usb_send(usbd_t *u, int ep, const char *buf, int len){
         *fifo = buf[i] | (buf[i+1]<<8) | (buf[i+2]<<16) | (buf[i+3]<<24);
     }
 
-    DROP_CRUMB("tx", ep, len);
     return len;
 }
 
@@ -334,6 +336,7 @@ usb_recv_ack(usbd_t *u, int ep){
     usbotg_t *usb = u->dev;
     USB_OTG_t *otg = usb->otg;
 
+    trace_crumb1("usbotg", "ack", ep);
     otg->epo[ep & 0x7f].DOEPCTL |= USB_OTG_DOEPCTL_CNAK | USB_OTG_DOEPCTL_EPENA;
 }
 
@@ -391,11 +394,16 @@ usb_tx_handler(usbotg_t *u){
         if( u->otg->epi[i].DIEPINT & USB_OTG_DIEPINT_XFRC ){
             u->otg->epi[i].DIEPINT = USB_OTG_DIEPINT_XFRC;
 
-            DROP_CRUMB("txc", i, 0);
+            trace_crumb1("usbotg", "txc", i);
             usbd_cb_send_complete(u->usbd, i);
         }
     }
 }
+
+static const char *rxinfo[] = {
+    "rx/0", "rx/NAK", "rx/out", "rx/out!", "rx/setup!", "rx/5", "rx/setup", "rx/7",
+    "rx/8", "rx/9", "rx/A", "rx/B", "rx/C", "rx/D", "rx/E", "rx/F"
+};
 
 static void
 usb_rx_handler(usbotg_t *u){
@@ -411,19 +419,18 @@ usb_rx_handler(usbotg_t *u){
 
         u->readflag = 0;
 
+        trace_crumb2("usbotg", rxinfo[pt], ep, len);
+
         switch( pt ){
         case 2:
-            DROP_CRUMB("rx2", ep, len);
             usbd_cb_recv(u->usbd, ep, len);
             if( !u->readflag ) usb_drain(u, ep);
             break;
         case 6:
-            DROP_CRUMB("rx6", ep, len);
             usbd_cb_recv_setup(u->usbd, len);
             if( !u->readflag ) usb_drain(u, ep);
             break;
         default:
-            DROP_CRUMB("rx-", pt, len);
             rxs = u->otg->g.GRXSTSP; // pop + discard
         }
     }
@@ -438,7 +445,7 @@ usb_reset_handler(usbotg_t *u){
     usb_config_ep0(u->usbd);
     usbd_cb_reset(u->usbd);
 
-    DROP_CRUMB("reset", 0, 0);
+    trace_crumb1("usbotg", "reset", 0);
 }
 
 static void
@@ -446,7 +453,7 @@ usb_suspend_handler(usbotg_t *u){
 
     if( !(u->otg->g.GINTMSK & USB_OTG_GINTMSK_USBSUSPM) ) return;
 
-    DROP_CRUMB("susp", 0, 0);
+    trace_crumb1("usbotg", "susp", 0);
     usbd_cb_suspend(u->usbd);
 }
 
@@ -461,8 +468,7 @@ static void
 otg_irq_handler(usbotg_t *u){
     int isr = u->otg->g.GINTSTS;
 
-    DROP_CRUMB( "irq!", isr, 0 );
-
+    trace_crumb1("usbotg",  "irq!", isr);
 
     if( isr & USB_OTG_GINTSTS_USBRST ){
         usb_reset_handler(u);
@@ -510,8 +516,7 @@ DEFUN(usbtest, "usb test")
     usb_disconnect(usb[0].usbd );
     sleep(1);
 
-    RESET_CRUMBS();
-    usbd_reset_crumbs();
+    trace_reset();
     usb_connect( usb[0].usbd );
 
     usleep(10000000);
@@ -519,8 +524,7 @@ DEFUN(usbtest, "usb test")
     usb_disconnect( usb[0].usbd );
     usleep(1000);
 
-    usbd_dump_crumbs();
-    DUMP_CRUMBS();
+    trace_dump();
 
     return  0;
 }
@@ -528,11 +532,8 @@ DEFUN(usbtest, "usb test")
 DEFUN(usbinfo, "usb test")
 {
 
-    usbd_dump_crumbs();
-    DUMP_CRUMBS();
-
-    RESET_CRUMBS();
-    usbd_reset_crumbs();
+    trace_dump();
+    trace_reset();
 
     return 0;
 }
@@ -543,3 +544,56 @@ OTG_DIEPEMPMSK
     1 << ep
 
  */
+/*
+    1963 usbotg   irq! 4008038
+    1965 usbotg   rx6 0 8
+    1967 usbotg   ack 0
+    1969 usbd     ctl type 21, req 20, len 8, wlen 7
+    1971 usbd     ctl/x 21 20
+    1973 usbvcp   set/lcod 8 7
+    1976 usbotg   send 0 len 0; diepint 20d0, dtxfsts 10
+    1978 usbd     send 0 0
+    1988 usbotg   irq! 4000030
+    1990 usbotg   rx2 0 7
+    1992 usbotg   rx- 0 0 258
+    2010 usbotg   irq! 4040020
+    2011 usbotg   txc 0
+    2013 usbd     send/c 0 0
+    2894 usbotg   irq! 4008038
+    2896 usbotg   rx- 0 4 0
+ 2004321 usbotg   irq! 4008038
+ 2004324 usbotg   rx- 0 3 0
+ 4005691 usbotg   irq! 4008038
+ 4005693 usbotg   rx6 0 8
+ 4005696 usbotg   ack 0
+ 4005697 usbd     ctl type 21, req 20, len 8, wlen 7
+ 4005699 usbd     ctl/x 21 20
+ 4005701 usbvcp   set/lcod 8 7
+ 4005704 usbotg   send 0 len 0; diepint 20d0, dtxfsts 10
+ 4005706 usbd     send 0 0
+ 4005717 usbotg   irq! 4000030
+ 4005719 usbotg   rx6 0 8
+ 4005722 usbotg   ack 0
+ 4005723 usbd     ctl type 21, req 20, len 8, wlen 7
+ 4005725 usbd     ctl/x 21 20
+ 4005727 usbvcp   set/lcod 8 7
+ 4005730 usbotg   send 0 len 0; diepint 20d0, dtxfsts 10
+ 4005732 usbd     send 0 0
+ 4005735 usbotg   rx6 0 8
+ 4005737 usbotg   ack 0
+ 4005738 usbd     ctl type 21, req 20, len 8, wlen 7
+ 4005740 usbd     ctl/x 21 20
+ 4005742 usbvcp   set/lcod 8 7
+ 4005745 usbotg   send 0 len 0; diepint 20d1, dtxfsts 10
+ 4005747 usbd     send 0 0
+ 4005750 usbotg   irq! 4040020
+ 4005751 usbotg   txc 0
+ 4005752 usbd     send/c 0 0
+ 4006311 usbotg   irq! 4000038
+ 4006313 usbotg   rx2 0 7
+ 6006808 usbotg   irq! 4008038
+ 6006810 usbotg   rx- 0 0 258
+ 8008509 usbotg   irq! 4008038
+ 8008512 usbotg   rx- 0 4 0
+
+*/
