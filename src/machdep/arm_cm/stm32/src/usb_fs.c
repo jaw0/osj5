@@ -77,6 +77,8 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
 
     nvic_enable( USB_IRQN, IPL_DISK );
 
+    trace_init( 8 * 1024 ); // XXX
+
     bootmsg("usb device full-speed\n");
 
     return usb + i;
@@ -113,7 +115,6 @@ void usb_set_addr1(usbd_t *u, int addr){
 void
 usb_set_addr2(usbd_t *u, int addr){
     USB->DADDR = USB_DADDR_EF | (addr & 0x7F);
-    RESET_CRUMBS();
 }
 
 void

@@ -149,16 +149,6 @@ usbd_cb_wakeup(usbd_t *u){
 
 }
 
-void
-usbd_cb_recv(usbd_t *u, int ep, int len){
-
-    ep &= 0x7f;
-    if( ep >= NUMENDPOINTS ) return;
-
-    if( u->cf->cb_recv[ep] )
-        u->cf->cb_recv[ep](u->cbarg, ep, len);
-}
-
 /****************************************************************/
 static int
 usbd_reply_descr(usbd_t *u, const char *buf){
@@ -285,29 +275,24 @@ usbd_ctl_ept(usbd_t *u, const char *buf, int len){
     return 0;
 }
 
-
-void
-usbd_cb_recv_setup(usbd_t *u, int len){
-    int i, r = 0;
+static void
+usbd_process_setup(usbd_t *u){
+    int r = 0;
     char *buf = u->ctlreq;
     usb_device_request_t *req = buf;
 
-    // copy packet + ack
-    usb_read(u, 0, buf, sizeof(u->ctlreq));
-    usb_recv_ack(u, 0);
-
-    trace_fdata("usbd", "ctl type %x, req %x, len %d, wlen %d", 4, req->bmRequestType, req->bRequest, len, req->wLength);
+    trace_fdata("usbd", "ctl type %x, req %x, wlen %d, have %d", 4, req->bmRequestType, req->bRequest, req->wLength, u->reqlen);
 
     switch (req->bmRequestType & ~USB_REQ_TYPE_READ){
 
     case USB_REQ_TYPE_DEVICE:
-        r = usbd_ctl_dev(u, buf, len);
+        r = usbd_ctl_dev(u, buf, u->reqlen);
         break;
     case USB_REQ_TYPE_INTERFACE:
-        r = usbd_ctl_int(u, buf, len);
+        r = usbd_ctl_int(u, buf, u->reqlen);
         break;
     case USB_REQ_TYPE_ENDPOINT:
-        r = usbd_ctl_ept(u, buf, len);
+        r = usbd_ctl_ept(u, buf, u->reqlen);
         break;
     default:
         trace_crumb2("usbd", "ctl/x", req->bmRequestType, req->bRequest);
@@ -317,12 +302,64 @@ usbd_cb_recv_setup(usbd_t *u, int len){
     if(r) return;
 
     if( u->cf->cb_recv_setup )
-        r = u->cf->cb_recv_setup(u->cbarg, buf, len);
+        r = u->cf->cb_recv_setup(u->cbarg, buf, u->reqlen);
 
     if( r ) return;
 
     trace_crumb2("usbd", "ctl/unk", req->bmRequestType, req->bRequest);
     usbd_write(u, 0, "", 0, 1);
+}
+
+
+void
+usbd_cb_recv_setup(usbd_t *u, int len){
+    int r = 0;
+    char *buf = u->ctlreq;
+    usb_device_request_t *req = buf;
+
+    // copy packet + ack
+    usb_read(u, 0, buf, sizeof(u->ctlreq));
+    u->reqpos = len;
+    u->reqlen = len;
+    usb_recv_ack(u, 0);
+
+    // read more?
+    if( req->wLength && !(req->bmRequestType & USB_REQ_TYPE_READ) ){
+        // read more data...
+        u->reqlen += req->wLength;
+        trace_fdata("usbd", "setup len %d, want more %d", 2, len, req->wLength);
+    }else{
+        usbd_process_setup(u);
+        u->reqlen = u->reqpos = 0;
+    }
+}
+
+/****************************************************************/
+
+void
+usbd_cb_recv(usbd_t *u, int ep, int len){
+
+    ep &= 0x7f;
+    if( ep >= NUMENDPOINTS ) return;
+
+    // data for a pending setup request?
+    if( !ep && u->reqlen ){
+        char *buf = u->ctlreq;
+        usb_read(u, 0, buf + u->reqpos, sizeof(u->ctlreq) - u->reqpos);
+        u->reqpos += len;
+
+        usb_recv_ack(u, 0);
+        trace_crumb2("usbd", "recv/setup/data", len, u->reqpos);
+
+        if( u->reqpos >= u->reqlen ){
+            usbd_process_setup(u);
+            u->reqlen = u->reqpos = 0;
+        }
+        return;
+    }
+
+    if( u->cf->cb_recv[ep] )
+        u->cf->cb_recv[ep](u->cbarg, ep, len);
 }
 
 /****************************************************************/

@@ -13,6 +13,7 @@
 
 
 #define MAX_RESPONSE	16
+#define MAX_REQUEST	64
 #define SERIALNO_IDX	0xFE
 
 #define USBD_STATE_INACTIVE	0
@@ -64,6 +65,7 @@ typedef struct _usbd {
 
     uint8_t  curr_state;
     uint8_t  curr_config;
+    uint8_t  reqlen, reqpos;
     uint16_t setaddrreq;
 
     const usbd_config_t *cf;
@@ -71,7 +73,7 @@ typedef struct _usbd {
 
     struct usbd_epd epd[NUMENDPOINTS];
 
-    char ctlreq[8];
+    char ctlreq[MAX_REQUEST];
     char ctlres[MAX_RESPONSE];
 
 } usbd_t;

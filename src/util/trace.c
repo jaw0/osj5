@@ -2,7 +2,7 @@
   Copyright (c) 2018
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 2018-Apr-19 23:49 (EDT)
-  Function: 
+  Function: tracing
 
 */
 
@@ -138,6 +138,31 @@ trace_fdata(const char *tag, const char *fmt, int narg, ...){
 }
 
 void
+trace_crumb(const char *tag, const char *evt, int narg, ...){
+    va_list ap;
+
+    if( !logbuf ) return;
+    if( !ROOMFOR(SPACEFOR(narg * sizeof(int))) ) return;
+
+    va_start(ap, narg);
+
+    _lock();
+    struct trace_info *ti = (struct trace_info*)(logbuf + logpos);
+    ti->type = LRT_CRUMB;
+    ti->tag  = tag;
+    ti->msg  = evt;
+    ti->when = get_hrtime();
+    ti->len  = narg * sizeof(int);
+
+    int *p = (int *)(ti + 1);
+    memcpy(p, ap, narg * sizeof(int));
+
+    logpos += SPACEFOR(narg * sizeof(int));
+    _unlock();
+}
+
+#if 0
+void
 trace_crumb1(const char *tag, const char *evt, int d1){
 
     if( !logbuf ) return;
@@ -203,6 +228,7 @@ trace_crumb3(const char *tag, const char *evt, int d1, int d2, int d3){
     logpos += SPACEFOR( 3 * sizeof(int));
     _unlock();
 }
+#endif
 
 /****************************************************************/
 
@@ -262,40 +288,65 @@ trace_dpy_crumb(struct trace_info *ti){
 }
 
 void
-trace_dump(void){
+trace_dump(const char *filter){
 
     int p = 0;
     int z = logpos;
     unsigned int wh;
 
+    printf("%d> %s\n", strlen(filter), filter);
+
     for(p=0; p<z; ){
         struct trace_info *ti = (struct trace_info *)(logbuf + p);
 
-        // when, tag
-        if( !p ) wh = ti->when;
-        unsigned int dt = ti->when - wh;
-        wh = ti->when;
+        if( !filter || !strcmp(filter, ti->tag) ){
 
-        printf("%8d %-8s ", dt, ti->tag);
+            // when, tag
+            if( !p ) wh = ti->when;
+            unsigned int dt = ti->when - wh;
+            wh = ti->when;
 
-        switch( ti->type ){
-        case LRT_MSG:
-            trace_dpy_msg(ti);
-            break;
-        case LRT_DATA:
-            trace_dpy_data(ti);
-            break;
-        case LRT_FDATA:
-            trace_dpy_fdata(ti);
-            break;
-        case LRT_CRUMB:
-            trace_dpy_crumb(ti);
-            break;
+            printf("%8d %-8s ", dt, ti->tag);
 
+            switch( ti->type ){
+            case LRT_MSG:
+                trace_dpy_msg(ti);
+                break;
+            case LRT_DATA:
+                trace_dpy_data(ti);
+                break;
+            case LRT_FDATA:
+                trace_dpy_fdata(ti);
+                break;
+            case LRT_CRUMB:
+                trace_dpy_crumb(ti);
+                break;
+            }
+
+            printf("\n");
         }
 
-        printf("\n");
         p += SPACEFOR(ti->len);
     }
 }
 
+DEFUN(trace, "trace")
+{
+    const char *filt = 0;
+    int resetp = 0;
+
+    if( (argc > 1) && !strcmp(argv[1], "-r") ){
+        resetp = 1;
+        argc--;
+        argv++;
+    }
+    if( argc > 1 ){
+        filt = argv[1];
+    }
+
+    trace_dump(filt);
+
+    if( resetp ) trace_reset();
+
+    return 0;
+}

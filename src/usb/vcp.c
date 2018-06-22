@@ -165,14 +165,17 @@ static const struct cdc_config cdc_config ALIGN2 = {
 struct VCP;
 static void vcp_tx_complete(struct VCP *, int);
 static void vcp_recv_chars(struct VCP*, int, int);
+static void vcp_reset(struct VCP *);
 static void vcp_configure(struct VCP *);
 static int  vcp_recv_setup(struct VCP*, const char *, int);
+static void maybe_tx(struct VCP* p);
 
 static const usb_wdata_descriptor_t lang_desc      ALIGN2 = { 4,  USB_DTYPE_STRING, USB_LANG_EN_US };
 static const usb_wdata_descriptor_t cdc_manuf_desc ALIGN2 = { 12, USB_DTYPE_STRING, u"OS/J5" };
 static const usb_wdata_descriptor_t cdc_prod_desc  ALIGN2 = { 14, USB_DTYPE_STRING, u"gadget"  };
 
 static const usbd_config_t cdc_usbd_config = {
+    .cb_reset       = vcp_reset,
     .cb_configure   = vcp_configure,
     .cb_tx_complete = { [CDC_TXD_EP & 0x7f] = vcp_tx_complete },
     .cb_recv_setup  = vcp_recv_setup,
@@ -227,6 +230,7 @@ static struct VCP {
     char txbuf[ CDC_SIZE ];
 
     uint8_t rblen, tblen;
+    uint8_t ready;
 
 } vcom[ 1 ];
 
@@ -273,6 +277,11 @@ chkq(struct queue *q){
 }
 
 static void
+vcp_reset(struct VCP *p){
+    p->ready = 0;
+}
+
+static void
 vcp_configure(struct VCP *p){
 
     usb_config_ep( p->usbd, CDC_RXD_EP, UE_BULK, CDC_SIZE );
@@ -280,6 +289,7 @@ vcp_configure(struct VCP *p){
     usb_config_ep( p->usbd, CDC_NTF_EP, UE_BULK, CDC_NTF_SZ );
 
     p->rblen = p->tblen = 0;
+    p->ready = 0;
 }
 
 static int
@@ -290,16 +300,19 @@ vcp_recv_setup(struct VCP *p, const char *buf, int len){
 
     switch (req->bRequest) {
     case UCDC_SET_CONTROL_LINE_STATE:
-        trace_crumb1("usbvcp", "set/state", 0);
+        trace_crumb1("vcp", "set/state", 0);
         usbd_reply(p->usbd, 0, "", 0, 0);
+        p->ready = 1;
+        maybe_tx(p);
         return 1;
     case UCDC_SET_LINE_CODING:
-        trace_crumb2("usbvcp", "set/lcod", len, req->wLength);
-        memcpy( &p->line_state, buf, sizeof(p->line_state) );
+        trace_crumb2("vcp", "set/lcod", len, req->wLength);
+        memcpy( &p->line_state, buf+8, sizeof(p->line_state) );
+        trace_data("vcp", "linestate", len, buf);
         usbd_reply(p->usbd, 0, "", 0, 0);
         return 1;
     case UCDC_GET_LINE_CODING:
-        trace_crumb2("usbvcp", "get/lcod", len, req->wLength);
+        trace_crumb2("vcp", "get/lcod", len, req->wLength);
         usbd_reply(p->usbd, 0, &p->line_state, sizeof(p->line_state), req->wLength);
         return 1;
     case UCDC_SEND_BREAK:
@@ -329,6 +342,8 @@ qpop(struct queue *q){
     q->tail %= CDC_SIZE;
     q->len --;
 
+    if( q->len == 0 ) q->head = q->tail = 0;
+
     return c;
 }
 
@@ -344,6 +359,7 @@ static void
 maybe_tx(struct VCP* p){
     int i;
 
+    if( !p->ready ) return;
     if( p->txq.len == 0 ) return;
     if( p->tblen ) return;
     if( !usbd_isactive(p->usbd) ) return;
@@ -356,6 +372,7 @@ maybe_tx(struct VCP* p){
     // tx
     p->tblen = i;
     int plx = splx(IPL_DISK);
+    trace_crumb2("vcp", "tx", i, p->txq.len);
     usbd_write(p->usbd, CDC_TXD_EP, p->txbuf, i, !(i & (CDC_SIZE - 1)) );
     splx(plx);
 }
@@ -366,6 +383,7 @@ vcp_tx_complete(struct VCP *p, int ep){
 
     p->tblen = 0;
 
+    trace_crumb1("vcp", "tx/c", ep);
     maybe_tx(p);
     maybe_dequeue(p);
     wakeup( &p->txq );
@@ -378,6 +396,8 @@ vcp_putchar(FILE *f, char ch){
     int plx;
 
     p = (struct VCP*)f->d;
+
+    trace_crumb3("vcp", "putchar", p->txq.len, p->txq.head, p->txq.tail);
 
     while(1){
         plx = spldisk();
@@ -412,6 +432,7 @@ maybe_dequeue(struct VCP* p){
 
     for(i=0; i<p->rblen; i++){
         int c = p->rxbuf[i];
+        // trace_crumb1("vcp", "recvchar", c);
 
         /* special control char ? */
         for(j=0; j<sizeof(p->file.cchars); j++){
@@ -477,8 +498,16 @@ DEFUN(vcpinfo, "test")
     printf("txq %d; %d - %d\n", v->txq.len, v->txq.head, v->txq.tail);
     printf("rxb %d\n", v->rblen);
     printf("txb %d\n", v->tblen);
-    //printf("ep1 %x\n", USB->EP1R);
 
+
+    return 0;
+}
+
+DEFUN(vcpreset, "")
+{
+    struct VCP *v = vcom + 0;
+    v->txq.len = v->txq.head = v->txq.tail = 0;
+    v->tblen = 0;
 
     return 0;
 }

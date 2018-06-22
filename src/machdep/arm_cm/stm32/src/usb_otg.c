@@ -120,7 +120,7 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
 
     nvic_enable( irq, IPL_DISK );
 
-    bootmsg("usb otg device %s", name);
+    bootmsg("usb otg device %s\n", name);
 
     trace_init( 64 * 1024 ); // XXX
 
@@ -142,7 +142,8 @@ pma_alloc(usbotg_t *u, int size){
 static inline void
 set_pma_tx(usbotg_t *u, int epa, int addr, int cnt){
 
-    u->otg->g.DIEPTXF[epa - 1] = ((cnt & ~3) << 14) | addr;
+    // nb. the manual is wrong. size + addr are in units of words
+    u->otg->g.DIEPTXF[epa - 1] = ((cnt >> 2) << 16) | (addr >> 2);
     trace_crumb2("usbotg", "pma", epa, addr);
 }
 
@@ -188,6 +189,8 @@ void
 usb_stall(usbd_t *u, int ep){
     usbotg_t * usb = u->dev;
     int epa = ep & 0x7f;
+
+    trace_crumb1("usbotg", "stall", ep);
 
     if( ep & 0x80 ){
         usb->otg->epi[epa].DIEPCTL |= USB_OTG_DIEPCTL_STALL;
@@ -281,6 +284,8 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
             break;
         }
 
+        trace_crumb2("usbotg", "cftx", ep, otg->epi[epa].DIEPCTL);
+
     }else{
         int t;
         switch( type ){
@@ -303,9 +308,9 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
 
 static uint32_t *
 get_fifo(usbotg_t *u, int epa){
-    return u->otg->fifo + (epa << 12);
+    // fifo is uint32[] - <<(12 - 2)
+    return u->otg->fifo + (epa << 10);
 }
-
 
 int
 usb_send(usbd_t *u, int ep, const char *buf, int len){
@@ -314,20 +319,25 @@ usb_send(usbd_t *u, int ep, const char *buf, int len){
 
     ep &= 0x7F;
     if( len > u->epd[ep].bufsize ) len = u->epd[ep].bufsize;
+    if( ep && !(otg->epi[ep].DIEPCTL & USB_OTG_DIEPCTL_USBAEP) ) return 0;	// ep not enabled
+    if( ep &&  (otg->epi[ep].DIEPCTL & USB_OTG_DIEPCTL_EPENA) )  return 0;	// ep currently sending
 
-    uint32_t *fifo = get_fifo(usb, ep);
+    volatile uint32_t *fifo = get_fifo(usb, ep);
 
-    trace_fdata("usbotg", "send %d len %d; diepint %x, dtxfsts %x", 4, ep, len, otg->epi[ep].DIEPINT, otg->epi[ep].DTXFSTS);
+    trace_fdata("usbotg", "send %d len %d; diepint %x, dtxfsts %x, fifo %x", 5, ep, len, otg->epi[ep].DIEPINT, otg->epi[ep].DTXFSTS, fifo);
+    trace_crumb3("usbotg", "send", otg->epi[ep].DIEPTSIZ, otg->epi[ep].DIEPCTL, otg->g.DIEPTXF[ep - 1]);
 
     otg->epi[ep].DIEPTSIZ = 0;
     otg->epi[ep].DIEPTSIZ = (1 << 19) | len;
-    otg->epi[ep].DIEPCTL  = (otg->epi[ep].DIEPCTL & ~USB_OTG_DIEPCTL_STALL) | USB_OTG_DOEPCTL_EPENA | USB_OTG_DOEPCTL_CNAK;
+    otg->epi[ep].DIEPCTL  = (otg->epi[ep].DIEPCTL & ~USB_OTG_DIEPCTL_STALL) | USB_OTG_DIEPCTL_EPENA | USB_OTG_DIEPCTL_CNAK;
+    trace_crumb2("usbotg", "send", otg->epi[ep].DIEPTSIZ, otg->epi[ep].DIEPCTL);
 
     int i;
     for(i=0; i<len; i+=4){
         *fifo = buf[i] | (buf[i+1]<<8) | (buf[i+2]<<16) | (buf[i+3]<<24);
     }
 
+    trace_crumb4("usbotg", "send", otg->epi[ep].DIEPTSIZ, otg->epi[ep].DIEPCTL, otg->epi[ep].DTXFSTS, otg->epi[ep].DIEPINT);
     return len;
 }
 
@@ -513,6 +523,9 @@ DEFUN(usbtest, "usb test")
 
     printf("usb: %x pma: %x\n", USB_OTG_FS_PERIPH_BASE, USB_OTG_FS->fifo);
 
+    usb_send(usb[0].usbd, 0x8081, "XYZ=", 3);
+    return 0;
+
     usb_disconnect(usb[0].usbd );
     sleep(1);
 
@@ -524,7 +537,7 @@ DEFUN(usbtest, "usb test")
     usb_disconnect( usb[0].usbd );
     usleep(1000);
 
-    trace_dump();
+    trace_dump(0);
 
     return  0;
 }
@@ -532,68 +545,28 @@ DEFUN(usbtest, "usb test")
 DEFUN(usbinfo, "usb test")
 {
 
-    trace_dump();
+    trace_dump(0);
     trace_reset();
 
     return 0;
 }
 
-/*
-OTG_DIEPEMPMSK
-    INEPTXFEM:INEPTx FIFO empty interrupt mask bits
-    1 << ep
+DEFUN(epinfo, "test")
+{
+    usbotg_t *u = usb;
+    USB_OTG_t *otg = u->otg;
+    int ep = 1;
 
- */
-/*
-    1963 usbotg   irq! 4008038
-    1965 usbotg   rx6 0 8
-    1967 usbotg   ack 0
-    1969 usbd     ctl type 21, req 20, len 8, wlen 7
-    1971 usbd     ctl/x 21 20
-    1973 usbvcp   set/lcod 8 7
-    1976 usbotg   send 0 len 0; diepint 20d0, dtxfsts 10
-    1978 usbd     send 0 0
-    1988 usbotg   irq! 4000030
-    1990 usbotg   rx2 0 7
-    1992 usbotg   rx- 0 0 258
-    2010 usbotg   irq! 4040020
-    2011 usbotg   txc 0
-    2013 usbd     send/c 0 0
-    2894 usbotg   irq! 4008038
-    2896 usbotg   rx- 0 4 0
- 2004321 usbotg   irq! 4008038
- 2004324 usbotg   rx- 0 3 0
- 4005691 usbotg   irq! 4008038
- 4005693 usbotg   rx6 0 8
- 4005696 usbotg   ack 0
- 4005697 usbd     ctl type 21, req 20, len 8, wlen 7
- 4005699 usbd     ctl/x 21 20
- 4005701 usbvcp   set/lcod 8 7
- 4005704 usbotg   send 0 len 0; diepint 20d0, dtxfsts 10
- 4005706 usbd     send 0 0
- 4005717 usbotg   irq! 4000030
- 4005719 usbotg   rx6 0 8
- 4005722 usbotg   ack 0
- 4005723 usbd     ctl type 21, req 20, len 8, wlen 7
- 4005725 usbd     ctl/x 21 20
- 4005727 usbvcp   set/lcod 8 7
- 4005730 usbotg   send 0 len 0; diepint 20d0, dtxfsts 10
- 4005732 usbd     send 0 0
- 4005735 usbotg   rx6 0 8
- 4005737 usbotg   ack 0
- 4005738 usbd     ctl type 21, req 20, len 8, wlen 7
- 4005740 usbd     ctl/x 21 20
- 4005742 usbvcp   set/lcod 8 7
- 4005745 usbotg   send 0 len 0; diepint 20d1, dtxfsts 10
- 4005747 usbd     send 0 0
- 4005750 usbotg   irq! 4040020
- 4005751 usbotg   txc 0
- 4005752 usbd     send/c 0 0
- 4006311 usbotg   irq! 4000038
- 4006313 usbotg   rx2 0 7
- 6006808 usbotg   irq! 4008038
- 6006810 usbotg   rx- 0 0 258
- 8008509 usbotg   irq! 4008038
- 8008512 usbotg   rx- 0 4 0
+    if( argc > 1 )
+        ep = atoi( argv[1] );
 
-*/
+    printf("ep#: %d\n", ep);
+
+    printf("ctl: %x\n", otg->epi[ep].DIEPCTL);
+    printf("siz: %x\n", otg->epi[ep].DIEPTSIZ);
+    printf("sts: %x\n", otg->epi[ep].DTXFSTS);	// amount of free space in tx fifo. words
+    printf("int: %x\n", otg->epi[ep].DIEPINT);
+    printf("txf: %x\n", otg->g.DIEPTXF[ep - 1]);
+
+    return 0;
+}
