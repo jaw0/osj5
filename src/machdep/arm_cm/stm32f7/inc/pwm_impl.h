@@ -22,7 +22,7 @@ timer_rcc_init(int t){
     case 12:
     case 13:
     case 14:
-        RCC->APB1ENR = 1 << (t - 6);
+        RCC->APB1ENR |= 1 << (t - 6);
         break;
 
     default: // 2-7
