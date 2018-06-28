@@ -26,7 +26,7 @@
 
 #ifdef TESTING
 //# define NOPRINTF64
-# define NOPRINTFFLOAT
+//# define NOPRINTFFLOAT
 # define NOPRINTFTIME
 #endif
 
@@ -86,11 +86,11 @@ typedef u_numstd_t u_numfull_t;
 
 struct put_args {
     short flags;
-    char base;
-    char width;
-    char prec;
-    char group;
-    char gchar;
+    unsigned char base;
+    unsigned char width;
+    unsigned char prec;
+    unsigned char group;
+    unsigned char gchar;
 };
 
 
@@ -397,7 +397,6 @@ putnum(int (*ofnc)(void*, char), void *arg, u_numfull_t val, struct put_args pa)
         val = 0 - val;
     }
 
-
     /* convert to buffer (in reverse order) */
     do{
         n = val % pa.base;
@@ -629,9 +628,11 @@ putfloat(int (*ofnc)(void*, char), void *arg, float_num_t val, struct put_args p
         int ipart   = val;
         int fpart   = (val - ipart) * pmul;
         int iwidth  = pa.width - pa.prec - 1;
-        int lwidth  = (pa.flags & B(PF_LEFT)) ? 0 : iwidth;
-        //fprintf(STDERR, ">> %d,%d\n", ipart, fpart);
-        int tlen = putnum(ofnc, arg, sign*ipart, (struct put_args){.base = 10, .width = lwidth, .prec = lwidth, .flags = pa.flags});
+        if( pa.flags & B(PF_LEFT) ) iwidth = 0;
+        if( iwidth < 0 ) iwidth = 0;
+
+        // dprintf(2, ">> %d,%d; lw %d; f %x\n", ipart, fpart, iwidth, pa.flags);
+        int tlen = putnum(ofnc, arg, sign*ipart, (struct put_args){.base = 10, .width = iwidth, .prec = 0, .flags = pa.flags});
         (*ofnc)(arg, '.');
         tlen ++;
 
@@ -662,6 +663,11 @@ void printf(const char *fmt, ...){
     va_start(ap,fmt);
     vprintf(printffnc, 0, fmt, ap);
     va_end(ap);
+}
+
+void printfv(const char *fmt, va_list ap){
+
+    vprintf(printffnc, 0, fmt, ap);
 }
 
 /* **************************************************************** */
@@ -747,8 +753,8 @@ void main(void){
     char buffer[128];
     int i;
 
-    for(i=0; i<128; i++) buffer[i]='a';
 
+    for(i=0; i<128; i++) buffer[i]='a';
 
     snprintf(buffer, 128, "%d %c %s %02X", (int)324, (int)0x45, "foobar", (int)32);
     puts(buffer);
@@ -763,7 +769,6 @@ void main(void){
     printf("%-5.5s;\n", "foo");
     printf("%-5.5s;\n", "foobar");
 
-    exit(0);
     //printf("%ld %c %s %02.2x\n",   (int)324, (int)0x45, "foobar", (int)32);
     //printf("%.6ld %c %s %02.2x\n", (int)324, (int)0x45, "foobar", (int)32);
 
@@ -781,6 +786,8 @@ void main(void){
 #endif
 
 }
+
+
 
 #endif
 
