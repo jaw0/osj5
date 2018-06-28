@@ -12,6 +12,7 @@
 #include <arch.h>
 #include <error.h>
 #include <msgs.h>
+#include <queue.h>
 #include <dev.h>
 #include <usbd.h>
 #include <usbdef.h>
@@ -30,7 +31,13 @@
 
 #define CDC_NTF_SZ  8
 
-#define QUEUE_SIZE	CDC_SIZE
+#define RX_QUEUE_SIZE	CDC_SIZE
+
+#ifndef VCP_QUEUE_SIZE
+# define TX_QUEUE_SIZE	256
+#else
+# define TX_QUEUE_SIZE	VCP_QUEUE_SIZE
+#endif
 
 
 #ifndef USB_VENDOR
@@ -212,12 +219,6 @@ const static struct io_fs vcp_port_fs = {
     0
 };
 
-struct queue {
-    uint8_t head, tail, len;
-    char d[QUEUE_SIZE];
-};
-
-
 
 static struct VCP {
     FILE file;
@@ -248,6 +249,8 @@ vcp_init(struct Device_Conf *dev){
     v->file.fs = &vcp_port_fs;
     v->file.codepage = CODEPAGE_UTF8;
     v->file.d  = (void*)v;
+    queue_init( &v->rxq, RX_QUEUE_SIZE );
+    queue_init( &v->txq, TX_QUEUE_SIZE );
 
     v->line_state = (usb_cdc_line_state_t){
         .dwDTERate          = 115200,
@@ -327,27 +330,6 @@ vcp_recv_setup(struct VCP *p, const char *buf, int len){
 }
 
 
-static void
-qpush(struct queue *q, int c){
-
-    q->d[ q->head ++ ] = c;
-    q->head %= CDC_SIZE;
-    q->len ++;
-}
-
-static int
-qpop(struct queue *q){
-
-    int c = q->d[ q->tail ++ ];
-    q->tail %= CDC_SIZE;
-    q->len --;
-
-    if( q->len == 0 ) q->head = q->tail = 0;
-
-    return c;
-}
-
-
 static int
 vcp_status(FILE*f){
     // RSN - usb connected?
@@ -402,7 +384,7 @@ vcp_putchar(FILE *f, char ch){
     while(1){
         plx = spldisk();
 
-        if( p->txq.len != QUEUE_SIZE ){
+        if( p->txq.len != TX_QUEUE_SIZE ){
             qpush(&p->txq, ch);
             maybe_tx(p);
             splx(plx);
@@ -411,10 +393,13 @@ vcp_putchar(FILE *f, char ch){
 
         maybe_tx(p);
         splx(plx);
-        if( p->txq.len != QUEUE_SIZE ) continue;
+        if( p->txq.len != TX_QUEUE_SIZE ) continue;
 
         if( f->flags & F_NONBLOCK ) break;	// drop
-        // QQQ - not active, drop?
+        if( !usbd_isactive(p->usbd) ) break;
+        if( !p->ready ) break;
+
+        trace_crumb1("vcp", "block", f->flags);
 
         // wait for buffer to empty
         tsleep( &p->txq, -1, "usb/o", 10000 );
@@ -428,7 +413,7 @@ maybe_dequeue(struct VCP* p){
     int i,j;
 
     if( !p->rblen ) return;
-    if( p->rblen > QUEUE_SIZE - p->rxq.len ) return;
+    if( p->rblen > RX_QUEUE_SIZE - p->rxq.len ) return;
 
     for(i=0; i<p->rblen; i++){
         int c = p->rxbuf[i];
