@@ -89,12 +89,12 @@ adc_init(int chan, int samp){
     // 7 => 480
 
     if( chan < 10 ){
-        dev->SMPR1 &= ~ (7<< (3 * chan));
-        dev->SMPR1 |= (samp & 0x7) << (3 * chan);
-    }else{
-        chan -= 10;
         dev->SMPR2 &= ~ (7<< (3 * chan));
         dev->SMPR2 |= (samp & 0x7) << (3 * chan);
+    }else{
+        chan -= 10;
+        dev->SMPR1 &= ~ (7<< (3 * chan));
+        dev->SMPR1 |= (samp & 0x7) << (3 * chan);
     }
 }
 
