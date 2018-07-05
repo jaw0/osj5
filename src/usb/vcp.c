@@ -353,7 +353,7 @@ maybe_tx(struct VCP* p){
 
     // tx
     p->tblen = i;
-    int plx = splx(IPL_DISK);
+    int plx = spldisk();
     trace_crumb2("vcp", "tx", i, p->txq.len);
     usbd_write(p->usbd, CDC_TXD_EP, p->txbuf, i, !(i & (CDC_SIZE - 1)) );
     splx(plx);

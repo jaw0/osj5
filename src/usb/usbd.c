@@ -100,7 +100,7 @@ usbd_configure(usbd_t *u, const usbd_config_t *cf, const void *cbarg){
 
 /****************************************************************/
 
-static const char serialdigits[] = "0123456789abcdefghjkmnprstuvwxyz";
+static const char serialdigits[] = "0123456789abcdefghjkmnpqrstvwxyz";
 static int
 usbd_serial_descr(char *buf){
     usb_wdata_descriptor_t *d = buf;
