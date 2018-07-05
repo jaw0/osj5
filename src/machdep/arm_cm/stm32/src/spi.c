@@ -19,7 +19,8 @@
 #include <nvic.h>
 #include <spi_impl.h>
 
-// #define SPIVERBOSE
+#define TRACE
+#include <trace.h>
 
 
 #define CR1_CRCEN	0x2000
@@ -64,39 +65,10 @@
 #define DMA_MIN_SIZE	64
 
 
-static u_long cur_crumb = 0;
 static char dma_idle_source = 0xFF;
 static char dma_idle_sink;
 
-
-#ifdef SPIVERBOSE
-struct crumb {
-    const char *event;
-    int when;
-    int arg0;
-    int arg1;
-};
-
-#define NR_CRUMBS       128
-static struct crumb crumbs[NR_CRUMBS];
-
-static inline void
-_spi_drop_crumb(const char *event, u_long arg0, u_long arg1) {
-    struct crumb *crumb = &crumbs[cur_crumb % NR_CRUMBS];
-    crumb->event = event;
-    crumb->when  = get_hrtime();
-    crumb->arg0  = arg0;
-    crumb->arg1  = arg1;
-    cur_crumb++;
-}
-#define SPI_CRUMB(event, arg0, arg1) _spi_drop_crumb(event, (u_long)arg0, (u_long)arg1)
-#else
-#define SPI_CRUMB(event, arg0, arg1)
-#endif
-
-
 struct SPIInfo spiinfo[ N_SPI ];
-
 
 static int  _set_speed(struct SPIInfo *, int);
 static void _msg_next(struct SPIInfo *);
@@ -128,7 +100,7 @@ spi_init(struct Device_Conf *dev){
     return 0;
 }
 
-int
+static int
 _set_speed(struct SPIInfo *ii, int speed){
     SPI_TypeDef *dev   = ii->addr;
     int cspeed = ii->clock / 2;
@@ -142,32 +114,12 @@ _set_speed(struct SPIInfo *ii, int speed){
     dev->CR1 &= ~(7 << 3);
     dev->CR1 |= clkdiv << 3;
 
-    SPI_CRUMB("set-speed", cspeed, 0);
+    trace_crumb2("spi", "set-speed", clkdiv, cspeed);
     return cspeed;
 }
 
 
 /****************************************************************/
-
-static void
-_spi_dump_crumb(void){
-    int i;
-
-#ifdef SPIVERBOSE
-    int st = (cur_crumb > NR_CRUMBS) ? cur_crumb - NR_CRUMBS : 0;
-    int wh = crumbs[st].when;
-
-    for(i=st; i<cur_crumb; i++){
-        int n = i % NR_CRUMBS;
-        unsigned int dt = crumbs[n].when - wh;
-        wh = crumbs[n].when;
-
-        kprintf("[spi] %d\t%s\t%x %x\n", dt, crumbs[n].event, crumbs[n].arg0, crumbs[n].arg1);
-    }
-#endif
-}
-
-void spi_dump_crumb(){_spi_dump_crumb();}
 
 // init CS pins
 int
@@ -192,18 +144,18 @@ _spi_cspins(const struct SPIConf *cf, int on){
     int nss = cf->nss;
     const short *ss = cf->ss;
 
-    SPI_CRUMB("cspins", on, 0);
+    trace_crumb1("spi", "cspins", on);
     while(nss--){
         int s = *ss ++;
         int m = (s & SPI_SS_INV) ? 1 : 0;	// hi bit = on/off
+
+        trace_crumb2("spi", "pin", s, m);
 
         if( on == m )
             gpio_set( s & 0xFF );
         else
             gpio_clear( s & 0xFF );
-#ifdef SPIVERBOSE
-        // kprintf("pin %x %s\n", (s & 0x7f), (on==m)?"on":"off");
-#endif
+
     }
 }
 
@@ -217,13 +169,66 @@ _spi_rxtx1(SPI_TypeDef *dev, int val){
         if( sr & SR_TXE  ) break;
     }
 
+    trace_crumb1("spi", "rxtx1", sr);
     PUT_DR(dev, val);
 
     while(1){
         sr = dev->SR;
         if( sr & SR_RXNE ){
             c = GET_DR(dev);
+            trace_crumb2("spi", "rxtx1", sr, c);
             return c;
+        }
+    }
+}
+
+static inline int
+_spi_tx1(SPI_TypeDef *dev, int val){
+    int sr, c;
+
+    // wait until ready
+    while(1){
+        sr = dev->SR;
+        if( sr & SR_TXE  ) break;
+    }
+
+    trace_crumb1("spi", "tx1", sr);
+    PUT_DR(dev, val);
+
+    return 0;
+}
+
+static inline int
+_spi_rx1(SPI_TypeDef *dev){
+    int sr, c;
+
+    while(1){
+        sr = dev->SR;
+        if( sr & SR_RXNE ){
+            c = GET_DR(dev);
+            trace_crumb2("spi", "rx1/rx", sr, c);
+            return c;
+        }
+
+        if( sr & SR_TXE ){
+            trace_crumb1("spi", "rx1/tx", sr);
+            PUT_DR(dev, 0xFF);
+        }
+
+    }
+}
+
+static inline int
+_spi_drain_rx(SPI_TypeDef *dev){
+    int sr, c;
+    int n = 16;
+
+    while(n-- > 0){
+        sr = dev->SR;
+        if( sr & SR_RXNE ){
+            c = GET_DR(dev);
+        }else{
+            return 0;
         }
     }
 }
@@ -257,7 +262,7 @@ static void
 _dma_enable_read(struct SPIInfo *ii){
     SPI_TypeDef *dev = ii->addr;
 
-    SPI_CRUMB("en-dma/r", 0, 0);
+    trace_crumb0("spi", "en-dma/r");
     // rx dma to buffer; tx dummy
     _dma_conf( ii->rxdma, (char*)& dev->DR, ii->msg->data, ii->msg->dlen, DMACCR_MINC );
     _dma_conf( ii->txdma, (char*)& dev->DR, &dma_idle_source, 0, DMACCR_DIR_M2P );
@@ -269,7 +274,7 @@ static void
 _dma_enable_write(struct SPIInfo *ii){
     SPI_TypeDef *dev = ii->addr;
 
-    SPI_CRUMB("en-dma/w", 0, 0);
+    trace_crumb0("spi", "en-dma/w");
     // tx dma from buffer, rx discard
     _dma_conf( ii->txdma, (char*)& dev->DR, ii->msg->data, ii->msg->dlen, DMACCR_MINC | DMACCR_DIR_M2P );
     _dma_conf( ii->rxdma, (char*)& dev->DR, &dma_idle_sink, 0, 0 );
@@ -324,7 +329,7 @@ static void
 _dma_enable_read(struct SPIInfo *ii){
     SPI_TypeDef *dev = ii->addr;
 
-    SPI_CRUMB("en-dma/r", 0, 0);
+    trace_crumb0("spi", "en-dma/r");
     // rx dma to buffer; tx dummy
     _dma_isr_clear_irqs( ii->dma, ii->dmanrx );
     _dma_isr_clear_irqs( ii->dma, ii->dmantx );
@@ -338,7 +343,7 @@ static void
 _dma_enable_write(struct SPIInfo *ii){
     SPI_TypeDef *dev = ii->addr;
 
-    SPI_CRUMB("en-dma/w", 0, 0);
+    trace_crumb0("spi", "en-dma/w");
     // tx dma from buffer, rx discard
     _dma_isr_clear_irqs( ii->dma, ii->dmanrx );
     _dma_isr_clear_irqs( ii->dma, ii->dmantx );
@@ -358,7 +363,7 @@ static inline void
 _spi_enable_irq(struct SPIInfo *ii){
     SPI_TypeDef *dev = ii->addr;
 
-    SPI_CRUMB("irq-en", 0, 0);
+    trace_crumb0("spi", "irq-en");
     dev->CR2 |= CR2_TXEIE | CR2_RXNEIE;
 }
 
@@ -377,7 +382,7 @@ _spi_conf_disable(const struct SPIConf *cf, struct SPIInfo *ii){
     _disable_irq_dma(ii);
     dev->CR1  &= ~ (CR1_SPE | CR1_CRCEN);
 
-    SPI_CRUMB("spi-off", dev->SR, 0);
+    trace_crumb1("spi", "spi-off", dev->SR);
 }
 
 static void
@@ -409,7 +414,7 @@ _msg_until(struct SPIInfo *ii){
         int r = m->until(c);
 
         if( r ==  1 ){
-            SPI_CRUMB("got", c, count);
+            trace_crumb2("spi", "got", c, count);
             return 0;	// got it. done.
         }
         if( r == -1 ) break;    // error
@@ -432,7 +437,7 @@ _msg_until(struct SPIInfo *ii){
     }
 
     // failed
-    SPI_CRUMB("until-fail", ii->addr->SR, 0); // m->response, count);
+    trace_crumb1("spi", "until-fail", ii->addr->SR); // m->response, count);
     ii->state = SPI_STATE_ERROR;
     return 1;
 }
@@ -441,7 +446,7 @@ static void
 _msg_dma_wait(struct SPIInfo *ii){
     int plx;
 
-    SPI_CRUMB("msg-dma-wait", 0,0);
+    trace_crumb0("spi", "msg-dma-wait");
     while( 1 ){
         asleep( ii, ii->name );
         if( ii->state != SPI_STATE_BUSY ){
@@ -451,7 +456,7 @@ _msg_dma_wait(struct SPIInfo *ii){
         await( -1, get_time() - ii->timeout );
 
         if( ii->timeout && get_time() > ii->timeout ){
-            SPI_CRUMB("timeout", 0,0);
+            trace_crumb0("spi", "timeout");
             ii->state = SPI_STATE_ERROR;
             return;
         }
@@ -498,7 +503,7 @@ _msg_do(struct SPIInfo *ii){
     spi_msg *m = ii->msg;
     int i;
 
-    SPI_CRUMB("msg-do", m->mode, m->dlen);
+    trace_crumb2("spi", "msg-do", m->mode, m->dlen);
     proc_trace_add("spi/do", m->mode);
 
     m->response = 0;
@@ -545,14 +550,14 @@ _irq_spidma_handler(int unit, int dman, DMAC_T *dmac){
     int pos = 4 * (dman - 1);
     int isr = (ii->dma->ISR >> pos) & 0xF;
 
-    SPI_CRUMB("dma-irq", dman, isr);
+    trace_crumb2("spi", "dma-irq", dman, isr);
 
     // clear irq
     ii->dma->IFCR |= (0xF<<pos);
 
     if( isr & 8 ){
         // error - done
-        SPI_CRUMB("dma-err", 0, 0);
+        trace_crumb0("spi", "dma-err");
         _disable_irq_dma(ii);
         ii->state = SPI_STATE_ERROR;
         wakeup( ii );
@@ -562,7 +567,7 @@ _irq_spidma_handler(int unit, int dman, DMAC_T *dmac){
     if( isr & 2 ){
         // dma complete
         if( m && ((u_long)m->data == dmac->CMAR) && ! dmac->CNDTR ){
-            SPI_CRUMB("dma-done", ii->msg, 0);
+            trace_crumb1("spi", "dma-done", ii->msg);
             _disable_irq_dma(ii);
             ii->state = SPI_STATE_DMA_DONE;
             wakeup( ii );
@@ -571,11 +576,11 @@ _irq_spidma_handler(int unit, int dman, DMAC_T *dmac){
 #elif defined(DMA_TYPE_2)
 
     int isr = _dma_isr_clear_irqs( ii->dma, dman );
-    SPI_CRUMB("dma-irq", dman, isr);
+    trace_crumb2("spi", "dma-irq", dman, isr);
 
     if( isr & 8 ){
         // error - done
-        SPI_CRUMB("dma-err", 0, 0);
+        trace_crumb2("spi", "dma-err", 0, 0);
         _disable_irq_dma(ii);
         ii->state = SPI_STATE_ERROR;
         wakeup( ii );
@@ -585,7 +590,7 @@ _irq_spidma_handler(int unit, int dman, DMAC_T *dmac){
     if( isr & 0x20 ){
         // dma complete
         if( m && ((u_long)m->data == dmac->M0AR) && ! dmac->NDTR ){
-            SPI_CRUMB("dma-done", ii->msg, 0);
+            trace_crumb1("spi", "dma-done", ii->msg);
             _disable_irq_dma(ii);
             ii->state = SPI_STATE_DMA_DONE;
             wakeup( ii );
@@ -627,6 +632,97 @@ spi_set_speed(const struct SPIConf * cf, int speed){
 }
 
 int
+spi_reg_read(const struct SPIConf * cf, int reg, int n, char *dst, int timeout){
+    if( cf->unit >= N_SPI ) return -1;
+
+    struct SPIInfo *ii = spiinfo + cf->unit;
+    SPI_TypeDef *dev   = ii->addr;
+
+    if( currproc ){
+        int r = sync_tlock(&ii->lock, "spi.L", timeout);
+        if( !r ) return SPI_XFER_TIMEOUT;
+    }
+
+    // enable device, pins
+    trace_crumb1("spi", "read/start", cf->unit);
+    _spi_conf_start(cf, ii);
+    dev->CR1 |= CR1_SPE;       // go!
+
+    int plx = splproc();
+
+    _spi_drain_rx( ii->addr );
+    int x = _spi_rxtx1( ii->addr, reg );
+    trace_crumb2("spi", "tx", reg, x);
+
+    int i;
+    for(i=0; i<n; i++){
+        dst[i] = _spi_rxtx1( ii->addr, 0xFF );
+    }
+
+    trace_crumb1("spi", "spi-wait!busy", dev->SR);
+    while( dev->SR & SR_BSY ){
+        if( ii->timeout && get_time() > ii->timeout ) break;
+    }
+
+    // disable device, pins
+    _spi_conf_done(cf, ii);
+
+    trace_crumb2("spi", "done", ii->state, dev->SR);
+
+
+    ii->state = SPI_STATE_IDLE;
+    if( currproc )
+        sync_unlock( &ii->lock );
+
+    return 0;
+
+}
+
+int
+spi_write(const struct SPIConf * cf, int n, char *src, int timeout){
+    if( cf->unit >= N_SPI ) return -1;
+
+    struct SPIInfo *ii = spiinfo + cf->unit;
+    SPI_TypeDef *dev   = ii->addr;
+
+    if( currproc ){
+        int r = sync_tlock(&ii->lock, "spi.L", timeout);
+        if( !r ) return SPI_XFER_TIMEOUT;
+    }
+
+    // enable device, pins
+    trace_crumb1("spi", "write/start", cf->unit);
+    _spi_conf_start(cf, ii);
+    dev->CR1 |= CR1_SPE;       // go!
+
+    int plx = splproc();
+
+    _spi_drain_rx( ii->addr );
+
+    int i;
+    for(i=0; i<n; i++){
+        int x = _spi_rxtx1( ii->addr, src[i] );
+    }
+
+    trace_crumb1("spi", "spi-wait!busy", dev->SR);
+    while( dev->SR & SR_BSY ){
+        if( ii->timeout && get_time() > ii->timeout ) break;
+    }
+
+    // disable device, pins
+    _spi_conf_done(cf, ii);
+
+    trace_crumb1("spi", "done", ii->state);
+
+    ii->state = SPI_STATE_IDLE;
+    if( currproc )
+        sync_unlock( &ii->lock );
+
+    return 0;
+
+}
+
+int
 spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
     if( cf->unit >= N_SPI ) return -1;
     if( !nmsg ) return 0;
@@ -645,11 +741,7 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
         if( !r ) return SPI_XFER_TIMEOUT;
     }
 
-    cur_crumb = 0;
-
-#ifdef SPIVERBOSE
-    kprintf("spi xfer starting, %d msgs\n", nmsg);
-#endif
+    trace_crumb1("spi", "start", nmsg);
 
     ii->cf        = cf;
     ii->msg       = msgs;
@@ -659,7 +751,7 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
 
     // enable device, pins
     _spi_conf_start(cf, ii);
-    SPI_CRUMB("spi-on", cf->unit, 0);
+    trace_crumb1("spi", "spi-on", cf->unit);
     dev->CR1 |= CR1_SPE;       // go!
 
     while( ii->num_msg > 0 ){
@@ -667,7 +759,7 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
         _msg_do( ii );
         splx(plx);
         if( ii->state == SPI_STATE_ERROR ){
-            SPI_CRUMB("error", 0,0);
+            trace_crumb0("spi", "error");
             break;
         }
         ii->num_msg --;
@@ -679,7 +771,7 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
 
     // wait !busy ( ~ 7 bit times from the txe-irq )
     // probably finished during the time it took to get here
-    SPI_CRUMB("spi-wait!busy", dev->SR, 0);
+    trace_crumb1("spi", "spi-wait!busy", dev->SR);
     while( dev->SR & SR_BSY ){
         if( ii->timeout && get_time() > ii->timeout ) break;
     }
@@ -687,14 +779,8 @@ spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
     // disable device, pins
     _spi_conf_done(cf, ii);
 
-    SPI_CRUMB("done", ii->state, 0);
+    trace_crumb1("spi", "done", ii->state);
 
-#ifdef SPIVERBOSE
-    if( verbose || (ii->state != SPI_STATE_XFER_DONE) ){
-        kprintf("spi xfer\n");
-        _spi_dump_crumb();
-    }
-#endif
 
     int r;
     switch(ii->state){

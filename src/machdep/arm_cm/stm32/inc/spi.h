@@ -40,6 +40,9 @@ typedef struct spi_msg {
 
 extern int spi_xfer(const struct SPIConf *, int, spi_msg*, int);
 extern int spi_cf_init(const struct SPIConf *);
+extern int spi_reg_read(const struct SPIConf * cf, int, int, char *, int timeout);
+extern int spi_write(const struct SPIConf * cf, int, char *, int timeout);
+
 
 #define SPI_XFER_OK		0
 #define SPI_XFER_TIMEOUT	-1

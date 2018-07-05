@@ -16,8 +16,8 @@
 #define CR2_FRXTH_8BIT	(1<<12)
 #define CR2_DS_8BIT	(7<<8)
 
-#define PUT_DR(dev, c) (*(char*)&(dev->DR) = c)
-#define GET_DR(dev)    (*(char*)&(dev->DR))
+#define PUT_DR(dev, c) (*(volatile char*)&(dev->DR) = c)
+#define GET_DR(dev)    (*(volatile char*)&(dev->DR))
 
 
 static inline void
