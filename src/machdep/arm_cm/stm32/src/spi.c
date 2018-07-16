@@ -19,7 +19,7 @@
 #include <nvic.h>
 #include <spi_impl.h>
 
-#define TRACE
+//#define TRACE
 #include <trace.h>
 
 
@@ -632,31 +632,23 @@ spi_set_speed(const struct SPIConf * cf, int speed){
 }
 
 int
-spi_reg_read(const struct SPIConf * cf, int reg, int n, char *dst, int timeout){
+spi_reg_read_nl(const struct SPIConf * cf, int reg, int n, char *dst, int timeout){
     if( cf->unit >= N_SPI ) return -1;
 
     struct SPIInfo *ii = spiinfo + cf->unit;
     SPI_TypeDef *dev   = ii->addr;
-
-    if( currproc ){
-        int r = sync_tlock(&ii->lock, "spi.L", timeout);
-        if( !r ) return SPI_XFER_TIMEOUT;
-    }
 
     // enable device, pins
     trace_crumb1("spi", "read/start", cf->unit);
     _spi_conf_start(cf, ii);
     dev->CR1 |= CR1_SPE;       // go!
 
-    int plx = splproc();
-
-    _spi_drain_rx( ii->addr );
+    if( dev->SR & SR_RXNE ) _spi_drain_rx( ii->addr );
     int x = _spi_rxtx1( ii->addr, reg );
     trace_crumb2("spi", "tx", reg, x);
 
-    int i;
-    for(i=0; i<n; i++){
-        dst[i] = _spi_rxtx1( ii->addr, 0xFF );
+    for(; n>0; n--){
+        *dst++ = _spi_rxtx1( ii->addr, 0xFF );
     }
 
     trace_crumb1("spi", "spi-wait!busy", dev->SR);
@@ -669,6 +661,25 @@ spi_reg_read(const struct SPIConf * cf, int reg, int n, char *dst, int timeout){
 
     trace_crumb2("spi", "done", ii->state, dev->SR);
 
+    return 0;
+
+}
+
+int
+spi_reg_read(const struct SPIConf * cf, int reg, int n, char *dst, int timeout){
+    if( cf->unit >= N_SPI ) return -1;
+
+    struct SPIInfo *ii = spiinfo + cf->unit;
+    SPI_TypeDef *dev   = ii->addr;
+
+    if( currproc ){
+        int r = sync_tlock(&ii->lock, "spi.L", timeout);
+        if( !r ) return SPI_XFER_TIMEOUT;
+    }
+
+    int plx = splproc();
+    spi_reg_read_nl(cf, reg, n, dst, timeout);
+    splx(plx);
 
     ii->state = SPI_STATE_IDLE;
     if( currproc )
@@ -692,10 +703,9 @@ spi_write(const struct SPIConf * cf, int n, char *src, int timeout){
 
     // enable device, pins
     trace_crumb1("spi", "write/start", cf->unit);
+    int plx = splproc();
     _spi_conf_start(cf, ii);
     dev->CR1 |= CR1_SPE;       // go!
-
-    int plx = splproc();
 
     _spi_drain_rx( ii->addr );
 
@@ -711,6 +721,7 @@ spi_write(const struct SPIConf * cf, int n, char *src, int timeout){
 
     // disable device, pins
     _spi_conf_done(cf, ii);
+    splx(plx);
 
     trace_crumb1("spi", "done", ii->state);
 
