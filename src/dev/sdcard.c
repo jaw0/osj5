@@ -509,7 +509,7 @@ sdcard_bwrite(FILE*f, const char*d, int len, offset_t pos){
             }
 
             if(r){
-                spi_dump_crumb();
+                //spi_dump_crumb();
 
                 //r = SPI_XFER_ERROR;
                 // try again with less

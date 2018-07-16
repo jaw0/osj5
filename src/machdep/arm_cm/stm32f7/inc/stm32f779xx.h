@@ -911,20 +911,20 @@ typedef struct
   __IO uint32_t CLKCR;          /*!< SDMMClock control register,     Address offset: 0x04 */
   __IO uint32_t ARG;            /*!< SDMMC argument register,         Address offset: 0x08 */
   __IO uint32_t CMD;            /*!< SDMMC command register,          Address offset: 0x0C */
-  __I uint32_t  RESPCMD;        /*!< SDMMC command response register, Address offset: 0x10 */
-  __I uint32_t  RESP1;          /*!< SDMMC response 1 register,       Address offset: 0x14 */
-  __I uint32_t  RESP2;          /*!< SDMMC response 2 register,       Address offset: 0x18 */
-  __I uint32_t  RESP3;          /*!< SDMMC response 3 register,       Address offset: 0x1C */
-  __I uint32_t  RESP4;          /*!< SDMMC response 4 register,       Address offset: 0x20 */
+  __IO uint32_t  RESPCMD;        /*!< SDMMC command response register, Address offset: 0x10 */
+  __IO uint32_t  RESP1;          /*!< SDMMC response 1 register,       Address offset: 0x14 */
+  __IO uint32_t  RESP2;          /*!< SDMMC response 2 register,       Address offset: 0x18 */
+  __IO uint32_t  RESP3;          /*!< SDMMC response 3 register,       Address offset: 0x1C */
+  __IO uint32_t  RESP4;          /*!< SDMMC response 4 register,       Address offset: 0x20 */
   __IO uint32_t DTIMER;         /*!< SDMMC data timer register,       Address offset: 0x24 */
   __IO uint32_t DLEN;           /*!< SDMMC data length register,      Address offset: 0x28 */
   __IO uint32_t DCTRL;          /*!< SDMMC data control register,     Address offset: 0x2C */
-  __I uint32_t  DCOUNT;         /*!< SDMMC data counter register,     Address offset: 0x30 */
-  __I uint32_t  STA;            /*!< SDMMC status register,           Address offset: 0x34 */
+  __IO uint32_t  DCOUNT;         /*!< SDMMC data counter register,     Address offset: 0x30 */
+  __IO uint32_t  STA;            /*!< SDMMC status register,           Address offset: 0x34 */
   __IO uint32_t ICR;            /*!< SDMMC interrupt clear register,  Address offset: 0x38 */
   __IO uint32_t MASK;           /*!< SDMMC mask register,             Address offset: 0x3C */
   uint32_t      RESERVED0[2];   /*!< Reserved, 0x40-0x44                                  */
-  __I uint32_t  FIFOCNT;        /*!< SDMMC FIFO counter register,     Address offset: 0x48 */
+  __IO uint32_t  FIFOCNT;        /*!< SDMMC FIFO counter register,     Address offset: 0x48 */
   uint32_t      RESERVED1[13];  /*!< Reserved, 0x4C-0x7C                                  */
   __IO uint32_t FIFO;           /*!< SDMMC data FIFO register,        Address offset: 0x80 */
 } SDMMC_TypeDef;

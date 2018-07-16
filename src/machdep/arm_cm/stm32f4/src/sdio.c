@@ -16,6 +16,7 @@
 #include <nvic.h>
 #include <userint.h>
 
+
 #ifdef PLATFORM_STM32F7
 #  define SDIO SDMMC1
 #  define SDIO_IRQn SDMMC1_IRQn
@@ -202,23 +203,27 @@ sdio_cmd_none(u_long cmd, u_long arg){
     // wait
     while( !(SDIO->STA & SR_CMDSENT) ) {
         if( !--timeout ) return SR_CTIMEOUT;
+        __asm__ volatile ("nop");
     }
 
     return 0;
 }
 
-static inline int
+static int
+__attribute__ ((optimize("-O0")))
 _sdio_cmd(u_long cmd){
 
     sdio_clr_icr();
-    cmd |= (SDIO->CMD & ~0x3FFF ) | CMD_CPSMEN | cmd;
+    cmd |= (SDIO->CMD & ~0x3FFF ) | CMD_CPSMEN;
     SDIO->CMD = cmd;
 
     while( !(SDIO->STA & (SR_CMDREND | SR_CCRCFAIL | SR_CTIMEOUT)) ){
+        __asm__ volatile ("nop");
     }
 
     return SDIO->STA & (SR_CCRCFAIL | SR_CTIMEOUT);
 }
+//#pragma GCC optimize ("-O3")
 
 static int
 sdio_cmd_short(u_long cmd, u_long arg){
@@ -259,6 +264,7 @@ sdio_cmd_long(u_long cmd, u_long arg, u_long *dst){
 
     return r;
 }
+
 
 #ifdef SDIO_INIT_VERBOSE
 #  define IDBGRESP(x)    kprintf("sdio cmd %d->%d r %x sr %x res %08.8x %08.8x %08.8x %08.8x\n", x, SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1, SDIO->RESP2, SDIO->RESP3, SDIO->RESP4)
@@ -352,7 +358,6 @@ sdio_stop(void){
     int r = sdio_cmd_short( 12, 0 );
 }
 
-
 static void
 dma_clr_irq(void){
     DMA->LIFCR |= 0x3D << 22;
@@ -407,7 +412,6 @@ dma_wait_complete(void){
     SDIO->MASK &= ~SR_DATAEND;
     return DMA->LISR & ((1<<25) | (1<<22));
 }
-
 
 int
 sdio_bread(FILE*f, char*d, int len, offset_t pos){
