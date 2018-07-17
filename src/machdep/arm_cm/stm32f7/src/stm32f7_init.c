@@ -12,6 +12,7 @@
 #include <clock.h>
 
 
+#define DTCMSTART	0x20000000
 #define R_FLASHKB	((unsigned short *)(0x1FF0F442))
 #define R_UNIQUE	((unsigned long*)(0x1FF0F420))
 #define R_CPUID		((unsigned long*)(0xE0042000))
@@ -250,3 +251,20 @@ power_down(void){
 
     __asm__("wfi");
 }
+
+void
+dcache_flush(char *buf, int len){
+#ifdef DTCMSIZE
+    if( buf + len < DTCMSTART + DTCMSIZE ) return;
+#endif
+    SCB_CleanDCache_by_Addr(buf, len);
+}
+
+void
+dcache_invalidate(char *buf, int len){
+#ifdef DTCMSIZE
+    if( buf + len < DTCMSTART + DTCMSIZE ) return;
+#endif
+    SCB_InvalidateDCache_by_Addr(buf, len);
+}
+

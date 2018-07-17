@@ -330,6 +330,7 @@ _dma_enable_read(struct SPIInfo *ii){
     SPI_TypeDef *dev = ii->addr;
 
     trace_crumb0("spi", "en-dma/r");
+    dcache_flush(ii->msg->data, ii->msg->dlen);
     // rx dma to buffer; tx dummy
     _dma_isr_clear_irqs( ii->dma, ii->dmanrx );
     _dma_isr_clear_irqs( ii->dma, ii->dmantx );
@@ -344,6 +345,7 @@ _dma_enable_write(struct SPIInfo *ii){
     SPI_TypeDef *dev = ii->addr;
 
     trace_crumb0("spi", "en-dma/w");
+    dcache_flush(ii->msg->data, ii->msg->dlen);
     // tx dma from buffer, rx discard
     _dma_isr_clear_irqs( ii->dma, ii->dmanrx );
     _dma_isr_clear_irqs( ii->dma, ii->dmantx );
@@ -591,6 +593,7 @@ _irq_spidma_handler(int unit, int dman, DMAC_T *dmac){
         // dma complete
         if( m && ((u_long)m->data == dmac->M0AR) && ! dmac->NDTR ){
             trace_crumb1("spi", "dma-done", ii->msg);
+            dcache_invalidate(ii->msg->data, ii->msg->dlen);
             _disable_irq_dma(ii);
             ii->state = SPI_STATE_DMA_DONE;
             wakeup( ii );

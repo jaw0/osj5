@@ -226,3 +226,12 @@ power_down(void){
 
     __asm__("wfi");
 }
+
+
+void
+dcache_flush(void *buf, int len){
+}
+
+void
+dcache_invalidate(void *buf, int len){
+}
