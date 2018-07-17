@@ -366,6 +366,7 @@ dma_clr_irq(void){
 static void
 dma_start(u_long flags, char *dst, int len){
 
+    dcache_flush(dst, len);
     DMASTR->PAR   = (u_long) & SDIO->FIFO;
     DMASTR->M0AR  = (u_long) dst;
     DMASTR->NDTR  = len >> 2;
@@ -389,7 +390,8 @@ dma_start(u_long flags, char *dst, int len){
 }
 
 static void
-dma_stop(void){
+dma_stop(char *dst, int len){
+    dcache_invalidate(dst, len);
     DMASTR->CR &= ~(DMASCR_EN | DMASCR_TEIE | DMASCR_TCIE);
     dma_clr_irq();
 }
@@ -453,7 +455,7 @@ sdio_bread(FILE*f, char*d, int len, offset_t pos){
         //kprintf("dma %x %x\n", DMASTR->NDTR, DMA->LISR >> 22);
         //kprintf("sr %x dl %x ct %x fc %x\n", SDIO->STA, SDIO->DLEN, SDIO->DCOUNT, SDIO->FIFOCNT);
         sdio_stop();
-        dma_stop();
+        dma_stop(d, len);
 
         if( !r ){
             // all done!
@@ -554,7 +556,7 @@ sdio_bwrite(FILE*f, const char*d, int len, offset_t pos){
 
         if( len != 512 ) sdio_stop();
         r |= sdio_write_wait(ii->rca);
-        dma_stop();
+        dma_stop(d, len);
 
         if( !r ){
             // all done!
