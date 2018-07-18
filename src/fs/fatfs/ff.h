@@ -23,6 +23,7 @@ extern "C" {
 
 #include "integer.h"	/* Basic integer types */
 #include "ffconf.h"		/* FatFs configuration options */
+#include <alloc.h>
 
 #if _FATFS != _FFCONF
 #error Wrong configuration file (ffconf.h).
@@ -104,7 +105,7 @@ typedef struct {
 	DWORD	dirbase;		/* Root directory start sector (FAT32:Cluster#) */
 	DWORD	database;		/* Data start sector */
 	DWORD	winsect;		/* Current sector appearing in the win[] */
-	BYTE	win[_MAX_SS];	/* Disk access window for Directory, FAT (and Data on tiny cfg) */
+        BYTE	win[_MAX_SS] ATTR_ALIGNED;	/* Disk access window for Directory, FAT (and Data on tiny cfg) */
 } FATFS;
 
 
@@ -132,7 +133,7 @@ typedef struct {
 	UINT	lockid;			/* File lock ID (index of file semaphore table Files[]) */
 #endif
 #if !_FS_TINY
-	BYTE	buf[_MAX_SS];	/* File data read/write buffer */
+        BYTE	buf[_MAX_SS] ATTR_ALIGNED;	/* File data read/write buffer */
 #endif
 } FIL;
 

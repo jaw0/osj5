@@ -158,7 +158,7 @@ alloc(size)
     int failed;
     int plx;
 
-    if( !top ) top = HEAP_START;
+    if( !top ) top = ALIGNED((int)HEAP_START);
 
 #ifdef ALLOC_TRACE
     xprintf("alloc(%d) top %x, fl %x\n", size, top, freelist);
@@ -365,4 +365,9 @@ alloc_stats(void){
     printf("alloc top %x\n", top);
     printf("tot alloc %d\n", total_alloc);
     printf("cur alloc %d\n", curr_alloc);
+}
+
+void *
+dmabuf_alloc(int size){
+    return alloc(size);
 }

@@ -31,18 +31,17 @@
 
 
 struct FatFS {
+    FATFS	ff;
     MountEntry *me;
     int     	n;
     long long	size;
-
-    FATFS	ff;
 };
 
 struct FileData {
-    struct FatFS *ffs;
     FIL		fil;
     // buffered at time of open (for stat):
     FILINFO	info;
+    struct FatFS *ffs;
 };
 
 int fatfs_putchar(FILE*, char);
@@ -70,8 +69,7 @@ const struct io_fs fatfs_iofs = {
 };
 
 
-
-static struct FatFS fsinfo[MAXDISK];
+static struct FatFS fsinfo[MAXDISK] ATTR_ALIGNED;
 static int nfs = 0;
 
 

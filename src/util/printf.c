@@ -684,6 +684,9 @@ void fprintf(FILE *f, const char *fmt, ...){
     vprintf(fprintffnc, f, fmt, ap);
     va_end(ap);
 }
+void fprintfv(FILE *f, const char *fmt, va_list ap){
+    vprintf(fprintffnc, f, fmt, ap);
+}
 
 #endif
 /* **************************************************************** */

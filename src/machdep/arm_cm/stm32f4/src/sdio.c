@@ -422,6 +422,10 @@ sdio_bread(FILE*f, char*d, int len, offset_t pos){
 
     //kprintf("sdrd %qx %d\n", pos, len);
 
+#ifdef DMAALIGN
+    if( (int)d & 0x1F ) kprintf("sdio buf align %x %d\n", d, len);
+#endif
+
     if( ii->ishc ) pos /= 512;
 
     sync_lock(& ii->lock, "sdcard");
@@ -511,6 +515,10 @@ sdio_bwrite(FILE*f, const char*d, int len, offset_t pos){
     int tries, ret=-1, r;
 
     //kprintf("sdwr %qx %d\n", pos, len);
+
+#ifdef DMAALIGN
+    if( (int)d & 0x1F ) kprintf("sdio buf align %x %d\n", d, len);
+#endif
 
     if( ii->ishc ) pos /= 512;
 

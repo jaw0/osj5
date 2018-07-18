@@ -18,5 +18,7 @@ extern char *_heap_limit;
 
 #define ALIGNED(x)	(((x)+(ALIGNMENT-1)) & ~(ALIGNMENT-1))
 
+#define ATTR_ALIGNED	__attribute__ ((aligned(ALIGNMENT)))
+
 #endif /* __alloc_h__ */
 

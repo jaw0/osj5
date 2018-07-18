@@ -113,7 +113,7 @@ const char ident[]   = "$ident";
 const char archid[]  = "$archid";
 const char version[] =
 	"OS/J5 ($ident) $archid Release $version($number)\\n"
-	"Copyright (c) 1999-2016 Jeff Weisberg\\n"
+	"Copyright (c) 1999-2018 Jeff Weisberg\\n"
 	"Built on $date by $whoami\@$host\\n"
 	"Built in $pwd\\n";
 

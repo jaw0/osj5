@@ -3,7 +3,7 @@
 
 CLEANFILES += $(OBJS) osj5$(LINK_SUFFIX) assym.h mkassym defun.list defun.list.tmp defvar.list defvar.list.tmp defproto.h
 
-CPPFLAGS += -I. -I../../src/inc $(INCL_FLAGS)
+CPPFLAGS += -I. $(INCL_FLAGS) -I../../src/inc
 
 all: osj5$(LINK_SUFFIX)
 
