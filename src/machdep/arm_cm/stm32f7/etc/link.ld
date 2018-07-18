@@ -153,7 +153,12 @@ SECTIONS
 		_sidata = _etext;
 	} >FLASH
 
-
+    .dtcm :
+    {
+	. = ALIGN(4);
+        *(.dtcm)
+        *(.dtcm.*)
+    } >RAM
 
     /* This is the initialized data section
     The program executes knowing that the data is in the RAM

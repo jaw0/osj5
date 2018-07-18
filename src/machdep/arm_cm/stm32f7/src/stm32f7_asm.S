@@ -21,8 +21,20 @@
         .globl _estack
 _estack =      (RAMSTART + RAMSIZE)
 
-#ifdef USE_CCM
+
 /* dtcm starts at 0x2000_0000, size varies
    sram immediately follows, size varies
 */
+#ifdef USE_CCM
+# ifndef DTCMSIZE
+#  define DTCMSIZE 65536
+# endif
+#endif
+
+#ifdef DTCMSIZE
+        .globl _ccmem
+        .section .dtcm,"a",%nobits
+        .size _ccmem, DTCMSIZE
+_ccmem:
+        .space DTCMSIZE, 0
 #endif
