@@ -80,7 +80,7 @@ trace_msgf(const char *fmt, ...){
     u_char *p = (u_char*)(ti + 1);
 
     va_start(ap,fmt);
-    int l = vprintf( printffnc, &p, fmt, ap);
+    int l = vxprintf( printffnc, &p, fmt, ap);
     // remove newline
     if( logbuf[logpos + l + 2 - 1] == '\n' ) l --;
 
@@ -271,7 +271,7 @@ trace_dpy_data(struct trace_info *ti){
 static void
 trace_dpy_fdata(struct trace_info *ti){
 
-    printfv(ti->msg, ti+1);
+    vprintf(ti->msg, ti+1);
 
 }
 

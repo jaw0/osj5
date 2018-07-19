@@ -113,7 +113,7 @@ typedef float float_num_t;
 static int putfloat(int (*)(void*, char), void *, float_num_t, struct put_args);
 #endif
 
-int vprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
+int vxprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, va_list ap){
     const char *p = fmt;
     char *s;
     u_numfull_t val;
@@ -661,13 +661,13 @@ void printf(const char *fmt, ...){
     va_list ap;
 
     va_start(ap,fmt);
-    vprintf(printffnc, 0, fmt, ap);
+    vxprintf(printffnc, 0, fmt, ap);
     va_end(ap);
 }
 
-void printfv(const char *fmt, va_list ap){
+void vprintf(const char *fmt, va_list ap){
 
-    vprintf(printffnc, 0, fmt, ap);
+    vxprintf(printffnc, 0, fmt, ap);
 }
 
 /* **************************************************************** */
@@ -681,11 +681,11 @@ void fprintf(FILE *f, const char *fmt, ...){
     va_list ap;
 
     va_start(ap,fmt);
-    vprintf(fprintffnc, f, fmt, ap);
+    vxprintf(fprintffnc, f, fmt, ap);
     va_end(ap);
 }
-void fprintfv(FILE *f, const char *fmt, va_list ap){
-    vprintf(fprintffnc, f, fmt, ap);
+void vfprintf(FILE *f, const char *fmt, va_list ap){
+    vxprintf(fprintffnc, f, fmt, ap);
 }
 
 #endif
@@ -720,7 +720,7 @@ int snprintf(char *buf, int len, const char *fmt, ...){
     s.max = len;
     if(len) *buf = 0;
 
-    int r = vprintf(snprintffnc, (void*)&s, fmt, ap);
+    int r = vxprintf(snprintffnc, (void*)&s, fmt, ap);
     va_end(ap);
     return r;
 }
@@ -732,7 +732,7 @@ int vsnprintf(char *buf, int len, const char *fmt, va_list ap){
     s.pos = 0;
     s.max = len;
 
-    return vprintf(snprintffnc, (void*)&s, fmt, ap);
+    return vxprintf(snprintffnc, (void*)&s, fmt, ap);
 }
 
 int
@@ -740,7 +740,7 @@ fncprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, ...){
     va_list ap;
 
     va_start(ap, fmt);
-    int r = vprintf(ofnc, arg, fmt, ap);
+    int r = vxprintf(ofnc, arg, fmt, ap);
     va_end(ap);
     return r;
 }

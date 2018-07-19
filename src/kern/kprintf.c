@@ -179,7 +179,7 @@ kprintf(const char *fmt, ...){
 
     red_on();
     va_start(ap,fmt);
-    vprintf(kprintffnc, 0, fmt, ap);
+    vxprintf(kprintffnc, 0, fmt, ap);
     va_end(ap);
     red_off();
 }
@@ -190,12 +190,12 @@ bootmsg(const char *fmt, ...){
 
 #ifdef KBOOTQUIET
     va_start(ap,fmt);
-    vprintf(klogffnc, 0, fmt, ap);
+    vxprintf(klogffnc, 0, fmt, ap);
     va_end(ap);
 #else
     red_on();
     va_start(ap,fmt);
-    vprintf(kprintffnc, 0, fmt, ap);
+    vxprintf(kprintffnc, 0, fmt, ap);
     va_end(ap);
     red_off();
 #endif
@@ -208,7 +208,7 @@ kcprintf(const char *fmt, ...){
 
     if( console_port ) fputs(RED, console_port);
     va_start(ap,fmt);
-    vprintf(kcprintffnc, 0, fmt, ap);
+    vxprintf(kcprintffnc, 0, fmt, ap);
     if( console_port ) fputs(WHT, console_port);
 }
 
@@ -218,7 +218,7 @@ ktprintf(const char *fmt, ...){
     va_list ap;
 
     va_start(ap,fmt);
-    vprintf(ktprintffnc, 0, fmt, ap);
+    vxprintf(ktprintffnc, 0, fmt, ap);
 }
 
 void
@@ -226,7 +226,7 @@ e9printf(const char *fmt, ...){
     va_list ap;
 
     va_start(ap,fmt);
-    vprintf(kprintffnc_e9, 0, fmt, ap);
+    vxprintf(kprintffnc_e9, 0, fmt, ap);
 }
 
 void
@@ -260,7 +260,7 @@ diag(const char *file, const char *func, int line, const char *fmt, ...){
     va_start(ap,fmt);
 
     kprintf("%s:%d in %s(): ", file, line, func);
-    vprintf(kprintffnc, 0, fmt, ap);
+    vxprintf(kprintffnc, 0, fmt, ap);
 
     red_off();
 }
