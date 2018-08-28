@@ -20,7 +20,7 @@
 #include <usbd.h>
 #include <userint.h>
 
-#define TRACE
+//#define TRACE
 #include <trace.h>
 
 
@@ -88,7 +88,14 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
     /* override Vbus sense */
     otg->g.GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN | USB_OTG_GOTGCTL_BVALOVAL;
     /* activate transceiver */
-    otg->g.GCCFG = USB_OTG_GCCFG_PWRDWN;
+    otg->g.GCCFG = USB_OTG_GCCFG_PWRDWN
+#ifdef NOVBUSSENS
+        // the newer + older usb peripherals have inverse behaviour of this bit
+        | (1 << 21)  // AKA - VBDEN(newer periph) or NOVBUSSENS(older periph)
+        // NB - several other bits in this register also vary, but not used in this code
+#endif
+        ;
+
     /* restart phy */
     otg->PCGCCTL = 0;
     /* soft disconnect device */
@@ -122,7 +129,7 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
 
     bootmsg("usb otg device %s\n", name);
 
-    trace_init( 64 * 1024 ); // XXX
+    trace_init( 8 * 1024 ); // XXX
 
     return usb + i;
 }
