@@ -1456,7 +1456,8 @@ run_script(const char* file){
 void
 shell(void){
 #if defined(USE_FILESYS) & defined(MOUNT_ROOT)
-    run_script(MOUNT_ROOT "shell.rc");
+    if( !(bootflags & BOOT_NORC) )
+        run_script(MOUNT_ROOT "shell.rc");
 #endif
     fshell(0, 1);
 }

@@ -8,6 +8,7 @@
 
 #include <conf.h>
 #include <proc.h>
+#include <bootflags.h>
 
 #ifndef STANDALONE
 void
@@ -23,7 +24,8 @@ start(void){
 
 #ifdef USE_CLI
 # if defined(USE_FILESYS) & defined(MOUNT_ROOT) & defined(STARTUPFILE)
-    run_script( MOUNT_ROOT STARTUPFILE );
+    if( !(bootflags & BOOT_NORC) )
+        run_script( MOUNT_ROOT STARTUPFILE );
 # endif
 
     proc0.name = "shell";

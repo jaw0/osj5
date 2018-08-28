@@ -8,7 +8,7 @@
 #define BOOT_SINGLE	2
 #define BOOT_ALTCON	4
 #define BOOT_USEGDB	8
-
+#define BOOT_NORC	16
 
 extern unsigned long bootflags;
 
