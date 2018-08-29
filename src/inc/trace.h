@@ -32,7 +32,7 @@ extern void trace_fdata(const char *tag, const char *fmt, int n, ...);
 # define trace_crumb4(t, e, a, b, c, d)
 # define trace_data(t, e, l, d)
 # define trace_fdata(t,f,n, args...)
-
+# define trace_init()
 #endif
 
 

@@ -19,7 +19,9 @@
 #include <usbcdc.h>
 #include <userint.h>
 
-#define TRACE
+#if defined(USB_VCP_TRACE) || defined(USB_TRACE)
+# define TRACE
+#endif
 #include <trace.h>
 
 
@@ -60,7 +62,7 @@ static const usb_device_descriptor_t cdc_dev_desc ALIGN2  = {
     .bMaxPacketSize     = CONTROLSIZE,
     .idVendor           = USB_VENDOR,
     .idProduct          = USB_PRODUCT,
-    .bcdDevice          = 0x01,
+    .bcdDevice          = USB_DEVICE,
     .iManufacturer      = 1,
     .iProduct           = 2,
     .iSerialNumber      = SERIALNO_IDX,
@@ -178,8 +180,8 @@ static int  vcp_recv_setup(struct VCP*, const char *, int);
 static void maybe_tx(struct VCP* p);
 
 static const usb_wdata_descriptor_t lang_desc      ALIGN2 = { 4,  USB_DTYPE_STRING, USB_LANG_EN_US };
-static const usb_wdata_descriptor_t cdc_manuf_desc ALIGN2 = { 12, USB_DTYPE_STRING, u"OS/J5" };
-static const usb_wdata_descriptor_t cdc_prod_desc  ALIGN2 = { 14, USB_DTYPE_STRING, u"gadget"  };
+static const usb_wdata_descriptor_t cdc_manuf_desc ALIGN2 = { 12, USB_DTYPE_STRING, CONCAT(u, USB_MANUF_DESC) };
+static const usb_wdata_descriptor_t cdc_prod_desc  ALIGN2 = { 14, USB_DTYPE_STRING, CONCAT(u, USB_PROD_DESC)  };
 
 static const usbd_config_t cdc_usbd_config = {
     .cb_reset       = vcp_reset,

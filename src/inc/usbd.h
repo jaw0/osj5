@@ -12,7 +12,7 @@
 #include <usb_conf_impl.h>
 
 
-#define MAX_RESPONSE	16
+#define MAX_RESPONSE	32
 #define MAX_REQUEST	64
 #define SERIALNO_IDX	0xFE
 

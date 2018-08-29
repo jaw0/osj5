@@ -16,7 +16,9 @@
 #include <usbdef.h>
 #include <userint.h>
 
-#define TRACE
+#if defined(USBD_TRACE) || defined(USB_TRACE)
+# define TRACE
+#endif
 #include <trace.h>
 
 
@@ -107,14 +109,14 @@ usbd_serial_descr(char *buf){
     uint16_t *dst = d->wData;
     int i;
 
-    d->bLength = 14;
+    d->bLength = 18;
     d->bDescriptorType = USB_DTYPE_STRING;
 
     unsigned int sn = usb_serialnumber();
 
-    for(i=0; i<6; i++){
-        *dst ++ = serialdigits[ sn & 0x1F ];
-        sn >>= 5;
+    for(i=0; i<8; i++){
+        *dst ++ = serialdigits[ sn & 0x0F ];
+        sn >>= 4;
     }
 
     return d->bLength;

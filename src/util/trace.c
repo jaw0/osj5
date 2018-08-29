@@ -29,6 +29,10 @@ static int logmode  = 0;
 #define LRT_FDATA	3
 #define LRT_CRUMB	4
 
+#ifndef TRACE_BUFSIZE
+# define TRACE_BUFSIZE 8192
+#endif
+
 
 struct trace_info {
     const char *tag;
@@ -233,13 +237,13 @@ trace_crumb3(const char *tag, const char *evt, int d1, int d2, int d3){
 /****************************************************************/
 
 void
-trace_init(int bufsize){
+trace_init(void){
 
     if( logbuf ) return;
 
     _lock();
-    logbuf  = malloc(bufsize);
-    logsize = bufsize;
+    logbuf  = malloc(TRACE_BUFSIZE);
+    logsize = TRACE_BUFSIZE;
     _unlock();
 }
 
@@ -293,8 +297,6 @@ trace_dump(const char *filter){
     int p = 0;
     int z = logpos;
     unsigned int wh;
-
-    printf("%d> %s\n", strlen(filter), filter);
 
     for(p=0; p<z; ){
         struct trace_info *ti = (struct trace_info *)(logbuf + p);

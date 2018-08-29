@@ -11,6 +11,31 @@
 
 #define PACKED			__attribute__((packed))
 
+/****************************************************************/
+
+#ifndef USB_VENDOR
+# define USB_VENDOR 0xA791
+#endif
+
+#ifndef USB_PRODUCT
+# define USB_PRODUCT 1
+#endif
+
+#ifndef USB_DEVICE
+# define USB_DEVICE 1
+#endif
+
+#ifndef USB_MANUF_DESC
+# define USB_MANUF_DESC "OS/J5"
+#endif
+
+#ifndef USB_PROD_DESC
+# define USB_PROD_DESC "gadget"
+#endif
+
+
+/****************************************************************/
+
 #define USB_LANG_EN_US		0x0409
 
 

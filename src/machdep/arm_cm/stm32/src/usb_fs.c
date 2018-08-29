@@ -20,7 +20,9 @@
 #include <usbdef.h>
 #include <userint.h>
 
-#define TRACE
+#if defined(USB_FS_TRACE) || defined(USB_TRACE)
+#  define TRACE
+#endif
 #include <trace.h>
 
 
@@ -77,7 +79,7 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
 
     nvic_enable( USB_IRQN, IPL_DISK );
 
-    trace_init( 8 * 1024 ); // XXX
+    trace_init();
 
     bootmsg("usb device full-speed\n");
 

@@ -20,7 +20,9 @@
 #include <usbd.h>
 #include <userint.h>
 
-//#define TRACE
+#if defined(USB_OTG_TRACE) || defined(USB_TRACE)
+#  define TRACE
+#endif
 #include <trace.h>
 
 
@@ -129,7 +131,7 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
 
     bootmsg("usb otg device %s\n", name);
 
-    trace_init( 8 * 1024 ); // XXX
+    trace_init();
 
     return usb + i;
 }

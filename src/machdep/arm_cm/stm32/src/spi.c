@@ -19,7 +19,9 @@
 #include <nvic.h>
 #include <spi_impl.h>
 
-//#define TRACE
+#ifdef SPI_TRACE
+# define TRACE
+#endif
 #include <trace.h>
 
 
