@@ -102,17 +102,28 @@ usbd_configure(usbd_t *u, const usbd_config_t *cf, const void *cbarg){
 
 /****************************************************************/
 
-static const char serialdigits[] = "0123456789abcdefghjkmnpqrstvwxyz";
+/* USB MSC requires:
+   4.1.1 The serial number shall contain at least 12 valid digits
+   4.1.2 The following table defines the valid characters that the device shall use for the serial number
+         [ 0-9, A-F ]
+*/
+
+static const char serialdigits[] = "0123456789ABCDEF"; // 0123456789abcdefghjkmnpqrstvwxyz
 static int
 usbd_serial_descr(char *buf){
     usb_wdata_descriptor_t *d = buf;
     uint16_t *dst = d->wData;
     int i;
 
-    d->bLength = 18;
+    d->bLength = 26;
     d->bDescriptorType = USB_DTYPE_STRING;
 
     unsigned int sn = usb_serialnumber();
+
+    *dst ++ = 'C';
+    *dst ++ = '4';
+    *dst ++ = '1';
+    *dst ++ = '1';
 
     for(i=0; i<8; i++){
         *dst ++ = serialdigits[ sn & 0x0F ];
