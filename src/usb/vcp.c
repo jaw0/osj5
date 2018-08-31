@@ -180,8 +180,10 @@ static int  vcp_recv_setup(struct VCP*, const char *, int);
 static void maybe_tx(struct VCP* p);
 
 static const usb_wdata_descriptor_t lang_desc      ALIGN2 = { 4,  USB_DTYPE_STRING, USB_LANG_EN_US };
-static const usb_wdata_descriptor_t cdc_manuf_desc ALIGN2 = { 12, USB_DTYPE_STRING, CONCAT(u, USB_MANUF_DESC) };
-static const usb_wdata_descriptor_t cdc_prod_desc  ALIGN2 = { 14, USB_DTYPE_STRING, CONCAT(u, USB_PROD_DESC)  };
+static const usb_wdata_descriptor_t cdc_manuf_desc ALIGN2 = { 2 + 2*sizeof(USB_MANUF_DESC), USB_DTYPE_STRING,
+                                                              CONCAT(u, USB_MANUF_DESC) };
+static const usb_wdata_descriptor_t cdc_prod_desc  ALIGN2 = { 2 + 2 * sizeof(USB_PROD_DESC), USB_DTYPE_STRING,
+                                                              CONCAT(u, USB_PROD_DESC)  };
 
 static const usbd_config_t cdc_usbd_config = {
     .cb_reset       = vcp_reset,
@@ -263,6 +265,7 @@ vcp_init(struct Device_Conf *dev){
 
     usbd_t *u = usbd_get(0);
     v->usbd = u;
+    trace_init();
     usbd_configure( u, &cdc_usbd_config, vcom + i );
     usb_connect( u );
 
@@ -270,6 +273,17 @@ vcp_init(struct Device_Conf *dev){
 
     vcp0_port = &v->file;
     return (int) &v->file;
+
+}
+
+void
+vcp_reconnect(int i){
+    struct VCP *v = vcom + i;
+
+    usbd_t *u = v->usbd;
+
+    usbd_configure( u, &cdc_usbd_config, v );
+    usb_connect( u );
 
 }
 

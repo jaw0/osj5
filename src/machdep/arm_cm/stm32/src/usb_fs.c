@@ -86,9 +86,9 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
     return usb + i;
 }
 
-int
+uint64_t
 usb_serialnumber(void){
-    return djb2_hash(R_UNIQUE, 12);
+    return fnv64_hash(R_UNIQUE, 12);
 }
 
 int

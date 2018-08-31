@@ -73,6 +73,8 @@ usbd_init(struct Device_Conf *dev){
     bzero(usbd+i, sizeof(usbd_t));
     void *usb = usb_init(dev, usbd + i);
 
+    trace_init();
+
     usbd[i].dev = usb;
     usbd[i].cf = &x_test_config;	// XXX
 
@@ -108,24 +110,19 @@ usbd_configure(usbd_t *u, const usbd_config_t *cf, const void *cbarg){
          [ 0-9, A-F ]
 */
 
-static const char serialdigits[] = "0123456789ABCDEF"; // 0123456789abcdefghjkmnpqrstvwxyz
+static const char serialdigits[] = "0123456789ABCDEF";
 static int
 usbd_serial_descr(char *buf){
     usb_wdata_descriptor_t *d = buf;
     uint16_t *dst = d->wData;
     int i;
 
-    d->bLength = 26;
+    d->bLength = 12 * 2 + 2;
     d->bDescriptorType = USB_DTYPE_STRING;
 
-    unsigned int sn = usb_serialnumber();
+    uint64_t sn = usb_serialnumber();
 
-    *dst ++ = 'C';
-    *dst ++ = '4';
-    *dst ++ = '1';
-    *dst ++ = '1';
-
-    for(i=0; i<8; i++){
+    for(i=0; i<12; i++){
         *dst ++ = serialdigits[ sn & 0x0F ];
         sn >>= 4;
     }
@@ -396,9 +393,11 @@ usbd_send_more(usbd_t *u, int ep){
 
         u->epd[epa].wbuf += l;
         u->epd[epa].wlen -= l;
+
+        if( l == 0 ) u->epd[epa].wzlp = 0; // zlp has been sent
     }
 
-    if( u->epd[epa].wlen <= 0 ){
+    if( u->epd[epa].wlen <= 0 && ! u->epd[epa].wzlp ){
         u->epd[epa].wpending = 0;
     }
 }

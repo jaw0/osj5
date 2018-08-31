@@ -30,3 +30,16 @@ fnv1a_hash(const unsigned char *src, int len){
     return hash;
 }
 
+unsigned long long
+fnv64_hash(const unsigned char *src, int len){
+    unsigned long long hash = 14695981039346656037ULL;
+    int c;
+
+    for( ; len; len--){
+        hash ^= *src++;
+        hash *= 1099511628211ULL;
+    }
+
+    return hash;
+}
+

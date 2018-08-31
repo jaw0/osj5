@@ -156,21 +156,23 @@ set_pma_tx(usbotg_t *u, int epa, int addr, int cnt){
     trace_crumb2("usbotg", "pma", epa, addr);
 }
 
-int
+uint64_t
 usb_serialnumber(void){
-    return djb2_hash(R_UNIQUE, 12);
+    return fnv64_hash(R_UNIQUE, 12);
 }
 
 int
 usb_connect(usbd_t *u){
     usbotg_t * usb = u->dev;
     usb->otg->d.DCTL &= ~USB_OTG_DCTL_SDIS;
+    u->curr_state = USBD_STATE_CONNECT;
 }
 
 int
 usb_disconnect(usbd_t *u){
     usbotg_t * usb = u->dev;
     usb->otg->d.DCTL |= USB_OTG_DCTL_SDIS;
+    u->curr_state = USBD_STATE_INACTIVE;
 }
 
 void

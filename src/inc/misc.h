@@ -23,6 +23,8 @@ extern const char ident[];
 extern const char archid[];
 extern const char version[];
 
+extern uint64_t fnv64_hash(const unsigned char *, int);
+
 
 #endif /* __misc_h__ */
 

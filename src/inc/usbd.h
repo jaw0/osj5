@@ -93,7 +93,7 @@ extern void usb_stall(usbd_t*, int);
 extern int  usb_isstalled(usbd_t*, int);
 extern int  usb_config_ep(usbd_t *, int, int, int);
 extern int  usb_send(usbd_t *, int, const char *, int);
-extern int  usb_serialnumber(void);
+extern uint64_t  usb_serialnumber(void);
 
 
 // provided by usbd.c
