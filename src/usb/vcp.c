@@ -42,14 +42,6 @@
 #endif
 
 
-#ifndef USB_VENDOR
-# define USB_VENDOR 0xA791
-#endif
-
-#ifndef USB_PRODUCT
-# define USB_PRODUCT 1
-#endif
-
 #define ALIGN2 __attribute__ ((aligned (2)))
 
 static const usb_device_descriptor_t cdc_dev_desc ALIGN2  = {
