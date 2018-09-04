@@ -18,6 +18,7 @@ kern:           libc/strlen.c libc/strncasecmp.c libc/strncat.c libc/strncmp.c l
 flash:          dev/flash.c
 console:        dev/console.c
 # hd:           dev/ide.c dev/disk.c
+romdisk:        dev/romdisk.c
 udsk:           dev/unixdisk.c dev/disk.c
 ssd1306:        dev/ssd1306.cc util/gfxdpy.cc
 ssd1331:        dev/ssd1331.cc util/gfxdpy.cc
@@ -40,6 +41,8 @@ beep:           util/beep.c
 usbd:           usb/usbd.c
 vcp:            usb/vcp.c
 msc:            usb/msc.c
+vcpmsc:         usb/vcpmsc.c
+
 
 
 

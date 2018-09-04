@@ -164,11 +164,11 @@ static const struct cdc_config cdc_config ALIGN2 = {
 
 
 struct VCP;
-static void vcp_tx_complete(struct VCP *, int);
-static void vcp_recv_chars(struct VCP*, int, int);
-static void vcp_reset(struct VCP *);
-static void vcp_configure(struct VCP *);
-static int  vcp_recv_setup(struct VCP*, const char *, int);
+void vcp_tx_complete(struct VCP *, int);
+void vcp_recv_chars(struct VCP*, int, int);
+void vcp_reset(struct VCP *);
+void vcp_configure(struct VCP *);
+int  vcp_recv_setup(struct VCP*, const char *, int);
 static void maybe_tx(struct VCP* p);
 
 static const usb_wdata_descriptor_t lang_desc      ALIGN2 = { 4,  USB_DTYPE_STRING, USB_LANG_EN_US };
@@ -258,8 +258,11 @@ vcp_init(struct Device_Conf *dev){
     usbd_t *u = usbd_get(0);
     v->usbd = u;
     trace_init();
+
+#ifndef USE_VCPMSC
     usbd_configure( u, &cdc_usbd_config, vcom + i );
     usb_connect( u );
+#endif
 
     bootmsg("%s cdc/vcp on usb\n", dev->name);
 
@@ -279,6 +282,12 @@ vcp_reconnect(int i){
 
 }
 
+struct VCP *
+vcp_get(int i){
+    struct VCP *v = vcom + i;
+    return v;
+}
+
 static void
 chkq(struct queue *q){
 
@@ -287,12 +296,12 @@ chkq(struct queue *q){
     kprintf("* %d %d %d\n", q->len, q->head, q->tail);
 }
 
-static void
+void
 vcp_reset(struct VCP *p){
     p->ready = 0;
 }
 
-static void
+void
 vcp_configure(struct VCP *p){
 
     usb_config_ep( p->usbd, CDC_RXD_EP, UE_BULK, CDC_SIZE );
@@ -303,7 +312,7 @@ vcp_configure(struct VCP *p){
     p->ready = 0;
 }
 
-static int
+int
 vcp_recv_setup(struct VCP *p, const char *buf, int len){
     usb_device_request_t *req = buf;
 
@@ -368,7 +377,7 @@ maybe_tx(struct VCP* p){
 }
 
 static void maybe_dequeue(struct VCP*);
-static void
+void
 vcp_tx_complete(struct VCP *p, int ep){
 
     p->tblen = 0;
@@ -469,7 +478,7 @@ vcp_getchar(FILE *f){
     return ch;
 }
 
-static void
+void
 vcp_recv_chars(struct VCP *p, int ep, int len){
 
     // copy to buffer

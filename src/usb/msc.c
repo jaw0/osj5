@@ -146,11 +146,11 @@ static const uint8_t msc_mode10_res[] = {0,6,0,0,0,0,0,0};
 
 
 struct MSC;
-static void msc_reset(struct MSC *);
-static void msc_configure(struct MSC *);
-static void msc_tx_complete(struct MSC *, int);
-static void msc_recv_data(struct MSC*, int, int);
-static int  msc_recv_setup(struct MSC*, const char *, int);
+void msc_reset(struct MSC *);
+void msc_configure(struct MSC *);
+void msc_tx_complete(struct MSC *, int);
+void msc_recv_data(struct MSC*, int, int);
+int  msc_recv_setup(struct MSC*, const char *, int);
 static void msc_run(void);
 
 static const usbd_config_t msc_usbd_config = {
@@ -212,15 +212,30 @@ msc_init(struct Device_Conf *dev){
 
 }
 
+void
+msc_reconnect(int n){
+    struct MSC *v = mscd + n;
+
+    usbd_t *u = v->usbd;
+
+    usbd_configure( u, &msc_usbd_config, v );
+    usb_connect( u );
+}
+
+struct MSC *
+msc_get(int i){
+    struct MSC *v = mscd + i;
+    return v;
+}
+
 void *
 msc_set_conf(int n, int maxlun, usb_msc_iocf_t* cf){
-
-    if( n > 0 ) return 0;
     struct MSC *v = mscd + n;
 
     v->maxlun = maxlun;
     v->conf   = cf;
 
+    trace_crumb1("msc", "setconf", maxlun);
     return v;
 }
 
@@ -242,13 +257,13 @@ msc_sense(struct MSC *p, int key, int asc, int ascq){
     p->sense.ascq = ascq;
 }
 
-static void
+void
 msc_reset(struct MSC *p){
     trace_crumb0("msc", "reset");
     p->state = STATE_READY;
 }
 
-static void
+void
 msc_configure(struct MSC *p){
     trace_crumb0("msc", "conf");
     usb_config_ep( p->usbd, MSC_RXD_EP, UE_BULK, MSC_SIZE );
@@ -257,7 +272,7 @@ msc_configure(struct MSC *p){
 }
 
 
-static int
+int
 msc_recv_setup(struct MSC *p, const char *buf, int len){
     usb_device_request_t *req = buf;
 
@@ -600,6 +615,7 @@ msc_process_scsi(struct MSC *p){
         return msc_scsi_write10(p);
 
     default:
+        play(4, "bbb");
         msc_sense(p, SKEY_ILLEGAL_REQUEST, SASC_INVALID_CDB, 0);
         return -1;
 
@@ -668,7 +684,7 @@ msc_bottom_proccess_cbw(struct MSC *p){
 }
 
 
-static void
+void
 msc_tx_complete(struct MSC *p, int ep){
 
     trace_crumb1("msc", "tx/c", ep);
@@ -687,7 +703,7 @@ msc_tx_complete(struct MSC *p, int ep){
     }
 }
 
-static void
+void
 msc_recv_data(struct MSC *p, int ep, int len){
     int l=0;
 
@@ -708,7 +724,7 @@ msc_recv_data(struct MSC *p, int ep, int len){
             usb_stall( p->usbd, MSC_RXD_EP );
             usb_stall( p->usbd, MSC_TXD_EP );
             p->state = STATE_READY;
-            return; // QQQ - botched?
+            return; // botched
         }
 
         // process data
@@ -719,7 +735,7 @@ msc_recv_data(struct MSC *p, int ep, int len){
             usb_stall( p->usbd, MSC_RXD_EP );
             usb_stall( p->usbd, MSC_TXD_EP );
             p->state = STATE_READY;
-            return; // QQQ - botched?
+            return; // botched
         }
 
         p->datalen -= l;
@@ -756,32 +772,16 @@ msc_run(void){
         tsleep( p, -1, "usb/i", 0 );
         msc_bottom_proccess_cbw( p );
     }
-
 }
-
 
 /****************************************************************/
-
-void
-usb_vcp_restore(const char *msg){
-
-    trace_crumb0("XXX", msg);
-    usbd_t *u = usbd_get(0);
-    usb_disconnect( u );
-    mscd[0].state = STATE_READY;
-    sleep(1);
-    vcp_reconnect(0);
-}
-
-
 static usb_msc_iocf_t usbconf[2];
 
 static int is_ready(void){ return 1; }
 static int not_ready(void){ return 0; }
 static void active_blink(void){ set_led1_rgb(0xFFFF00); }
 
-DEFUN(msctest, "msc test")
-{
+void msc_test(void){
 
     usbd_t *u = usbd_get(0);
 
@@ -796,25 +796,27 @@ DEFUN(msctest, "msc test")
         return 0;
     }
 
+    // disconnect vcp (if connected) + connect msc
+    usb_disconnect( u );
     msc_set_conf(0, 0, usbconf);
 
-    usb_disconnect( u );
     sleep(1);
     trace_reset();
     trace_crumb0("msc", "start");
 
     set_blinky(3);
-    usbd_configure( u, &msc_usbd_config, mscd );
-    usb_connect( u );
+    msc_reconnect(0);
 
+    // run msc until button press
     while( ! get_button() ){
         usleep(1000);
     }
     play(4, "a4b4b4");
     sleep(1);
 
-
     trace_crumb0("msc", "/start");
+
+    // disconnect msc, reconnect vcp
     usb_disconnect( u );
     sleep(1);
     vcp_reconnect(0);
@@ -822,4 +824,9 @@ DEFUN(msctest, "msc test")
 
 
     return 0;
+}
+
+DEFUN(msctest, "msc test")
+{
+    msc_test();
 }
