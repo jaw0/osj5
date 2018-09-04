@@ -9,12 +9,13 @@
 #ifndef __usbmsc_h__
 #define __usbmsc_h__
 
-struct usb_msc_io {
-    FILE *fio;
+typedef struct {
+    int8_t  readonly;
+    FILE   *fio;
     int (*ready)(void);
-};
-
-extern void msc_run(int, struct usb_msc_io*);
+    void (*activity)(void);
+    char *prod;
+} usb_msc_iocf_t;
 
 
 #define USB_CLASS_MSC                   0x08
@@ -65,7 +66,21 @@ typedef struct {
     char    manuf[8];
     char    prod[16];
     char    rev[4];
-} umass_bbb_inquiry_t;
+} PACKED umass_bbb_inquiry_t;
+
+typedef struct {
+    uint8_t  cmd;
+    uint8_t  _resv1;
+    uint32_t lba;
+    uint8_t  _resv2;
+    uint16_t len;
+} PACKED umass_bbb_rw10_t;
+
+typedef struct {
+
+
+} PACKED umass_bbb_write10_t;
+
 
 #define SCSI_TEST_UNIT_READY			    0x00
 #define SCSI_FORMAT_UNIT                            0x04

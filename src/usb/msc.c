@@ -24,22 +24,16 @@
 #endif
 #include <trace.h>
 
+#define MSC_BUFSIZE	16384			// must be a multiple of 512
+
 #define MSC_SIZE    64
 #define MSC_RXD_EP  0x03
 #define MSC_TXD_EP  0x83
-
-#define MAXLUN		0
 
 #define STATE_READY	0
 #define STATE_DATARX	1
 #define STATE_DATATX	2
 #define STATE_STATUS	3
-#define STATE_WAIT	4
-
-#define OP_STATUS	0
-#define OP_CAPACITY	1
-#define OP_READ		2
-#define OP_WRITE	3
 
 
 #ifndef USB_MSC_VENDOR
@@ -50,7 +44,13 @@
 # define USB_MSC_PRODUCT USB_PRODUCT
 #endif
 
+#ifndef USB_MSC_DEVICE
+# define USB_MSC_DEVICE USB_DEVICE
+#endif
 
+
+#define REV32(x) __builtin_bswap32(x)
+#define REV16(x) __builtin_bswap16(x)
 #define ALIGN2 __attribute__ ((aligned (2)))
 
 static const usb_device_descriptor_t msc_dev_desc ALIGN2  = {
@@ -61,21 +61,14 @@ static const usb_device_descriptor_t msc_dev_desc ALIGN2  = {
     .bDeviceSubClass    = 0,
     .bDeviceProtocol    = 0,
     .bMaxPacketSize     = CONTROLSIZE,
-    .idVendor           = USB_VENDOR,
-    .idProduct          = USB_PRODUCT,
-    .bcdDevice          = USB_DEVICE,
+    .idVendor           = USB_MSC_VENDOR,
+    .idProduct          = USB_MSC_PRODUCT,
+    .bcdDevice          = USB_MSC_DEVICE,
     .iManufacturer      = 1,
     .iProduct           = 2,
     .iSerialNumber      = SERIALNO_IDX,
     .bNumConfigurations = 1,
 };
-
-/* sandisk:
-   09 02 20 00 01 01 00 80 64	// conf desc
-   09 04 00 00 02 08 06 50 00	// interface desc
-   07 05 81 02 00 02 00		// in  ep desc
-   07 05 02 02 00 02 01		// out ep desc
-*/
 
 struct msc_config {
     usb_config_descriptor_t     config;
@@ -145,7 +138,7 @@ static const umass_bbb_inquiry_t msc_inquiry_res = {
     },
     "OSJ5    ",		// len=8,  space padded
     "Mass Storage    ", // len=16, space padded
-    "0000"		// len=4
+    "0001"		// len=4
 };
 
 static const uint8_t msc_mode6_res[]  = {0,0,0,0,0,0,0,0};
@@ -158,6 +151,7 @@ static void msc_configure(struct MSC *);
 static void msc_tx_complete(struct MSC *, int);
 static void msc_recv_data(struct MSC*, int, int);
 static int  msc_recv_setup(struct MSC*, const char *, int);
+static void msc_run(void);
 
 static const usbd_config_t msc_usbd_config = {
     .cb_reset       = msc_reset,
@@ -177,47 +171,23 @@ static const usbd_config_t msc_usbd_config = {
 };
 
 
-
-static int msc_putchar(FILE*, char);
-static int msc_getchar(FILE*);
-static int msc_noop(FILE*);
-static int msc_status(FILE*);
-
-const static struct io_fs msc_port_fs = {
-    msc_putchar,
-    msc_getchar,
-    0,
-    0,
-    msc_status,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0
-};
-
 struct Sense {
     uint8_t key, asc, ascq;
 };
 
-#define MSC_BUF_SIZE	16384			// must be a multiple of 512
 
 static struct MSC {
-    FILE             file;
     usbd_t          *usbd;
+    usb_msc_iocf_t  *conf;
     int8_t           state;
+    int8_t           maxlun;
     int              datalen;
-    int		     status;			// deferred status from async command
     struct Sense     sense;
     umass_bbb_cbw_t  cbw;
     umass_bbb_csw_t  csw;
-    char             resbuf[64];		// for results
-    char	     xbuf[MSC_BUFSIZE]; 	// QQQ
-
-    int bufpos;
-    int buffoff;
-
+    char             resbuf[64]; // for results
+    char             xbuf[MSC_BUFSIZE];
+    int              bufpos;
 
 } mscd[ 1 ];
 
@@ -227,6 +197,8 @@ msc_init(struct Device_Conf *dev){
 
     struct MSC *v = mscd + 0;
 
+    bzero(v, sizeof(struct MSC));
+
     usbd_t *u = usbd_get(0);
     v->usbd = u;
     v->state = STATE_READY;
@@ -234,9 +206,33 @@ msc_init(struct Device_Conf *dev){
     //usb_connect( u );
 
     bootmsg("%s msc/scsi on usb\n", dev->name);
+    start_proc( 1024, msc_run, "usbmsc" );
 
-    return 0; // (int) &v->file;
+    return 0;
 
+}
+
+void *
+msc_set_conf(int n, int maxlun, usb_msc_iocf_t* cf){
+
+    if( n > 0 ) return 0;
+    struct MSC *v = mscd + n;
+
+    v->maxlun = maxlun;
+    v->conf   = cf;
+
+    return v;
+}
+
+
+static usb_msc_iocf_t*
+lun_conf(struct MSC *p){
+
+    if( !p->conf ) return 0;
+    int lun = p->cbw.bCBWLUN;
+    if( lun > p->maxlun ) return 0;
+
+    return p->conf + lun;
 }
 
 static inline void
@@ -250,17 +246,14 @@ static void
 msc_reset(struct MSC *p){
     trace_crumb0("msc", "reset");
     p->state = STATE_READY;
-
 }
 
 static void
 msc_configure(struct MSC *p){
-
     trace_crumb0("msc", "conf");
     usb_config_ep( p->usbd, MSC_RXD_EP, UE_BULK, MSC_SIZE );
     usb_config_ep( p->usbd, MSC_TXD_EP, UE_BULK, MSC_SIZE );
     p->state = STATE_READY;
-
 }
 
 
@@ -280,7 +273,7 @@ msc_recv_setup(struct MSC *p, const char *buf, int len){
 
     case UR_BBB_GET_MAX_LUN:
         trace_crumb0("msc", "get/maxlun");
-        usbd_reply(p->usbd, 0, "\0", 1, req->wLength);
+        usbd_reply(p->usbd, 0, & p->maxlun, 1, req->wLength);
         return 1;
 
     }
@@ -291,6 +284,15 @@ msc_recv_setup(struct MSC *p, const char *buf, int len){
     return 0;
 }
 
+static int
+msc_send_result(struct MSC *p, char *buf, int len){
+
+    p->state = STATE_DATATX;
+    usbd_write(p->usbd, MSC_TXD_EP, buf, len, 0);
+    tsleep( p, -1, "usb/txc", 10000 );
+    return 0;
+    // RSN - handle send failed
+}
 
 static void
 msc_send_csw(struct MSC *p, int status){
@@ -306,22 +308,75 @@ msc_send_csw(struct MSC *p, int status){
     usbd_write(p->usbd, MSC_TXD_EP, &p->csw, sizeof(p->csw), 0);
 }
 
+/****************************************************************/
+
+static int
+msc_send_unitready(struct MSC *p){
+
+    usb_msc_iocf_t *cf = lun_conf(p);
+    if( !cf || !cf->ready() ){
+        msc_sense(p, SKEY_NOT_READY, SASC_MEDIUM_NOT_PRESENT, 0);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int
 msc_send_inquiry(struct MSC *p){
-    usbd_write(p->usbd, MSC_TXD_EP, &msc_inquiry_res, sizeof(msc_inquiry_res), 0);
-    return 0;
+
+    usb_msc_iocf_t *cf = lun_conf(p);
+    if( !cf || !cf->ready() ){
+        msc_sense(p, SKEY_NOT_READY, SASC_MEDIUM_NOT_PRESENT, 0);
+        return -1;
+    }
+
+    memcpy(p->resbuf, &msc_inquiry_res, sizeof(msc_inquiry_res));
+
+    if( cf->prod ){
+        // copy name, space pad
+        int i;
+        umass_bbb_inquiry_t *in = (umass_bbb_inquiry_t *)p->resbuf;
+        for(i=0; i<16; i++) in->prod[i] = ' ';
+        strncpy(in->prod, cf->prod, 16);
+    }
+
+    return msc_send_result(p, p->resbuf, sizeof(msc_inquiry_res));
 }
 
 static int
 msc_send_mode6(struct MSC *p){
-    usbd_write(p->usbd, MSC_TXD_EP, msc_mode6_res, sizeof(msc_mode6_res), 0);
-    return 0;
+
+    usb_msc_iocf_t *cf = lun_conf(p);
+    if( !cf || !cf->ready() ){
+        msc_sense(p, SKEY_NOT_READY, SASC_MEDIUM_NOT_PRESENT, 0);
+        return -1;
+    }
+
+    memcpy(p->resbuf, msc_mode6_res, sizeof(msc_mode6_res));
+
+    if( cf->readonly )
+        p->resbuf[2] |= 0x80;
+
+    return msc_send_result(p, p->resbuf, sizeof(msc_mode6_res) );
 }
 
 static int
 msc_send_mode10(struct MSC *p){
-    usbd_write(p->usbd, MSC_TXD_EP, msc_mode10_res, sizeof(msc_mode10_res), 0);
-    return 0;
+
+    usb_msc_iocf_t *cf = lun_conf(p);
+    if( !cf || !cf->ready() ){
+        msc_sense(p, SKEY_NOT_READY, SASC_MEDIUM_NOT_PRESENT, 0);
+        return -1;
+    }
+
+    memcpy(p->resbuf, msc_mode10_res, sizeof(msc_mode10_res));
+
+    if( cf->readonly )
+        p->resbuf[3] |= 0x80;
+
+    return msc_send_result(p, p->resbuf, sizeof(msc_mode10_res) );
+
 }
 
 static int
@@ -335,35 +390,172 @@ msc_send_sense(struct MSC *p){
     b[12] = p->sense.asc;
     b[13] = p->sense.ascq;
 
-    usbd_write(p->usbd, MSC_TXD_EP, b, 18, 0);
-    return 0;
+    return msc_send_result(p, b, 18);
 }
 
 static int
 msc_send_capacity10(struct MSC *p){
     uint32_t *b = p->resbuf;
+    struct stat s;
 
-    b[0] = 1024 * 1024;	// XXX
-    b[1] = 512;
+    usb_msc_iocf_t *cf = lun_conf(p);
+    if( !cf || !cf->ready() ){
+        msc_sense(p, SKEY_NOT_READY, SASC_MEDIUM_NOT_PRESENT, 0);
+        trace_crumb0("msc", "capac!cf");
+        return -1;
+    }
 
+    fstat( cf->fio, &s );
+
+    bzero(b, 8);
+    uint32_t size = (s.size >> 9) - 1;
+
+    b[0] = REV32(size);
+    b[1] = REV32(512);
+
+    trace_crumb1("msc", "capacity", b[0]);
+
+    p->state = STATE_DATATX;
     usbd_write(p->usbd, MSC_TXD_EP, b, 8, 0);
+    tsleep( p, -1, "usb/txc", 10000 );
     return 0;
 }
 
 static int
 msc_scsi_read10(struct MSC *p){
 
-    // XXX
-    bzero(p->xbuf, 512);
-    usbd_write(p->usbd, MSC_TXD_EP, p->xbuf, 512, 1);
-    return 0;
+    usb_msc_iocf_t *cf = lun_conf(p);
+    umass_bbb_rw10_t *cbd = (umass_bbb_rw10_t*)p->cbw.CBWCDB;
+
+    if( !cf || !cf->ready() ){
+        msc_sense(p, SKEY_NOT_READY, SASC_MEDIUM_NOT_PRESENT, 0);
+        trace_crumb0("msc", "read!cf");
+        return -1;
+    }
+
+    int totlen = p->cbw.dCBWDataTransferLength;
+    int cbdlen = REV16(cbd->len) << 9;
+
+    if( totlen != cbdlen ){
+        msc_sense(p, SKEY_ILLEGAL_REQUEST, SASC_INVALID_CDB, 0);
+        trace_crumb2("msc", "read!len", totlen, cbd->len);
+        return -1;
+    }
+
+    int err = 0;
+    offset_t pos = REV32(cbd->lba) << 9;
+    p->state = STATE_DATATX;
+
+    trace_crumb3("msc", "read", (int)pos, totlen, cbdlen );
+
+    while( totlen > 0 ){
+        // read from device, send to usb
+
+        if( cf->activity ) cf->activity();
+
+        int len = totlen;
+        if( len > MSC_BUFSIZE ) len = MSC_BUFSIZE;
+
+        int r = fbread( cf->fio, p->xbuf, len, pos );
+
+        if( r <= 0 ){
+            trace_crumb3("msc", "readerr", pos, len, r);
+            err = 1;
+            bzero(p->xbuf, len);
+        }
+
+        usbd_write(p->usbd, MSC_TXD_EP, p->xbuf, len, 0);
+        tsleep( p, -1, "usb/txc", 10000 );
+        if( p->state != STATE_DATATX ) return 0;
+
+        totlen -= len;
+        pos    += len;
+    }
+
+    if( err )
+        msc_sense(p, SKEY_MEDIUM_ERROR, SASC_UNRECOVERED_READ_ERROR, 0);
+
+    return err;
 }
 
 static int
 msc_scsi_write10(struct MSC *p){
+    usb_msc_iocf_t *cf = lun_conf(p);
+    umass_bbb_rw10_t *cbd = (umass_bbb_rw10_t*)p->cbw.CBWCDB;
 
-    return 0;
+    if( !cf || !cf->ready() ){
+        msc_sense(p, SKEY_NOT_READY, SASC_MEDIUM_NOT_PRESENT, 0);
+        trace_crumb0("msc", "write!cf");
+        return -1;
+    }
+
+    if( cf->readonly ){
+        msc_sense(p, SKEY_MEDIUM_ERROR, SASC_WRITE_PROTECTED, 0);
+        trace_crumb0("msc", "write/ro");
+        return -1;
+    }
+
+    int totlen = p->cbw.dCBWDataTransferLength;
+    int cbdlen = REV16(cbd->len) << 9;
+
+    if( totlen != cbdlen ){
+        msc_sense(p, SKEY_ILLEGAL_REQUEST, SASC_INVALID_CDB, 0);
+        trace_crumb2("msc", "write!len", totlen, cbd->len);
+        return -1;
+    }
+
+    int err = 0;
+    offset_t pos = REV32(cbd->lba) << 9;
+    p->state = STATE_DATARX;
+    p->datalen = totlen;
+    p->bufpos = 0;
+
+    trace_reset();
+    trace_crumb3("msc", "write", (int)pos, totlen, cbdlen );
+
+    usb_recv_ack( p->usbd, MSC_RXD_EP );
+
+    while( p->datalen > 0 ){
+        // read from usb, send to device
+
+        if( cf->activity ) cf->activity();
+
+        tsleep( p, -1, "usb/rxc", 10000 );
+        if( p->state != STATE_DATARX ) return 0;
+
+        int len = p->bufpos;
+        trace_crumb2("msc", "recv", pos, len);
+
+        if( len <= 0 ){
+            err = 1;
+            break;
+        }
+
+        if( !err ){
+            int r = fbwrite( cf->fio, p->xbuf, len, pos );
+
+            if( r <= 0 ){
+                trace_crumb3("msc", "writeerr", pos, len, r);
+                err = 1;
+            }
+        }
+
+        totlen -= len;
+        pos    += len;
+        p->bufpos = 0;
+
+        usb_recv_ack( p->usbd, MSC_RXD_EP );
+
+    }
+
+    if( err ){
+        msc_sense(p, SKEY_MEDIUM_ERROR, SASC_WRITE_FAULT, 0);
+    }
+
+    return err;
 }
+
+/****************************************************************/
 
 static int
 msc_process_scsi(struct MSC *p){
@@ -373,13 +565,16 @@ msc_process_scsi(struct MSC *p){
 
     trace_crumb1("msc", "scsi", cmd);
 
+    // delay ack on write cmds
+    // so we don't start recving data before we're ready
     switch(cmd){
-    case SCSI_TEST_UNIT_READY:
-        // RSN - check media
-        // ok? send csw(ok)
-        // else: sense={NOT_READY, MEDIUM_NOT_PRESENT}, return -1 (send csw);
-        return 0;
+    case SCSI_WRITE10:
+        break;
+    default:
+        usb_recv_ack( p->usbd, MSC_RXD_EP );
+    }
 
+    switch(cmd){
     case SCSI_SEND_DIAGNOSTIC:
         return 0;
     case SCSI_ALLOW_MEDIUM_REMOVAL:
@@ -387,6 +582,8 @@ msc_process_scsi(struct MSC *p){
     case SCSI_START_STOP_UNIT:
         return 0;
 
+    case SCSI_TEST_UNIT_READY:
+        return msc_send_unitready(p);
     case SCSI_INQUIRY:
         return msc_send_inquiry(p);
     case SCSI_REQUEST_SENSE:
@@ -401,10 +598,6 @@ msc_process_scsi(struct MSC *p){
         return msc_scsi_read10(p);
     case SCSI_WRITE10:
         return msc_scsi_write10(p);
-
-    case SCSI_VERIFY10:
-    case SCSI_READ_FORMAT_CAPACITIES:
-    case SCSI_FORMAT_UNIT:
 
     default:
         msc_sense(p, SKEY_ILLEGAL_REQUEST, SASC_INVALID_CDB, 0);
@@ -422,14 +615,21 @@ cbw_is_valid(struct MSC *p, int len){
 
 static inline int
 cbw_is_meaningful(struct MSC *p, int len){
-    if( p->cbw.bCBWLUN > MAXLUN ) return 0;
+    if( p->cbw.bCBWLUN > p->maxlun ) return 0;
     if( p->cbw.bCDBLength > CBWCDBLENGTH ) return 0;
     return 1;
 }
 
 
-static int
+static void
 msc_process_cbw(struct MSC *p, int len){
+
+    if( len == 0 ){
+        // MSC 6.7.3 - The host shall not send zero length packets
+        // but I see them. ignore stray zlp
+        usb_recv_ack( p->usbd, MSC_RXD_EP );
+        return;
+    }
 
     // verify cbw
     if( !cbw_is_valid(p, len) ){
@@ -447,27 +647,26 @@ msc_process_cbw(struct MSC *p, int len){
         return -1;
     }
 
+    // bottom half task will continue with processing the request
+    // by calling msc_bottom_proccess_cbw
+    trace_crumb0("msc", "wakeup");
+    wakeup( p );
+
+}
+
+static void
+msc_bottom_proccess_cbw(struct MSC *p){
+
     if( msc_process_scsi(p) ){
         // error
         msc_send_csw(p, CSWSTATUS_FAILED);
-        return -1;
+        return;
     }
 
-    // next state
-    p->datalen = p->cbw.dCBWDataTransferLength;
-    if( p->cbw.dCBWDataTransferLength ){
-        if( p->cbw.bCBWFlags & CBWFLAGS_IN )
-            p->state = STATE_DATATX;
-        else
-            p->state = STATE_DATARX;
-    }else{
-        p->state = STATE_STATUS;
-    }
-
+    msc_send_csw(p, CSWSTATUS_GOOD);
     trace_crumb1("msc", "state", p->state);
-
-    return 0;
 }
+
 
 static void
 msc_tx_complete(struct MSC *p, int ep){
@@ -476,8 +675,7 @@ msc_tx_complete(struct MSC *p, int ep){
 
     switch(p->state){
     case STATE_DATATX:
-        p->state = STATE_STATUS;
-        msc_send_csw(p, CSWSTATUS_GOOD);
+        wakeup(p);
         break;
 
     case STATE_READY:
@@ -499,24 +697,41 @@ msc_recv_data(struct MSC *p, int ep, int len){
     case STATE_READY:
         // read cbw
         l = usb_read(p->usbd, ep, & p->cbw, sizeof(p->cbw));
-        usb_recv_ack( p->usbd, ep );
-        // hexdump(&p->cbw, l);
         msc_process_cbw(p, l);
         break;
 
     case STATE_DATARX:
+        trace_crumb2("msc", "recv", p->datalen, p->bufpos);
+
+        if( p->bufpos + MSC_SIZE > MSC_BUFSIZE ){
+            trace_crumb0("msc", "recv/ovf");
+            usb_stall( p->usbd, MSC_RXD_EP );
+            usb_stall( p->usbd, MSC_TXD_EP );
+            p->state = STATE_READY;
+            return; // QQQ - botched?
+        }
+
         // process data
-        l = usb_read(p->usbd, ep, & p->xbuf + x->bufpos, MSC_BUF_SIZE - p->bufpos);
+        l = usb_read(p->usbd, ep, p->xbuf + p->bufpos, MSC_BUFSIZE - p->bufpos);
+
+        if( l <= 0 ){
+            trace_crumb1("msc", "recv/len?", l);
+            usb_stall( p->usbd, MSC_RXD_EP );
+            usb_stall( p->usbd, MSC_TXD_EP );
+            p->state = STATE_READY;
+            return; // QQQ - botched?
+        }
+
         p->datalen -= l;
         p->bufpos  += l;
 
-        if( (MSC_BUF_SIZE - p->bufpos > MSC_SIZE) || ! p->datalen )
+        //  buffer full or done reading - process the buffer
+        // else ack and get more
+        if( (p->bufpos >= MSC_BUFSIZE) || ! p->datalen )
+            wakeup(p);
+        else
             usb_recv_ack( p->usbd, ep );
-        // RSN - handle short read
 
-        // wakeup(...
-        
-        
         break;
     case STATE_DATATX:
     case STATE_STATUS:
@@ -526,32 +741,62 @@ msc_recv_data(struct MSC *p, int ep, int len){
         break;
     }
 
-    if( p->state == STATE_STATUS ){
-        msc_send_csw(p, CSWSTATUS_GOOD);
-    }
-
 }
 
 /****************************************************************/
 void
-msc_run(int n, struct usb_msc_io *ioa){
+msc_run(void){
+    struct MSC *p = mscd + 0;
 
-    // init
-    // start
+    currproc->flags |= PRF_REALTIME | PRF_IMPORTANT;
+    currproc->prio  = 2;
+
     while(1){
-        // tsleep()
-        // process
+        trace_crumb0("msc", "tsleep");
+        tsleep( p, -1, "usb/i", 0 );
+        msc_bottom_proccess_cbw( p );
     }
 
 }
 
 
 /****************************************************************/
+
+void
+usb_vcp_restore(const char *msg){
+
+    trace_crumb0("XXX", msg);
+    usbd_t *u = usbd_get(0);
+    usb_disconnect( u );
+    mscd[0].state = STATE_READY;
+    sleep(1);
+    vcp_reconnect(0);
+}
+
+
+static usb_msc_iocf_t usbconf[2];
+
+static int is_ready(void){ return 1; }
+static int not_ready(void){ return 0; }
+static void active_blink(void){ set_led1_rgb(0xFFFF00); }
 
 DEFUN(msctest, "msc test")
 {
 
     usbd_t *u = usbd_get(0);
+
+    usbconf[0].ready = is_ready;
+    usbconf[0].readonly = 0;
+    usbconf[0].fio = fopen("dev:sd0", "rw");
+    usbconf[0].prod = "Crypto Jawn";
+    usbconf[0].activity = active_blink;
+
+    if( ! usbconf[0].fio ){
+        printf("cannot open sd0\n");
+        return 0;
+    }
+
+    msc_set_conf(0, 0, usbconf);
 
     usb_disconnect( u );
     sleep(1);
@@ -568,11 +813,12 @@ DEFUN(msctest, "msc test")
     play(4, "a4b4b4");
     sleep(1);
 
+
     trace_crumb0("msc", "/start");
     usb_disconnect( u );
+    sleep(1);
     vcp_reconnect(0);
     set_blinky(5);
-    sleep(1);
 
 
     return 0;
