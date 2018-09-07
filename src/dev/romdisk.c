@@ -88,8 +88,12 @@ romdsk_bread(FILE* f, char *buf, int len, offset_t pos){
 
 int
 romdsk_bwrite(FILE* f, const char *buf, int len, offset_t pos){
+    struct ROMDSK_Device *hd = (struct ROMDSK_Device *)(f->d);
 
-    return -1;
+    if( pos + len > ROMDISK_SIZE ) return -1;
+
+    memcpy(romdisk_image + pos, buf, len);
+    return len;
 }
 
 int

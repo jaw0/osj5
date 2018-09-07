@@ -361,6 +361,24 @@ usb_recv_ack(usbd_t *u, int ep){
     otg->epo[ep & 0x7f].DOEPCTL |= USB_OTG_DOEPCTL_CNAK | USB_OTG_DOEPCTL_EPENA;
 }
 
+void
+usb_recv_nack(usbd_t *u, int ep){
+    usbotg_t *usb = u->dev;
+    USB_OTG_t *otg = usb->otg;
+
+    if( otg->epo[ep & 0x7f].DOEPCTL & USB_OTG_DOEPCTL_NAKSTS ) trace_reset();
+    trace_crumb2("usbotg", "nack", ep, otg->epo[ep & 0x7f].DOEPCTL & USB_OTG_DOEPCTL_NAKSTS );
+    otg->epo[ep & 0x7f].DOEPCTL |= USB_OTG_DOEPCTL_SNAK;
+}
+int
+usb_epinfo(usbd_t *u, int ep){
+    usbotg_t *usb = u->dev;
+    USB_OTG_t *otg = usb->otg;
+
+    return otg->epo[ep & 0x7f].DOEPCTL;
+}
+
+
 int
 usb_read(usbd_t *u, int ep, char *buf, int len){
     usbotg_t *usb = u->dev;

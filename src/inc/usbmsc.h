@@ -9,8 +9,13 @@
 #ifndef __usbmsc_h__
 #define __usbmsc_h__
 
+struct Sense {
+    uint8_t key, asc, ascq;
+};
+
 typedef struct {
     int8_t  readonly;
+    struct Sense sense;
     FILE   *fio;
     int (*ready)(void);
     void (*activity)(void);

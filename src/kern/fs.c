@@ -69,6 +69,11 @@ _mount(FILE *fdev, const char *name, const char *type){
 
     me = alloc(sizeof(MountEntry));
 
+    if( !me ){
+        kprintf("cannot alloc me\n");
+        return -1;
+    }
+
     me->fdev   = fdev;
     me->fscf   = fst;
     me->fsdat  = 0;
@@ -76,7 +81,8 @@ _mount(FILE *fdev, const char *name, const char *type){
     if( type ){
         strncpy(me->name, name, sizeof(me->name));
         me->flags   = MNTE_F_FS;
-        (me->fscf->init)(me);
+        if( me->fscf && me->fscf->init )
+            (me->fscf->init)(me);
     }else{
         /* mount special device in dev: */
         strncpy(me->name, DEVPREFIX, sizeof(me->name));

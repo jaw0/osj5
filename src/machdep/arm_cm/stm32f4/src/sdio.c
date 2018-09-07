@@ -367,11 +367,14 @@ static void
 dma_start(u_long flags, char *dst, int len){
 
     dcache_flush(dst, len);
+
+    DMASTR->CR   &= ~1;	// clear EN first
+    while( DMASTR->CR & 1 ) {} // wait for it
+
     DMASTR->PAR   = (u_long) & SDIO->FIFO;
     DMASTR->M0AR  = (u_long) dst;
     DMASTR->NDTR  = len >> 2;
 
-    DMASTR->CR   &= ~1;	// clear EN first
     DMASTR->CR   &= (0xF<<28) | (1<<20);
     DMASTR->CR   |= flags | DMASCR_MINC | (DMACHAN << 25)
         | DMASCR_PFCTRL
@@ -400,6 +403,7 @@ static int
 dma_wait_complete(void){
     utime_t t1 = get_hrtime() + 1000000;
 
+    SDIO->ICR  = 0xFFFFFFFF;
     SDIO->MASK |= SR_DATAEND;
 
     while( 1 ){
@@ -529,7 +533,7 @@ sdio_bwrite(FILE*f, const char*d, int len, offset_t pos){
         dma_start(DMASCR_DIR_M2P, d, len);
 
         SDIO->DCTRL  &= ~0xFFF;
-        SDIO->DTIMER  = RTIMEOUT;
+        SDIO->DTIMER  = WTIMEOUT;
         SDIO->DLEN    = len;
 
         if( len == 512 ){
@@ -556,7 +560,8 @@ sdio_bwrite(FILE*f, const char*d, int len, offset_t pos){
             if( SDIO->STA & SR_DTIMEOUT ) r = -1;
 
             if( r )
-                kprintf("dma err %x, %x\n", r, DMA->LISR >> 22 );
+                kprintf("dma err %x, %x\n", r, DMA->LISR >> 22);
+
         }
 
         //kprintf("dma %x %x %x\n", DMASTR->NDTR, DMA->LISR >> 22, DMASTR->CR);
@@ -579,7 +584,7 @@ sdio_bwrite(FILE*f, const char*d, int len, offset_t pos){
     }
 
     sync_unlock(& ii->lock );
-    // kprintf("sdwr => %d\n", ret);
+    //kprintf("sdwr => %d; %x %x %x\n", ret);
 
     return ret;
 
@@ -614,7 +619,28 @@ SDIO_IRQHandler(void){
 
 }
 
+DEFUN(sdwr, "")
+{
+
+    if( argc < 4 ) return 0;
+    offset_t pos = strtol(argv[1], 0, 16);
+    int bsz = atoi(argv[2]);
+    int nbk = atoi(argv[3]);
+
+    FILE *f   = fopen("dev:sd0", "w");
+
+    extern char _sdata[];
+    for(; nbk>0; nbk--){
+        sdio_bwrite(f, _sdata, bsz, pos);
+        pos += bsz;
+    }
+
+    return 0;
+}
+
 #ifdef KTESTING
+
+
 
 DEFUN(sdtest, "sd card test")
 {
