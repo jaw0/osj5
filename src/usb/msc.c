@@ -25,7 +25,6 @@
 #include <trace.h>
 
 #define MSC_BUFSIZE	16384			// must be a multiple of 512
-#define MSC_BUFOVF	128
 
 #define MSC_SIZE    64
 #define MSC_RXD_EP  0x03
@@ -177,14 +176,13 @@ static struct MSC {
     usb_msc_iocf_t  *conf;
     int8_t           state;
     int8_t           maxlun;
-    int8_t	     changed;
     volatile int     txcflag, rxcflag, rcvflag;
     int              datalen;
     struct Sense     sense;
     umass_bbb_cbw_t  cbw;
     umass_bbb_csw_t  csw;
     char             resbuf[64]; // for results
-    char             xbuf[MSC_BUFSIZE + MSC_BUFOVF];
+    char             xbuf[MSC_BUFSIZE];
     int              bufpos;
 
 } mscd[ 1 ];
@@ -355,11 +353,6 @@ msc_send_csw(struct MSC *p, int status){
 }
 
 /****************************************************************/
-
-void
-msc_change_ready(){
-    mscd[0].changed = 1;
-}
 
 static int
 msc_send_unitready(struct MSC *p){
@@ -583,7 +576,7 @@ msc_scsi_write10(struct MSC *p){
     trace_crumb0("msc", "ack");
     usb_recv_ack( p->usbd, MSC_RXD_EP );
 
-    kprintf("msc wr %x %d\n", (int)pos, totlen);
+    // kprintf("msc wr %x %d\n", (int)pos, totlen);
 
     while( p->datalen > 0 ){
         // read from usb, send to device
@@ -596,7 +589,7 @@ msc_scsi_write10(struct MSC *p){
         int len = p->bufpos;
         trace_crumb2("msc", "recvd", (int)pos, len);
 
-        kprintf("msc wr+ %x %d\n", (int)pos, len);
+        // kprintf("msc wr+ %x %d\n", (int)pos, len);
 
         if( len <= 0 ){
             err = 1;
