@@ -839,6 +839,9 @@ msc_run(void){
 }
 
 /****************************************************************/
+
+#ifdef KTESTING
+
 static usb_msc_iocf_t usbconf[2];
 
 static int is_ready(void){ return 1; }
@@ -894,3 +897,5 @@ DEFUN(msctest, "msc test")
 {
     msc_test();
 }
+
+#endif

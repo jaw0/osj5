@@ -491,6 +491,7 @@ vcp_recv_chars(struct VCP *p, int ep, int len){
 
 }
 
+#ifdef KTESTING
 
 DEFUN(vcpinfo, "test")
 {
@@ -513,3 +514,5 @@ DEFUN(vcpreset, "")
 
     return 0;
 }
+
+#endif

@@ -547,6 +547,8 @@ USB_HS_IRQ_HANDLER(void){
 }
 
 
+#ifdef KTESTING
+
 DEFUN(usbtest, "usb test")
 {
 
@@ -599,3 +601,5 @@ DEFUN(epinfo, "test")
 
     return 0;
 }
+
+#endif
