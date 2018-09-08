@@ -619,27 +619,7 @@ SDIO_IRQHandler(void){
 
 }
 
-DEFUN(sdwr, "")
-{
-
-    if( argc < 4 ) return 0;
-    offset_t pos = strtol(argv[1], 0, 16);
-    int bsz = atoi(argv[2]);
-    int nbk = atoi(argv[3]);
-
-    FILE *f   = fopen("dev:sd0", "w");
-
-    extern char _sdata[];
-    for(; nbk>0; nbk--){
-        sdio_bwrite(f, _sdata, bsz, pos);
-        pos += bsz;
-    }
-
-    return 0;
-}
-
 #ifdef KTESTING
-
 
 
 DEFUN(sdtest, "sd card test")
