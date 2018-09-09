@@ -7,6 +7,7 @@
 */
 
 #include <conf.h>
+#include <alloc.h>
 #include <nstdio.h>
 #include <proc.h>
 #include <arch.h>
@@ -172,6 +173,8 @@ static const usbd_config_t msc_usbd_config = {
 
 
 static struct MSC {
+    char             resbuf[64]; // for results
+    char             xbuf[MSC_BUFSIZE];
     usbd_t          *usbd;
     usb_msc_iocf_t  *conf;
     int8_t           state;
@@ -181,11 +184,9 @@ static struct MSC {
     struct Sense     sense;
     umass_bbb_cbw_t  cbw;
     umass_bbb_csw_t  csw;
-    char             resbuf[64]; // for results
-    char             xbuf[MSC_BUFSIZE];
     int              bufpos;
 
-} mscd[ 1 ];
+} mscd[ 1 ] ATTR_ALIGNED;
 
 
 int
@@ -201,6 +202,7 @@ msc_init(struct Device_Conf *dev){
     //usbd_configure( u, &cdc_usbd_config, vcom + i );
     //usb_connect( u );
 
+    trace_init();
     bootmsg("%s msc/scsi on usb\n", dev->name);
     start_proc( 1024, msc_run, "usbmsc" );
 
@@ -543,7 +545,6 @@ msc_scsi_write10(struct MSC *p){
     usb_msc_iocf_t *cf = lun_conf(p);
     umass_bbb_rw10_t *cbd = (umass_bbb_rw10_t*)p->cbw.CBWCDB;
 
-    trace_reset();
     if( !cf || !cf->ready() ){
         msc_sense(p, SKEY_NOT_READY, SASC_MEDIUM_NOT_PRESENT, 0);
         trace_crumb0("msc", "write!cf");
@@ -573,7 +574,6 @@ msc_scsi_write10(struct MSC *p){
 
     trace_crumb3("msc", "write", (int)pos, totlen, cbdlen );
 
-    trace_crumb0("msc", "ack");
     usb_recv_ack( p->usbd, MSC_RXD_EP );
 
     // kprintf("msc wr %x %d\n", (int)pos, totlen);
@@ -611,7 +611,6 @@ msc_scsi_write10(struct MSC *p){
         pos    += len;
         p->bufpos = 0;
 
-        trace_crumb0("msc", "ack");
         usb_recv_ack( p->usbd, MSC_RXD_EP );
 
     }
@@ -639,7 +638,6 @@ msc_process_scsi(struct MSC *p){
     case SCSI_WRITE10:
         break;
     default:
-        trace_crumb0("msc", "ack");
         usb_recv_ack( p->usbd, MSC_RXD_EP );
     }
 
@@ -698,7 +696,6 @@ msc_process_cbw(struct MSC *p, int len){
     if( len == 0 ){
         // MSC 6.7.3 - The host shall not send zero length packets
         // but I see them. ignore stray zlp
-        trace_crumb0("msc", "ack");
         usb_recv_ack( p->usbd, MSC_RXD_EP );
         return;
     }
@@ -766,17 +763,17 @@ void
 msc_recv_data(struct MSC *p, int ep, int len){
     int l=0;
 
-    trace_crumb2("msc", "recv", ep, len);
 
     switch(p->state){
     case STATE_READY:
         // read cbw
+        trace_crumb2("msc", "recv/cbw", ep, len);
         l = usb_read(p->usbd, ep, & p->cbw, sizeof(p->cbw));
         msc_process_cbw(p, l);
         break;
 
     case STATE_DATARX:
-        trace_crumb2("msc", "recv", p->datalen, p->bufpos);
+        trace_crumb3("msc", "recv", len, p->datalen, p->bufpos);
         usb_recv_nack( p->usbd, ep ); // XXX
 
         if( p->bufpos + MSC_SIZE > MSC_BUFSIZE ){
@@ -809,7 +806,6 @@ msc_recv_data(struct MSC *p, int ep, int len){
         if( (p->bufpos >= MSC_BUFSIZE) || ! p->datalen )
             msc_wakeup(& p->rxcflag );
         else{
-            trace_crumb0("msc", "ack");
             usb_recv_ack( p->usbd, ep );
         }
         break;
@@ -817,6 +813,7 @@ msc_recv_data(struct MSC *p, int ep, int len){
     case STATE_STATUS:
     default:
         // phase error
+        trace_crumb2("msc", "recv/?", ep, len);
         msc_send_csw(p, CSWSTATUS_PHASE);
         break;
     }
