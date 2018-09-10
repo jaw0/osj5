@@ -219,7 +219,7 @@ _hash_copy_out(u_char *out, int outlen){
     // in a second set of output registers.
     // the values in hr[0..4] are duplicated in both sets
 
-    if( outlen < 5 ){
+    if( outlen <= 5 ){
         for(i=0; i<outlen; i++)
             dst[i] = __REV(HASH->HR[i]);
     }else{
@@ -273,6 +273,10 @@ DEFUN(hashtest, "test")
     hash_finish(buf, sizeof(buf));
     printf("%16,.4H\n", buf);
 
+    hash_sha1_start();
+    hash_add("what do ya want for nothing?", 28); // 8f820394f95335182045da24f34de52bf8bc3432
+    hash_finish(buf, sizeof(buf));
+    printf("%20,.4H\n", buf);
 
 
     // test vectors from RFC 2202
