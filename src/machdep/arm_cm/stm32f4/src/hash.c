@@ -18,6 +18,9 @@ static int hash_outlen;
 static u_char *hmac_key;
 static int hmac_key_len;
 
+// NB - SHA224, SHA256 are not available on all chips with the hash peripheral
+//      check data sheets for details.
+
 int
 hash_init(void){
 
@@ -43,7 +46,27 @@ hash_sha1_start(void){
     HASH->CR    |= (2<<4);	// byte mode
     HASH->CR    |= 1<<2;	// init
     HASH->STR &= ~0x11F;
-    hash_outlen  = 24;
+    hash_outlen  = 20;
+}
+
+void
+hash_sha224_start(void){
+
+    HASH->CR     = 1<<18;
+    HASH->CR    |= (2<<4);	// byte mode
+    HASH->CR    |= 1<<2;	// init
+    HASH->STR &= ~0x11F;
+    hash_outlen  = 28;
+}
+
+void
+hash_sha256_start(void){
+
+    HASH->CR     = (1<<7) | (1<<18);
+    HASH->CR    |= (2<<4);	// byte mode
+    HASH->CR    |= 1<<2;	// init
+    HASH->STR &= ~0x11F;
+    hash_outlen  = 32;
 }
 
 static inline void
@@ -97,7 +120,31 @@ hmac_sha1_start(const u_char *key, int keylen){
     if( keylen > 64 ) HASH->CR |= 1<<16;	// long key
     HASH->CR     |= (2<<4);	// byte mode
     HASH->CR     |= 1<<2;	// init
-    hash_outlen   = 24;
+    hash_outlen   = 20;
+    hmac_key      = key;
+    hmac_key_len  = keylen;
+    _hmac_start();
+}
+
+void
+hmac_sha224_start(const u_char *key, int keylen){
+    HASH->CR      = (1<<6) | (1<<18);
+    if( keylen > 64 ) HASH->CR |= 1<<16;	// long key
+    HASH->CR     |= (2<<4);	// byte mode
+    HASH->CR     |= 1<<2;	// init
+    hash_outlen   = 28;
+    hmac_key      = key;
+    hmac_key_len  = keylen;
+    _hmac_start();
+}
+
+void
+hmac_sha256_start(const u_char *key, int keylen){
+    HASH->CR      = (1<<6) | (1<<18) | (1<<7);
+    if( keylen > 64 ) HASH->CR |= 1<<16;	// long key
+    HASH->CR     |= (2<<4);	// byte mode
+    HASH->CR     |= 1<<2;	// init
+    hash_outlen   = 32;
     hmac_key      = key;
     hmac_key_len  = keylen;
     _hmac_start();
@@ -167,9 +214,18 @@ _hash_copy_out(u_char *out, int outlen){
     short i;
     outlen >>= 2;
     int *dst = (int*)out;
-    for(i=0; i<outlen; i++)
-        dst[i] = __REV(HASH->HR[i]);
 
+    // chips with sha224,sha256 output the longer results
+    // in a second set of output registers.
+    // the values in hr[0..4] are duplicated in both sets
+
+    if( outlen < 5 ){
+        for(i=0; i<outlen; i++)
+            dst[i] = __REV(HASH->HR[i]);
+    }else{
+        for(i=0; i<outlen; i++)
+            dst[i] = __REV(HASH->HR2[i]);
+    }
 }
 
 void
@@ -215,18 +271,31 @@ DEFUN(hashtest, "test")
     hash_md5_start();
     hash_add("what do ya want for nothing?", 28); // d03cb659cbf9192dcd066272249f8412
     hash_finish(buf, sizeof(buf));
-    hexdump(buf, 16);
+    printf("%16,.4H\n", buf);
+
+
 
     // test vectors from RFC 2202
     hmac_md5_start("Jefe", 4);
     hash_add("what do ya want for nothing?", 28); // 750c783e6ab0b503eaa86e310a5db738
     hmac_finish(buf, sizeof(buf));
-    hexdump(buf, 16);
+    printf("%16,.4H\n", buf);
 
     hmac_sha1_start("Jefe", 4);
     hash_add("what do ya want for nothing?", 28); // effcdf6ae5eb2fa2d27416d5f184df9c259a7c79
     hmac_finish(buf, sizeof(buf));
-    hexdump(buf, 20);
+    printf("%20,.4H\n", buf);
+
+    // test vectors from RFC 4231
+    hmac_sha224_start("Jefe", 4);
+    hash_add("what do ya want for nothing?", 28); // a30e01098bc6dbbf45690f3a7e9e6d0f8bbea2a3 9e6148008fd05e44
+    hmac_finish(buf, sizeof(buf));
+    printf("%28,.4H\n", buf);
+
+    hmac_sha256_start("Jefe", 4);
+    hash_add("what do ya want for nothing?", 28); // 5bdcc146bf60754e6a042426089575c75a003f089 d2739839dec58b964ec3843
+    hmac_finish(buf, sizeof(buf));
+    printf("%32,.4H\n", buf);
 
     return 0;
 }
