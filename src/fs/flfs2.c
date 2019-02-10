@@ -19,6 +19,11 @@
 #include <ioctl.h>
 #include <userint.h>
 
+#ifdef FLFS2_TRACE
+#  define TRACE
+#endif
+#include <trace.h>
+
 
 #undef offsetof
 #ifdef __compiler_offsetof
@@ -28,14 +33,13 @@
 #endif
 
 
-#define fsmsg(f, args...)		fprintf(STDERR, f , ## args )
-#define debug(f, args...)		/* fprintf(STDERR, f , ## args ) */
+#define fsmsg(f, args...)		//fprintf(STDERR, f , ## args )
+#define debug(f, args...)		//fprintf(STDERR, f , ## args )
 
 typedef char bool;
 
 #define USE_INDEX
 #define USE_INTENT
-
 
 
 struct FLFS {
@@ -65,6 +69,7 @@ struct FLFS {
 
     offset_t lastfreeoffset;         	/* cache location of last available space found */
     u_long flags;
+    u_long diruid;
 
     int    ndirent;
 };
@@ -115,9 +120,12 @@ static offset_t find_available(struct FLFS *);
 static int get_open_dir_slot(struct FLFSBuf *);
 static int release_block(struct FLFSBuf *);
 static int deletefile_from(struct FLFSBuf *, struct FSDirEnt *);
-
+static void learn_diruid(struct FLFS*);
+static int get_index_type(struct FLFS *, offset_t);
 
 #define DIRENT_IS_DELETED( e )	((e).attr == 0)
+#define DIRENT_IS_VALID( e )	((e).attr & FLFS_FDAF_MASK == FDA_VALID)
+#define DIRENT_IS_EMPTY( e )	((e).attr == FDA_EMPTY)
 
 
 const struct io_fs flfs2_iofs = {
@@ -154,10 +162,10 @@ flfs2_init(MountEntry *me){
     flfs->total_size = s.size;
     flfs->write_size = o[0] ? o[0] : 1;
     flfs->erase_size = o[1];
+    flfs->block_size = FBLOCKSIZE;
     flfs->flags      = s.flags;
     flfs->dirpos     = DIRPOS_UNKNOWN;
 
-    flfs->block_size = FBLOCKSIZE;
     if( flfs->write_size > flfs->block_size ) flfs->block_size = flfs->write_size;
 
     flfs->ndirent = (flfs->block_size - sizeof(struct FSDir)) / sizeof(struct FSDirEnt);
@@ -202,11 +210,19 @@ flfs2_init(MountEntry *me){
     while( (flfs->total_size / flfs->cleaning_size) > 64 && (flfs->cleaning_size < 64*1024) )
         flfs->cleaning_size *= 2;
 
+    learn_diruid(flfs);
+
+    if( flfs->diruid == 0 )
+        flfs->diruid = random();
+
 #if 0
     bootmsg("wsize %d, esize %d, csize %d, ndir %d, nidx %d\n", (int)flfs->write_size, (int)flfs->erase_size,
             (int)flfs->cleaning_size, (int)flfs->ndirent, nidx );
+    bootmsg("dir uid %x, pos %x, lfo %x\n", (int)flfs->diruid, (int)flfs->dirpos, (int)flfs->lastfreeoffset);
+    bootmsg("dir nl %d, sz %d, ent %d\n", FLFS_NAMELEN, sizeof(struct FSDir), sizeof(struct FSDirEnt));
 #endif
 
+    trace_init();
     return 0;
 }
 
@@ -238,15 +254,19 @@ diskread(struct FLFS *flfs, offset_t off, char *buf, int len){
 
 static int
 diskwrite(struct FLFS *flfs, offset_t off, const char *buf, int len){
+    trace_crumb2("flfs2", "dwrite", (int)off, len);
     int r = fbwrite(flfs->me->fdev, buf, len, off);
     if( r < 0 )
         fsmsg("write %s @0x%x failed\n", flfs->me->name, off);
+    trace_crumb1("flfs2", "/dwrite", r);
     return r;
 }
 
 static int
 diskerase(struct FLFS *flfs, offset_t off, offset_t len){
     offset_t i;
+
+    trace_crumb2("flfs2", "derase", (int)off, (int)len);
 
     if( flfs_erase_notneeded(flfs) ){
         int e = ALLONES;
@@ -258,15 +278,60 @@ diskerase(struct FLFS *flfs, offset_t off, offset_t len){
             fioctl(flfs->me->fdev, IOC_ERASE, (void*)(off + i) );
         }
     }
+    trace_crumb0("flfs2", "/derase");
 }
+
+static void
+learn_diruid(struct FLFS *flfs){
+
+    struct FSDir dir;
+
+    offset_t off, xoff=0;
+    u_long xuid=0;
+
+    for(off=0; off<flfs->total_size; off+= flfs->block_size){
+        int t = get_index_type(flfs, off);
+
+        // first free block after best dir
+        if( t == FCT_BLANK &&  !flfs->lastfreeoffset ) flfs->lastfreeoffset = off;
+        if( t != FCT_DIR ) continue;
+
+        diskread(flfs, off, &dir, sizeof(dir));
+
+        if( dir.uid > xuid ){
+            xuid = dir.uid;
+            xoff = off;
+        }
+
+        if( dir.flag != FDT_ACTIVE ) continue;
+
+        if( dir.uid > flfs->diruid ){
+#ifdef FLFS_64BIT
+            flfs->diruid = dir.uid >> 32;
+#else
+            flfs->diruid = dir.uid;
+#endif
+            flfs->dirpos = off;
+            flfs->lastfreeoffset = 0;
+        }
+    }
+
+    // no dirs with space. use best unusable
+    if( flfs->diruid == 0 ){
+        flfs->diruid = xuid;
+        flfs->dirpos = xoff;
+        flfs->lastfreeoffset = xoff;
+    }
+}
+
 
 // QQQ - or scan all blocks for current highest on init, and ++
 static fs2_t
-uniqueid(){
+uniqueid(struct FLFS *flfs){
 #ifdef FLFS_64BIT
-    return (random() << 32) | random();
+    return ((++ flfs->diruid) << 32) | random();
 #else
-    return random();
+    return ++ flfs->diruid;
 #endif
 
 }
@@ -379,7 +444,7 @@ read_index(struct FLFS *flfs, offset_t off){
 
     flfs->idxoff = -1;
 
-    debug("read idx %x\n", (int)off);
+    // debug("read idx %x\n", (int)off);
     if( diskread(flfs, off, flfs->idxbuf, flfs->block_size) <= 0 ) return -1;
     flfs->idxoff = off;
 
@@ -591,7 +656,7 @@ relocate_dir(struct FLFSBuf *fb){
     // prune deleted entries
     for(i=j=0; i<fb->flfs->ndirent; i++){
         if( DIRENT_IS_DELETED(db->dir[i]) )   continue;
-        if( db->dir[i].start == FDS_EMPTY )   continue;
+        if( DIRENT_IS_EMPTY(db->dir[i]) )     continue;
 
         if( i != j )
             db->dir[j] = db->dir[i];
@@ -606,6 +671,7 @@ relocate_dir(struct FLFSBuf *fb){
         }
 
         db->intent = fb->offset;
+        db->uid = uniqueid(fb->flfs);
         newoff = find_available(fb->flfs);
         debug(" -> %x", newoff);
 
@@ -662,7 +728,7 @@ should_do_level2(struct FLFS *flfs, offset_t region, int *nfile){
             break;
         }
 
-        debug("  %x => %x\n", (int)off, t);
+        // debug("  %x => %x\n", (int)off, t);
     }
     debug("ne %d, nd %d, nf %d, nt %d\n", nerase, ndel, *nfile, ntot);
     if( nerase == ntot )   return 0; // all erased. leave it alone.
@@ -695,6 +761,8 @@ clean_level2_region(struct FLFS *flfs, offset_t region){
     fb.flfs = flfs;
     flfs->cleaningregion = region;
 
+    debug("gc/2...\n");
+
     struct FSDir *db = (struct FSDir*)fb.buffer;
 
     // look for files in the cleaning region - move them
@@ -710,7 +778,7 @@ clean_level2_region(struct FLFS *flfs, offset_t region){
             for(i=0; i<flfs->ndirent; i++){
                 debug("  [%d]\n", i);
                 if( DIRENT_IS_DELETED(db->dir[i]) )   continue;
-                if( db->dir[i].start == FDS_EMPTY )   continue;
+                if( DIRENT_IS_EMPTY(db->dir[i]) )     continue;
 
                 debug("  ? %x %x %s\n", (int)db->dir[i].attr, (int)db->dir[i].start, db->dir[i].name);
                 int x = file_in_cleaning_region(flfs, db->dir[i].start);
@@ -776,7 +844,7 @@ findfile_in_dir(struct FLFSBuf *fb, const char *name){
     if( db->flag == FDT_DELETED ) return 0;
 
     for(i=0; i<fb->flfs->ndirent; i++){
-        if( db->dir[i].start == FDS_EMPTY )   return 0; /* end of entries */
+        if( DIRENT_IS_EMPTY(db->dir[i]) )     return 0; /* end of entries */
         if( DIRENT_IS_DELETED(db->dir[i]) )   continue;
 
         if( !strcmp(name, db->dir[i].name)) return & db->dir[i];
@@ -935,7 +1003,7 @@ get_open_dir_slot_from(struct FLFSBuf *fb, offset_t offset){
     if( dir->flag != FDT_ACTIVE ) return -1;
 
     for(i=0; i<fb->flfs->ndirent; i++){
-        if( dir->dir[i].start == FDS_EMPTY ){
+        if( DIRENT_IS_EMPTY(dir->dir[i]) ){
             debug("dir slot: %x [%d]\n", (int)offset, i);
             return i;
         }
@@ -988,7 +1056,7 @@ get_open_dir_slot(struct FLFSBuf *fb){
     memset( fb->buffer, 0xFF, flfs->block_size );
     struct FSDir *dir = (struct FSDir*)fb->buffer;
     dir->type = FCT_DIR;
-    dir->uid  = uniqueid();
+    dir->uid  = uniqueid(flfs);
     update_index(flfs, offset, FCT_DIR);
 
     debug("dir new %x -> 0\n", (int)offset);
@@ -1187,7 +1255,7 @@ flush_final_meta(struct FileData *fd){
     struct FSDir *dir = (struct FSDir*)fd->buffer;
     struct FSDirEnt *de = & dir->dir[di];
     strncpy(de->name, fd->name, sizeof(de->name));
-    de->attr = fd->attr | (ALLONES & ~FLFS_ATTR_MASK);
+    de->attr = fd->attr | FDA_VALID;
     de->filelen = fd->filelen;
     de->ctime = get_time();
     de->start = fd->filestart;
@@ -1214,7 +1282,7 @@ flfs2_close(FILE *f){
     fd   = f->d;
     flfs = fd->flfs;
 
-    debug("close\n");
+    trace_crumb0("flfs2", "close");
     if( fd->how == FDH_WRITE ){
         flush_final_data(fd);
         flush_final_meta(fd);
@@ -1222,6 +1290,7 @@ flfs2_close(FILE *f){
 
     free_filedata(fd);
     free(f, sizeof(FILE));
+    trace_crumb0("flfs2", "/close");
 
     return 0;
 }
@@ -1338,12 +1407,14 @@ flfs2_open(MountEntry *me, const char *name, const char *how){
     struct FLFS *flfs = me->fsdat;
     FILE *f;
 
+    trace_crumb1("flfs2", "open", how);
     if( *how == 'r' ){
         f = flfs2_open_r(flfs, name);
     }else{
         f = flfs2_open_w(flfs, name);
     }
 
+    trace_crumb0("flfs2", "/open");
     return f;
 }
 
@@ -1443,7 +1514,7 @@ flfs2_dir(MountEntry *me, int how){
         for(i=0; i<flfs->ndirent; i++){
             struct FSDirEnt *d = dir->dir + i;
 
-            if( d->start == FDS_EMPTY ) continue;
+            if( DIRENT_IS_DELETED(*d) ) continue;
             if( DIRENT_IS_DELETED(*d) && !(how & LSHOW_EXT) ) continue;
 
             if(how & LSHOW_EXT){
@@ -1511,6 +1582,7 @@ flfs2_format(MountEntry *me, char *flfsname){
     flfs->idxdirty = 0;
 #endif
     flfs->dirpos = DIRPOS_INVALID;
+    flfs->diruid = random();
     flfs->lastfreeoffset = 0;
 
     sync_unlock( &flfs->lock );
@@ -1777,14 +1849,16 @@ flfs2_glob(MountEntry *me, const char *pattern, int (*fnc)(const char *, void*),
         for(i=0; i<flfs->ndirent; i++){
             struct FSDirEnt *d = dir->dir + i;
 
-            if( DIRENT_IS_DELETED(*d) )   continue;
-            if( d->start == FDS_EMPTY )   continue;
+            if( DIRENT_IS_DELETED(*d) ) continue;
+            if( DIRENT_IS_EMPTY(*d) )   continue;
 
             if( !(d->attr & FFA_HIDDEN)
                 && !fnmatch(pattern, d->name, 0)){
                 /* found it */
 
+                sync_unlock( &flfs->lock );
                 rv = (fnc)(d->name, args);
+                sync_lock( &flfs->lock, "flfs.L" );
             }
         }
     }
@@ -1838,4 +1912,90 @@ flfs2_ops(int what, MountEntry *me, ...){
     }
 }
 
+#if 1// XXX def KTESTING
+
+DEFUN(dumpflfs2, "dump flfs2")
+{
+    if( argc < 2 ) return 0;
+
+    MountEntry *me = find_mount(argv[1]);
+    if( !me ) return 0;
+
+    struct FLFS *flfs = me->fsdat;
+    char *buffer = alloc(flfs->block_size);
+
+    printf("sizeof     %x\n",  sizeof(fs2_t));
+    printf("total_size %qx\n", flfs->total_size);
+    printf("block_size %qx\n", flfs->block_size);
+    printf("write_size %qx\n", flfs->write_size);
+    printf("erase_size %qx\n", flfs->erase_size);
+    printf("clean_size %qx\n", flfs->cleaning_size);
+    printf("clean_regn %qx\n", flfs->cleaningregion);
+    printf("dirpos     %qx\n", flfs->dirpos);
+    printf("diruid     %qx\n", flfs->diruid);
+    printf("ndirent    %x\n",  flfs->ndirent);
+    printf("lastfree   %qx\n", flfs->lastfreeoffset);
+
+#ifdef USE_INDEX
+    printf("idxoff     %qx\n", flfs->idxoff);
+    printf("nidxent    %x\n",  flfs->nidxent);
+#endif
+
+
+    offset_t off;
+
+    for(off=0; off<flfs->total_size; off+= flfs->block_size){
+        int t = get_index_type(flfs, off);
+
+        int repeat=1;
+        while( t == get_index_type(flfs, off + repeat * flfs->block_size) )
+            repeat ++;
+
+        printf(" %08x * %02x ", (int)off, repeat);
+        switch(t){
+        case FCT_BLANK:		printf("blank\n"); break;
+        case FCT_DELETED:	printf("delet\n"); break;
+        case FCT_FIRST:		printf("file1\n"); break;
+        case FCT_DATA:		printf("file+\n"); break;
+        case FCT_DIR:		printf("dir");     break;
+        case FCT_INDEX:		printf("index\n"); break;
+        case FCT_EMPTY_INDEX:	printf("index/empty\n"); break;
+        case FCT_DELET_INDEX:	printf("index/deled\n"); break;
+        default:		printf("<%x>\n", t);
+        }
+
+        if( t == FCT_DIR ){
+            int i;
+            struct FSDir *dir = (struct FSDir*)buffer;
+
+            diskread(flfs, off, buffer, flfs->block_size);
+
+            switch( dir->flag ){
+            case FDT_FULL:    printf("/full"); break;
+            case FDT_DELETED: printf("/used"); break;
+            default:          printf("/actv"); break;
+            }
+
+            printf("    id=%x; %x\n", dir->uid, dir->intent);
+
+            for(i=0; i<flfs->ndirent; i++){
+                struct FSDirEnt *d = dir->dir + i;
+                if( DIRENT_IS_EMPTY(*d) ){
+                    continue;
+                }
+                if( DIRENT_IS_DELETED(*d) )
+                    printf("    %2d %8x ---- %s\n", i, d->start, d->name);
+                else
+                    printf("    %2d %8x %04x %s\n", i, d->start, d->attr & FLFS_ATTR_MASK, d->name);
+            }
+        }
+
+        off += (repeat - 1) * flfs->block_size;
+    }
+
+    free(buffer, flfs->block_size);
+    return 0;
+}
+
+#endif
 

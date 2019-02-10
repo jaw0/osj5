@@ -49,7 +49,7 @@ public:
     u_char text_attr;		// ATTR_*
 
     u_char text_fg,  text_bg;	// ANSI code
-    int	   color_fg, color_bg;	// rgb
+    int	   color_fg, color_bg;	// native value
 
 private:
     short  cx,cy;		// current cursor position
@@ -66,6 +66,7 @@ public:
     virtual void flush(void) = 0;
     virtual void _set_pixel(int, int, int) = 0;
     virtual int  _get_pixel(int, int) = 0;
+    virtual int  get_color(int);
     virtual void clear_screen(void) = 0;
     virtual void set_colors(void) = 0;
     virtual void set_sleep(bool);
@@ -75,6 +76,7 @@ public:
     void init(void);
     void set_pixel(int, int, int);
     int  get_pixel(int, int);
+    void set_pixel_rgb(int x, int y, int c) {set_pixel(x,y, get_color(c));}
     void set_orientation(int);
     void scroll(void);
     void scroll_horiz(int,int,int);
@@ -99,7 +101,7 @@ public:
     void triangle_filled(int,int, int,int, int,int, int);
     void circle(int,int,int,int);
     void circle_filled(int,int,int,int);
-    void bitblit(u_char *, int, int, int, int, int);
+    void bitblit(const u_char *, int, int, int, int, int);
 
 };
 

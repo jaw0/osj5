@@ -27,6 +27,10 @@
 
 #define MSC_BUFSIZE	16384			// must be a multiple of 512
 
+#ifndef MSC_BUFSIZE
+# define MSC_BUFSIZE	16384			// must be a multiple of 512
+#endif
+
 #define MSC_SIZE    64
 #define MSC_RXD_EP  0x03
 #define MSC_TXD_EP  0x83
@@ -330,18 +334,65 @@ msc_recv_setup(struct MSC *p, const char *buf, int len){
     return 0;
 }
 
+static void
+msc_flush_pipe(struct MSC *p){
+
+    int totlen = p->cbw.dCBWDataTransferLength;
+    if( totlen == 0 ) return;
+
+    trace_crumb2("msc", "flush", p->cbw.bCBWFlags, p->cbw.dCBWDataTransferLength);
+    kprintf("F");
+
+    if( p->cbw.bCBWFlags & CBWFLAGS_IN ){
+        // send to host
+
+        bzero(p->xbuf, sizeof(p->xbuf));
+        p->state = STATE_DATATX;
+
+        while( totlen > 0 ){
+            int len = totlen;
+            if( len > sizeof(p->xbuf) ) len = sizeof(p->xbuf);
+
+            usbd_write(p->usbd, MSC_TXD_EP, p->xbuf, len, 0);
+            msc_sleep( &p->txcflag, "usb/txc", 10000 );
+            if( p->state != STATE_DATATX ) break;
+
+            totlen -= len;
+        }
+
+    }else{
+        // recv + discard
+        p->state = STATE_DATARX;
+        p->datalen = totlen;
+        p->bufpos = 0;
+        usb_recv_ack( p->usbd, MSC_RXD_EP );
+
+        while( p->datalen > 0 ){
+            msc_sleep( &p->rxcflag, "usb/rxc", 10000 );
+            if( p->state != STATE_DATARX ) break;
+            p->bufpos = 0;
+            usb_recv_ack( p->usbd, MSC_RXD_EP );
+        }
+    }
+
+    p->cbw.dCBWDataTransferLength = 0;
+}
+
 static int
 msc_send_result(struct MSC *p, char *buf, int len){
 
     p->state = STATE_DATATX;
     usbd_write(p->usbd, MSC_TXD_EP, buf, len, 0);
     msc_sleep( & p->txcflag, "usb/txc", 10000 );
+    p->cbw.dCBWDataTransferLength = 0;
     return 0;
     // RSN - handle send failed
 }
 
 static void
 msc_send_csw(struct MSC *p, int status){
+
+    msc_flush_pipe(p);
 
     trace_crumb1("msc", "csw", status);
 
@@ -393,10 +444,6 @@ msc_send_inquiry(struct MSC *p){
     }
 
     return msc_send_result(p, p->resbuf, sizeof(msc_inquiry_res));
-
-    msc_send_result(p, p->resbuf, sizeof(msc_inquiry_res));
-    msc_sense(p, SKEY_NOT_READY, SASC_MEDIUM_NOT_PRESENT, 0);
-    return -1;
 }
 
 static int
@@ -476,10 +523,7 @@ msc_send_capacity10(struct MSC *p){
 
     trace_crumb1("msc", "capacity", b[0]);
 
-    p->state = STATE_DATATX;
-    usbd_write(p->usbd, MSC_TXD_EP, b, 8, 0);
-    msc_sleep( & p->txcflag, "usb/txc", 10000 );
-    return 0;
+    return msc_send_result(p, b, 8);
 }
 
 static int
@@ -533,6 +577,8 @@ msc_scsi_read10(struct MSC *p){
         totlen -= len;
         pos    += len;
     }
+
+    p->cbw.dCBWDataTransferLength = 0;
 
     if( err )
         msc_sense(p, SKEY_MEDIUM_ERROR, SASC_UNRECOVERED_READ_ERROR, 0);
@@ -615,6 +661,8 @@ msc_scsi_write10(struct MSC *p){
 
     }
 
+    p->cbw.dCBWDataTransferLength = 0;
+
     if( err ){
         msc_sense(p, SKEY_MEDIUM_ERROR, SASC_WRITE_FAULT, 0);
     }
@@ -634,10 +682,7 @@ msc_process_scsi(struct MSC *p){
 
     // delay ack on write cmds
     // so we don't start recving data before we're ready
-    switch(cmd){
-    case SCSI_WRITE10:
-        break;
-    default:
+    if( ! p->cbw.dCBWDataTransferLength || (p->cbw.bCBWFlags & CBWFLAGS_IN) ){
         usb_recv_ack( p->usbd, MSC_RXD_EP );
     }
 

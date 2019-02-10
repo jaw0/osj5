@@ -30,6 +30,7 @@ typedef struct spi_msg {
 # define SPIMO_PINSOFF	6
 # define SPIMO_PINSON	7
 # define SPIMO_UNTIL_SLOW 8
+# define SPIMO_FUNC     9
 
     u_char	response;
     int		dlen;

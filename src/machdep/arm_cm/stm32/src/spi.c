@@ -96,6 +96,8 @@ spi_init(struct Device_Conf *dev){
     ii->name  = dev->name;
     ii->state = SPI_STATE_IDLE;
 
+    trace_init();
+
     bootmsg("%s at io 0x%x irq %d dma %d+%d speed %dkHz\n",
             dev->name, ii->addr, ii->irq, ii->dmanrx, ii->dmantx, speed/1000);
 
@@ -146,7 +148,7 @@ _spi_cspins(const struct SPIConf *cf, int on){
     int nss = cf->nss;
     const short *ss = cf->ss;
 
-    trace_crumb1("spi", "cspins", on);
+    trace_crumb2("spi", "cspins", on, nss);
     while(nss--){
         int s = *ss ++;
         int m = (s & SPI_SS_INV) ? 1 : 0;	// hi bit = on/off
@@ -171,7 +173,7 @@ _spi_rxtx1(SPI_TypeDef *dev, int val){
         if( sr & SR_TXE  ) break;
     }
 
-    trace_crumb1("spi", "rxtx1", sr);
+    trace_crumb2("spi", "rxtx1", sr, val);
     PUT_DR(dev, val);
 
     while(1){
@@ -523,6 +525,10 @@ _msg_do(struct SPIInfo *ii){
     case SPIMO_UNTIL:
     case SPIMO_UNTIL_SLOW:
         _msg_until(ii);
+        break;
+    case SPIMO_FUNC:
+        trace_crumb0("spi", "func");
+        m->until(m->data);
         break;
 
     case SPIMO_PINSON:

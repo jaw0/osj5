@@ -305,8 +305,6 @@ crypto_final(void){
 static const u_char zero128[16]  = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 static const u_char azero128[16] = { 'a',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 static const u_char azero256[32] = { 'a',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
-static const u_char azero[32]    = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-                                   'a',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 static const u_char test1[32]    = {
     0x8a, 0x18, 0x2a, 0xdc,  0xe7, 0xd1, 0x80, 0x72,  0xed, 0x6a, 0x21, 0x5e,  0x4c, 0x85, 0xeb, 0x4b,
     0x0d, 0xae, 0x2e, 0xcd,  0x9b, 0x59, 0x01, 0xbc,  0xc2, 0x8b, 0x9c, 0x7a,  0x15, 0x2b, 0xab, 0xe4 };
@@ -336,31 +334,13 @@ DEFUN(cryptotest, "crypto test")
 
     bzero(buf, sizeof(buf));
 
-#if 0 //ok
-    crypto_encrypt_start( CRYPTO_ALG_AES_CBC, azero128, 16, azero128, 16);
-    n += crypto_add(zero128, 16, buf,   sizeof(buf) );
-    n += crypto_add(zero128, 16, buf+n, sizeof(buf) - n);
-    n += crypto_final(buf + n, sizeof(buf) - n );
-    hexdump( buf, n );
-
-    crypto_encrypt_start( CRYPTO_ALG_AES_CBC, "abcdefghijklmnop", 16, azero128, 16);
-    n = crypto_add(zero128, 16, buf,   sizeof(buf) );
-    n += crypto_final(buf + n, sizeof(buf) - n );
-    hexdump( buf, n );
-
-    crypto_encrypt_start( CRYPTO_ALG_AES_CBC, "abcdefghijklmnop", 16, "0123456789abcdef", 16);
-    n = crypto_add(zero128, 16, buf,   sizeof(buf) );
-    n += crypto_final(buf + n, sizeof(buf) - n );
-    hexdump( buf, n );
-
-#endif
 
     // 8a 18 2a dc  e7 d1 80 72  ed 6a 21 5e  4c 85 eb 4b
     crypto_encrypt_start( CRYPTO_ALG_AES_CBC, azero256, 32, azero128, 16, buf, sizeof(buf));
     crypto_add(zero128, 16 );
     crypto_add(zero128, 16 );
     crypto_final( );
-    hexdump( buf, 32 );
+    printf("%32,.4H\n", buf);
 
     memset(buf, 0xAA, 32);
     crypto_decrypt_start( CRYPTO_ALG_AES_CBC, azero256, 32, azero128, 16, buf, sizeof(buf));
@@ -370,7 +350,7 @@ DEFUN(cryptotest, "crypto test")
     crypto_add(test1, 32 );
 
     crypto_final( );
-    hexdump( buf, 32 );
+    printf("%32,.4H\n", buf);
 
 
     return 0;

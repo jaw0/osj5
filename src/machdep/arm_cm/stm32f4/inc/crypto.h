@@ -16,7 +16,9 @@
 #define CRYPTO_ALG_AES_ECB	4
 #define CRYPTO_ALG_AES_CBC	5
 #define CRYPTO_ALG_AES_CTR	6
-
+// 7 is reserved for key preparation
+#define CRYPTO_ALG_AES_CCM	8	// not available on all devices
+#define CRYPTO_ALG_AES_GCM	9	// not available on all devices
 
 
 

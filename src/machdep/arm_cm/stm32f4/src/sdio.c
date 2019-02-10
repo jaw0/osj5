@@ -29,7 +29,7 @@
 
 #define MAXTRY 		5
 #define RTIMEOUT	4800000		// 100 ms
-#define WTIMEOUT	12000000	// 250 ms
+#define WTIMEOUT	24000000	// 500 ms
 
 
 #define CMD_CPSMEN	(1<<10)
@@ -625,22 +625,24 @@ SDIO_IRQHandler(void){
 DEFUN(sdtest, "sd card test")
 {
     char *buf = alloc(1024);
-    FILE *f   = fopen("dev:sdio", "w");
+    FILE *f   = fopen("dev:sd0", "w");
 
-    //sdio_bread( f, buf, 512, 0);	// read first sector
-    //hexdump( buf, 16 );
-    //hexdump( buf+512-16, 16 );
+    printf("reading...\n");
+    sdio_bread( f, buf, 512, 0);	// read first sector
+    printf("%16,.4H\n", buf);
+    printf("%16,.4H\n", buf+512-16);
 
     memset(buf, random() & 0xFF, 512);
-    hexdump( buf, 16 );
+    printf("%16,.4H\n", buf);
 
+    printf("writing...\n");
     sdio_bwrite(f, buf, 512, 0xF0000 ); // write
 
+    printf("reading...\n");
     bzero(buf, 512);
     sdio_bread( f, buf, 512, 0xF0000 ); // read back
-    hexdump( buf, 16 );
-    hexdump( buf+512-16, 16 );
-    //hexdump(buf, 1024);
+    printf("%16,.4H\n", buf);
+    printf("%16,.4H\n", buf+512-16);
 
     free(buf, 1024);
     return 0;

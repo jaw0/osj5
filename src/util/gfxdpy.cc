@@ -219,7 +219,6 @@ GFXdpy::scroll_vert(int xa, int xz, int dy){
     }
 }
 
-
 inline void
 GFXdpy::set_pixel(int x, int y, int val){
     int px, py;
@@ -242,7 +241,7 @@ GFXdpy::set_pixel(int x, int y, int val){
         break;
     }
 
-    if( px >= _width || py >= _height || px < 0 || py < 0 ) return;
+    if( (px >= _width) || (py >= _height) || (px < 0) || (py < 0) ) return;
     _set_pixel(px, py, val);
 }
 
@@ -270,6 +269,11 @@ GFXdpy::get_pixel(int x, int y){
 
     if( px >= _width || py >= _height || px < 0 || py < 0 ) return color_bg;
     return _get_pixel(px, py);
+}
+
+int
+GFXdpy::get_color(int rgb){
+    return rgb;
 }
 
 inline int
@@ -731,7 +735,7 @@ GFXdpy::circle_filled(int x0, int y0, int r, int color){
 }
 
 void
-GFXdpy::bitblit(u_char *img, int x0, int y0, int w, int h, int color){
+GFXdpy::bitblit(const u_char *img, int x0, int y0, int w, int h, int color){
     short i,j;
     char b=0;
 

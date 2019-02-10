@@ -22,7 +22,7 @@
 typedef u_long fs2_t;
 # define ALLONES 	0xFFFFFFFF
 # ifndef FLFS_NAMELEN
-#  define FLFS_NAMELEN	32
+#  define FLFS_NAMELEN	36
 # endif
 
 #else
@@ -30,7 +30,7 @@ typedef u_long fs2_t;
 typedef u_int64_t fs2_t;
 # define ALLONES 	0xFFFFFFFFFFFFFFFF
 # ifndef FLFS_NAMELEN
-#  define FLFS_NAMELEN	24
+#  define FLFS_NAMELEN	32
 # endif
 #endif
 
@@ -62,15 +62,17 @@ struct FSIndex {
 };
 
 struct FSDirEnt {
-    fs2_t   start;			/* start offset */
-#define FDS_EMPTY	ALLONES		/* slot is available for use */
-    fs2_t   attr;			/* <delete flag: valid=allones, deleted=0><attr 16bit> */
-#define FLFS_ATTR_MASK 0xFFFF
-#define FDA_DELETED	0		/* slot in no longer valid */
     utime_t ctime;
+    fs2_t   attr;			/* <delete flag: available, valid, deleted><attr 16bit> */
+#define FLFS_ATTR_MASK 0xFFFF
+#define FLFS_FDAF_MASK 0xFFFF0000
+#define FDA_EMPTY	ALLONES		/* slot is available for use */
+#define FDA_VALID	0x10000		/* slot is valid file */
+#define FDA_DELETED	0		/* slot in no longer valid */
+    u_long  start;			/* start offset */
     u_long  filelen;
     char    name[FLFS_NAMELEN]; /* null terminated */
-};
+} __attribute__((packed)); /* nb. namelen is sized so that sizeof(struct) % 8 == 0 */
 
 struct FSDir {
     fs2_t type;

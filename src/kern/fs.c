@@ -178,7 +178,7 @@ fopen(const char *name, const char *how){
     if( me )
         name = basenameoffile(name);
 #ifdef USE_PROC
-    if( !me )
+    if( currproc && !me )
         me = currproc->cwd;
 #endif
     if( !me )
