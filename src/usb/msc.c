@@ -381,6 +381,10 @@ msc_flush_pipe(struct MSC *p){
 static int
 msc_send_result(struct MSC *p, char *buf, int len){
 
+    if( len > p->cbw.dCBWDataTransferLength )
+        len = p->cbw.dCBWDataTransferLength;
+
+    trace_crumb1("msc", "result", len);
     p->state = STATE_DATATX;
     usbd_write(p->usbd, MSC_TXD_EP, buf, len, 0);
     msc_sleep( & p->txcflag, "usb/txc", 10000 );

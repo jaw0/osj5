@@ -378,15 +378,20 @@ static void
 usbd_send_more(usbd_t *u, int ep){
     int epa = ep & 0x7F;
 
-    if( ! u->epd[epa].wpending ) return;
+    if( ! u->epd[epa].wpending ){
+        kprintf("usbd  cannot send\n");
+        return;
+    }
 
     if( (u->epd[epa].wlen != 0) || u->epd[epa].wzlp ){
         int l = usb_send(u, ep, u->epd[epa].wbuf, u->epd[epa].wlen);
 
         trace_crumb2("usbd", "send", ep, l);
 
-        if( l == -1 ){
+        if( l < 0 ){
             // error
+            trace_crumb2("usbd", "ERROR", ep, l);
+            kprintf("usbd send err %d\n", l);
             u->epd[epa].wpending = 0;
             return;
         }
@@ -395,6 +400,8 @@ usbd_send_more(usbd_t *u, int ep){
         u->epd[epa].wlen -= l;
 
         if( l == 0 ) u->epd[epa].wzlp = 0; // zlp has been sent
+    }else{
+        trace_crumb2("usbd", "send/no", ep, u->epd[epa].wlen);
     }
 
     if( u->epd[epa].wlen <= 0 && ! u->epd[epa].wzlp ){

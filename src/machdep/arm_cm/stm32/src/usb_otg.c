@@ -116,7 +116,7 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
     /* clear pending interrupts */
     otg->g.GINTSTS = 0xFFFFFFFF;
     /* unmask global interrupt */
-    otg->g.GAHBCFG = USB_OTG_GAHBCFG_GINT;
+    otg->g.GAHBCFG = USB_OTG_GAHBCFG_GINT | USB_OTG_GAHBCFG_TXFELVL;
 
     // QQQ - fifo sizes?
     /* setting max RX FIFO size */
@@ -330,8 +330,8 @@ usb_send(usbd_t *u, int ep, const char *buf, int len){
 
     ep &= 0x7F;
     if( len > u->epd[ep].bufsize ) len = u->epd[ep].bufsize;
-    if( ep && !(otg->epi[ep].DIEPCTL & USB_OTG_DIEPCTL_USBAEP) ) return 0;	// ep not enabled
-    if( ep &&  (otg->epi[ep].DIEPCTL & USB_OTG_DIEPCTL_EPENA) )  return 0;	// ep currently sending
+    if( ep && !(otg->epi[ep].DIEPCTL & USB_OTG_DIEPCTL_USBAEP) ) return -1;	// ep not enabled
+    if( ep &&  (otg->epi[ep].DIEPCTL & USB_OTG_DIEPCTL_EPENA) )  return -2;	// ep currently sending
 
     volatile uint32_t *fifo = get_fifo(usb, ep);
 
@@ -341,7 +341,7 @@ usb_send(usbd_t *u, int ep, const char *buf, int len){
     otg->epi[ep].DIEPTSIZ = 0;
     otg->epi[ep].DIEPTSIZ = (1 << 19) | len;
     otg->epi[ep].DIEPCTL  = (otg->epi[ep].DIEPCTL & ~USB_OTG_DIEPCTL_STALL) | USB_OTG_DIEPCTL_EPENA | USB_OTG_DIEPCTL_CNAK;
-    trace_crumb2("usbotg", "send", otg->epi[ep].DIEPTSIZ, otg->epi[ep].DIEPCTL);
+    trace_crumb4("usbotg", "send", otg->epi[ep].DIEPTSIZ, otg->epi[ep].DIEPCTL, otg->epi[ep].DTXFSTS, otg->epi[ep].DIEPINT);
 
     int i;
     for(i=0; i<len; i+=4){
@@ -481,10 +481,10 @@ usb_reset_handler(usbotg_t *u){
     u->otg->g.GRSTCTL |= USB_OTG_GRSTCTL_RXFFLSH; // flush rx
 
     u->bufnext = RX_FIFO_SIZE + CONTROL_SIZE;
+    trace_crumb1("usbotg", "reset", 0);
     usb_config_ep0(u->usbd);
     usbd_cb_reset(u->usbd);
 
-    trace_crumb1("usbotg", "reset", 0);
 }
 
 static void
@@ -531,7 +531,7 @@ otg_irq_handler(usbotg_t *u){
         usb_rx_handler(u);
     }
 
-    u->otg->g.GINTSTS = 0xFFFFFFFF;
+    //u->otg->g.GINTSTS = 0xFFFFFFFF;
 
 }
 
@@ -568,7 +568,7 @@ DEFUN(usbtest, "usb test")
     usb_disconnect( usb[0].usbd );
     usleep(1000);
 
-    trace_dump(0);
+    trace_dump(0, 0);
 
     return  0;
 }
@@ -576,7 +576,7 @@ DEFUN(usbtest, "usb test")
 DEFUN(usbinfo, "usb test")
 {
 
-    trace_dump(0);
+    trace_dump(0, 0);
     trace_reset();
 
     return 0;
