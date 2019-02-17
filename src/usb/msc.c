@@ -341,7 +341,6 @@ msc_flush_pipe(struct MSC *p){
     if( totlen == 0 ) return;
 
     trace_crumb2("msc", "flush", p->cbw.bCBWFlags, p->cbw.dCBWDataTransferLength);
-    kprintf("F");
 
     if( p->cbw.bCBWFlags & CBWFLAGS_IN ){
         // send to host
