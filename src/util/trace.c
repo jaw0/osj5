@@ -28,6 +28,8 @@ static int logmode  = 0;
 #define LRT_DATA	2
 #define LRT_FDATA	3
 #define LRT_CRUMB	4
+#define LRT_MARK_START	5
+#define LRT_MARK_STOP	6
 
 #ifndef TRACE_BUFSIZE
 # define TRACE_BUFSIZE 8192
@@ -165,74 +167,44 @@ trace_crumb(const char *tag, const char *evt, int narg, ...){
     _unlock();
 }
 
-#if 0
 void
-trace_crumb1(const char *tag, const char *evt, int d1){
+trace_mark_start(const char *tag){
+    va_list ap;
 
     if( !logbuf ) return;
-    if( !ROOMFOR( SPACEFOR(sizeof(int))) ) return;
+    if( !ROOMFOR(0) ) return;
 
     _lock();
     struct trace_info *ti = (struct trace_info*)(logbuf + logpos);
-    ti->type = LRT_CRUMB;
+    ti->type = LRT_MARK_START;
     ti->tag  = tag;
-    ti->msg  = evt;
     ti->when = get_hrtime();
-    ti->len  = sizeof(int);
+    ti->len  = 0;
+    ti->msg  = 0;
 
-    int *p = (int *)(ti + 1);
-    p[0] = d1;
-
-    logpos += SPACEFOR( sizeof(int));
-    _unlock();
-}
-
-
-void
-trace_crumb2(const char *tag, const char *evt, int d1, int d2){
-
-    if( !logbuf ) return;
-    if( !ROOMFOR( SPACEFOR(2*sizeof(int))) ) return;
-
-    _lock();
-    struct trace_info *ti = (struct trace_info*)(logbuf + logpos);
-    ti->type = LRT_CRUMB;
-    ti->tag  = tag;
-    ti->msg  = evt;
-    ti->when = get_hrtime();
-    ti->len  = 2 * sizeof(int);
-
-    int *p = (int *)(ti + 1);
-    p[0] = d1;
-    p[1] = d2;
-
-    logpos += SPACEFOR( 2 * sizeof(int));
+    logpos += SPACEFOR(0);
     _unlock();
 }
 
 void
-trace_crumb3(const char *tag, const char *evt, int d1, int d2, int d3){
+trace_mark_stop(const char *tag){
+    va_list ap;
 
     if( !logbuf ) return;
-    if( !ROOMFOR( 3*SPACEFOR(2*sizeof(int))) ) return;
+    if( !ROOMFOR(0) ) return;
 
     _lock();
     struct trace_info *ti = (struct trace_info*)(logbuf + logpos);
-    ti->type = LRT_CRUMB;
+    ti->type = LRT_MARK_STOP;
     ti->tag  = tag;
-    ti->msg  = evt;
     ti->when = get_hrtime();
-    ti->len  = 3 * sizeof(int);
+    ti->len  = 0;
+    ti->msg  = 0;
 
-    int *p = (int *)(ti + 1);
-    p[0] = d1;
-    p[1] = d2;
-    p[2] = d3;
-
-    logpos += SPACEFOR( 3 * sizeof(int));
+    logpos += SPACEFOR(0);
     _unlock();
 }
-#endif
+
 
 /****************************************************************/
 
@@ -284,18 +256,19 @@ trace_dpy_crumb(struct trace_info *ti){
     int i;
     int *d = (int*)(ti+1);
 
-    printf("%s ", ti->msg);
+    printf("%s", ti->msg);
 
     for(i=0; i*sizeof(int)<ti->len; i++ ){
-        printf("%x ", d[i]);
+        printf(" %x", d[i]);
     }
 }
 
 void
-trace_dump(const char *filter){
+trace_dump(int markflag, const char *filter){
 
     int p = 0;
     int z = logpos;
+    int inmark = 0;
     unsigned int wh;
 
     for(p=0; p<z; ){
@@ -303,29 +276,42 @@ trace_dump(const char *filter){
 
         if( !filter || !strcmp(filter, ti->tag) ){
 
-            // when, tag
-            if( !p ) wh = ti->when;
-            unsigned int dt = ti->when - wh;
-            wh = ti->when;
+            if( ti->type == LRT_MARK_START ) inmark = 1;
+            if( !markflag || inmark ){
 
-            printf("%8d %-8s ", dt, ti->tag);
+                // when, tag
+                if( !p ) wh = ti->when;
+                unsigned int dt = ti->when - wh;
+                wh = ti->when;
 
-            switch( ti->type ){
-            case LRT_MSG:
-                trace_dpy_msg(ti);
-                break;
-            case LRT_DATA:
-                trace_dpy_data(ti);
-                break;
-            case LRT_FDATA:
-                trace_dpy_fdata(ti);
-                break;
-            case LRT_CRUMB:
-                trace_dpy_crumb(ti);
-                break;
+                printf("%8d %-8s ", dt, ti->tag);
+
+                switch( ti->type ){
+                case LRT_MSG:
+                    trace_dpy_msg(ti);
+                    break;
+                case LRT_DATA:
+                    trace_dpy_data(ti);
+                    break;
+                case LRT_FDATA:
+                    trace_dpy_fdata(ti);
+                    break;
+                case LRT_CRUMB:
+                    trace_dpy_crumb(ti);
+                    break;
+
+                case LRT_MARK_START:
+                    printf("start {");
+                    break;
+
+                case LRT_MARK_STOP:
+                    printf("stop }");
+                    inmark = 0;
+                    break;
+                }
+
+                printf("\n");
             }
-
-            printf("\n");
         }
 
         p += SPACEFOR(ti->len);
@@ -336,9 +322,15 @@ DEFUN(trace, "trace")
 {
     const char *filt = 0;
     int resetp = 0;
+    int markp = 0;
 
     if( (argc > 1) && !strcmp(argv[1], "-r") ){
         resetp = 1;
+        argc--;
+        argv++;
+    }
+    if( (argc > 1) && !strcmp(argv[1], "-m") ){
+        markp = 1;
         argc--;
         argv++;
     }
@@ -346,7 +338,7 @@ DEFUN(trace, "trace")
         filt = argv[1];
     }
 
-    trace_dump(filt);
+    trace_dump(markp, filt);
 
     if( resetp ) trace_reset();
 

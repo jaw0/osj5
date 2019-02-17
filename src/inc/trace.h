@@ -17,6 +17,8 @@
 extern void trace_crumb(const char *tag, const char *evt, int n, ...);
 extern void trace_data( const char *tag, const char *evt, int len, const char *);
 extern void trace_fdata(const char *tag, const char *fmt, int n, ...);
+extern void trace_mark_start(const char *);
+extern void trace_mark_stop(const char *);
 
 # define trace_crumb0(t, e)			trace_crumb(t, e, 0)
 # define trace_crumb1(t, e, a1)			trace_crumb(t, e, 1, a1)
@@ -34,6 +36,8 @@ extern void trace_fdata(const char *tag, const char *fmt, int n, ...);
 # define trace_fdata(t,f,n, args...)
 # define trace_init()
 # define trace_reset()
+# define trace_mark_start()
+# define trace_mark_stop()
 #endif
 
 
