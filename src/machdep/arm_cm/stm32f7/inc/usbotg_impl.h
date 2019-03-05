@@ -9,13 +9,14 @@
 #ifndef __stm32f7_usbfs_impl_h__
 #define __stm32f7_usbfs_impl_h__
 
-#define R_UNIQUE	((unsigned long*)(0x1FF0F420))
+extern uint32_t *r_unique;
+#define R_UNIQUE	((unsigned long*)r_unique)
 
 #define USB_FS_IRQN	OTG_FS_IRQn
 #define USB_HS_IRQN	OTG_HS_IRQn
 
 #define USB_FS_FIFOSIZE	1280
-#define USB_HS_FIFOSIZE	40996
+#define USB_HS_FIFOSIZE	4096
 
 
 #define USB_FS_IRQ_HANDLER OTG_FS_IRQHandler

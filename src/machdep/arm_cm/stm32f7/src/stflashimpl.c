@@ -12,7 +12,8 @@
 #include <stflash.h>
 #include <stm32.h>
 
-#define R_FLASHKB	((unsigned short *)(0x1FF0F442))
+extern uint16_t *r_flashkb;
+extern uint16_t stm32f7_cpuid;
 
 #define FLASHSTART	0x08000000
 
@@ -42,7 +43,20 @@ dualboot_enabled(){
 const struct Flash_Info *
 stflash_flashinfo(){
 
-    int size = *R_FLASHKB; // in kB
+    int size = *r_flashkb; // in kB
+
+    if( stm32f7_cpuid == 0x452 ){
+        // 256k or 512k
+        finfo[0].addr = 0x08020000;
+        finfo[0].blockno = 5;
+        finfo[0].block_size = 128;
+        finfo[0].erase_size = 128 * 1024;
+        finfo[0].write_size = 4;
+        finfo[0].nblocks = (size == 512) ? 3 : 1;
+
+        finfo[1].addr = 0;
+        return finfo;
+    }
 
     if( dualboot_enabled() ){
         finfo[0].addr = 0x08020000;

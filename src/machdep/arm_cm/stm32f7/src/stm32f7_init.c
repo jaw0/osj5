@@ -14,9 +14,12 @@
 
 #define DTCMSTART	0x20000000
 #define R_FLASHKB	((unsigned short *)(0x1FF0F442))
+#define R_FLASHKB2	((unsigned short *)(0x1FF07A22)) // F7[23]x
 #define R_UNIQUE	((unsigned long*)(0x1FF0F420))
+#define R_UNIQUE2	((unsigned long*)(0x1FF07A10))	 // F7[23]x
 #define R_CPUID		((unsigned long*)(0xE0042000))
-#define R_PKGID		((unsigned long*)(0x1FFF7BF0))
+#define R_PKGID		((unsigned long*)(0x1FFF7BF0))	// QQQ is this right? or 1FF07BF0
+
 
 #ifdef HSECLOCK
 #  define SRCCLOCK	HSECLOCK
@@ -26,6 +29,10 @@
 
 
 unsigned long bootflags = 0;
+uint32_t *r_unique;
+uint16_t *r_flashkb;
+uint16_t stm32f7_cpuid;
+
 void stm32_putchar(int);
 
 int freq_sys=HSICLOCK, freq_apb1=HSICLOCK, freq_apb2=HSICLOCK, freq_usb=HSICLOCK;
@@ -211,11 +218,27 @@ void
 init_hw2(void){
     int i;
 
+    int id  = *R_CPUID & 0xFFF;
+    stm32f7_cpuid = id;
+
+    switch( id ){
+    case 0x452: // F7[23]x
+        r_unique = R_UNIQUE2;
+        r_flashkb = R_FLASHKB2;
+        break;
+    case 0x451: // F7[67]x
+    case 0x449: // F7[45]x
+    default:
+        r_unique = R_UNIQUE;
+        r_flashkb = R_FLASHKB;
+
+    }
+
     int ram = (&_estack - &_sdata)/1024;
-    bootmsg("bootflags = 0x%x, cpuid %x, %dk flash, %dk RAM\n", bootflags, *R_CPUID, *R_FLASHKB, ram);
+    bootmsg("bootflags = 0x%x, cpuid %x, %dk flash, %dk RAM\n", bootflags, *R_CPUID, *r_flashkb, ram);
     bootmsg("clocks: sys %dMHz, apb1 %dMHz, apb2 %dMHz, usb %dMHz\n",
             freq_sys/1000000, freq_apb1/1000000, freq_apb2/1000000, freq_usb/1000000);
-    bootmsg("uid %x-%x-%x\n", R_UNIQUE[0], R_UNIQUE[1], R_UNIQUE[2]);
+    bootmsg("uid %x-%x-%x\n", r_unique[0], r_unique[1], r_unique[2]);
 
 }
 
