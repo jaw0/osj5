@@ -54,6 +54,12 @@
  extern "C" {
 #endif /* __cplusplus */
 
+
+#define CPUID_STM32F72X	0x452
+#define CPUID_STM32F74X	0x449
+#define CPUID_STM32F76X	0x451
+
+
 /** @addtogroup Configuration_section_for_CMSIS
   * @{
   */

@@ -45,7 +45,7 @@ stflash_flashinfo(){
 
     int size = *r_flashkb; // in kB
 
-    if( stm32f7_cpuid == 0x452 ){
+    if( stm32f7_cpuid == CPUID_STM32F72X ){
         // 256k or 512k
         finfo[0].addr = 0x08020000;
         finfo[0].blockno = 5;

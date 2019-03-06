@@ -222,12 +222,12 @@ init_hw2(void){
     stm32f7_cpuid = id;
 
     switch( id ){
-    case 0x452: // F7[23]x
+    case CPUID_STM32F72X: // F7[23]x
         r_unique = R_UNIQUE2;
         r_flashkb = R_FLASHKB2;
         break;
-    case 0x451: // F7[67]x
-    case 0x449: // F7[45]x
+    case CPUID_STM32F76X: // F7[67]x
+    case CPUID_STM32F74X: // F7[45]x
     default:
         r_unique = R_UNIQUE;
         r_flashkb = R_FLASHKB;
