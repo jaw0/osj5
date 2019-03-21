@@ -1912,7 +1912,7 @@ flfs2_ops(int what, MountEntry *me, ...){
     }
 }
 
-#if 1// XXX def KTESTING
+#ifdef KTESTING
 
 DEFUN(dumpflfs2, "dump flfs2")
 {

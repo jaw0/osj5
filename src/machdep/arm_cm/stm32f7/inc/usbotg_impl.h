@@ -43,7 +43,7 @@ _usb_otg_fs_init(void){
 static inline void
 _usb_otg_hs_init(void){
 
-    RCC->AHB1ENR |= 3 << 29;
+    RCC->AHB1ENR |= 1 << 29;
 
     // XXX - various options. B14,15 = builtin FS PHY
     gpio_init( GPIO_B14, GPIO_AF(12) | GPIO_PUSH_PULL | GPIO_SPEED_100MHZ );

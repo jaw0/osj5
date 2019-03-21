@@ -27,8 +27,10 @@
 
 
 #define CONTROL_SIZE	64
-#define RX_FIFO_SIZE	256
 
+#ifndef RX_FIFO_SIZE
+#  define RX_FIFO_SIZE	256
+#endif
 
 
 typedef struct {
@@ -73,19 +75,13 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
         break;
     }
 
-
     USB_OTG_t *otg = usb[i].otg;
 
-    /* select Internal PHY */
-    otg->g.GUSBCFG |= USB_OTG_GUSBCFG_PHYSEL;
     /* wait for idle */
     while( otg->g.GRSTCTL & USB_OTG_GRSTCTL_AHBIDL == 0 ) {}
-    /* reset */
-    otg->g.GRSTCTL |= USB_OTG_GRSTCTL_CSRST;
-    while( otg->g.GRSTCTL & USB_OTG_GRSTCTL_CSRST ) {}
-    /* set device mode */
+    /* select internal PHY, device mode */
     otg->g.GUSBCFG = USB_OTG_GUSBCFG_FDMOD | USB_OTG_GUSBCFG_PHYSEL |
-        (6 << 10); /* trdt = minimum */
+        (9 << 10) | 4; /* trdt = minimum */
 
     /* override Vbus sense */
     otg->g.GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN | USB_OTG_GOTGCTL_BVALOVAL;
@@ -98,8 +94,12 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
 #endif
         ;
 
+    /* reset */
+    otg->g.GRSTCTL |= USB_OTG_GRSTCTL_CSRST;
+    while( otg->g.GRSTCTL & USB_OTG_GRSTCTL_CSRST ) {}
+    
     /* restart phy */
-    otg->PCGCCTL = 0;
+    otg->PCGCCTL &= ~0xFF;
     /* soft disconnect device */
     otg->d.DCTL |= USB_OTG_DCTL_SDIS;
     /* Setup USB FS speed and frame interval */
@@ -248,7 +248,6 @@ usb_config_ep0(usbd_t *u){
     usb->otg->epo[0].DOEPCTL  = USB_OTG_DOEPCTL_EPENA | USB_OTG_DOEPCTL_CNAK;
 
     u->epd[0].bufsize = CONTROL_SIZE;
-
 }
 
 
@@ -279,7 +278,7 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
 
         switch( type ){
         case UE_ISOCHRONOUS:
-            otg->epi[epa].DIEPCTL = USB_OTG_DIEPCTL_EPENA | USB_OTG_DIEPCTL_CNAK |
+            otg->epi[epa].DIEPCTL = /*USB_OTG_DIEPCTL_EPENA |*/ USB_OTG_DIEPCTL_CNAK |
                 USB_OTG_DIEPCTL_SD0PID_SEVNFRM | USB_OTG_DIEPCTL_USBAEP |
                            (1 << 18) | (epa << 22) | size;
             break;
@@ -309,7 +308,7 @@ usb_config_ep(usbd_t *u, int ep, int type, int size){
         }
 
         otg->epo[epa].DOEPCTL = USB_OTG_DOEPCTL_SD0PID_SEVNFRM | USB_OTG_DOEPCTL_CNAK |
-            USB_OTG_DOEPCTL_EPENA | USB_OTG_DOEPCTL_USBAEP |
+            /*USB_OTG_DOEPCTL_EPENA |*/ USB_OTG_DOEPCTL_USBAEP |
             (t << 18) | size;
 
     }
@@ -366,7 +365,6 @@ usb_recv_nack(usbd_t *u, int ep){
     usbotg_t *usb = u->dev;
     USB_OTG_t *otg = usb->otg;
 
-    if( otg->epo[ep & 0x7f].DOEPCTL & USB_OTG_DOEPCTL_NAKSTS ) trace_reset();
     trace_crumb2("usbotg", "nack", ep, otg->epo[ep & 0x7f].DOEPCTL & USB_OTG_DOEPCTL_NAKSTS );
     otg->epo[ep & 0x7f].DOEPCTL |= USB_OTG_DOEPCTL_SNAK;
 }
@@ -529,6 +527,7 @@ otg_irq_handler(usbotg_t *u){
     }
     if( isr & USB_OTG_GINTSTS_RXFLVL ){
         usb_rx_handler(u);
+        // set_leds_rgb(0xFFFFFF, 0xFFFFFF);
     }
 
     //u->otg->g.GINTSTS = 0xFFFFFFFF;
@@ -593,13 +592,43 @@ DEFUN(epinfo, "test")
 
     printf("ep#: %d\n", ep);
 
-    printf("ctl: %x\n", otg->epi[ep].DIEPCTL);
-    printf("siz: %x\n", otg->epi[ep].DIEPTSIZ);
-    printf("sts: %x\n", otg->epi[ep].DTXFSTS);	// amount of free space in tx fifo. words
-    printf("int: %x\n", otg->epi[ep].DIEPINT);
-    printf("txf: %x\n", otg->g.DIEPTXF[ep - 1]);
+    printf("ctl: in %08x out %08x\n", otg->epi[ep].DIEPCTL,  otg->epo[ep].DOEPCTL);
+    printf("siz: in %08x out %08x\n", otg->epi[ep].DIEPTSIZ, otg->epo[ep].DOEPTSIZ);
+    printf("sts: in %x\n", otg->epi[ep].DTXFSTS);	// amount of free space in tx fifo. words
+    printf("int: in %08x out %08x\n", otg->epi[ep].DIEPINT,   otg->epo[ep].DOEPINT);
+    printf("txf: in %08x\n", otg->g.DIEPTXF[ep - 1]);
+
+    return 0;
+}
+
+DEFUN(hstest, "test")
+{
+    int x;
+
+    RCC->AHB1ENR |= 1 << 29;
+    // do not actually config the pins
+
+    USB_OTG_t *otg = USB_OTG_HS_PERIPH_BASE;
+
+    /* select Internal PHY */
+    otg->g.GUSBCFG |= USB_OTG_GUSBCFG_PHYSEL;
+    /* wait for idle */
+    printf("waiting...");
+    while( otg->g.GRSTCTL & USB_OTG_GRSTCTL_AHBIDL == 0 ) {
+        usleep(10000);
+    }
+    /* reset */
+    printf("waiting...");
+    otg->g.GRSTCTL |= USB_OTG_GRSTCTL_CSRST;
+    while( otg->g.GRSTCTL & USB_OTG_GRSTCTL_CSRST ) {
+        usleep(10000);
+    }
+
+
+
 
     return 0;
 }
 
 #endif
+

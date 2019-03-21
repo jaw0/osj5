@@ -25,8 +25,6 @@
 #endif
 #include <trace.h>
 
-#define MSC_BUFSIZE	16384			// must be a multiple of 512
-
 #ifndef MSC_BUFSIZE
 # define MSC_BUFSIZE	16384			// must be a multiple of 512
 #endif

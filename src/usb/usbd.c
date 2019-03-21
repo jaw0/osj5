@@ -24,47 +24,6 @@
 
 static usbd_t usbd[N_USBD];
 
-static const usb_device_descriptor_t x_test_dev_desc = {
-    .bLength            = sizeof(usb_device_descriptor_t),
-    .bDescriptorType    = USB_DTYPE_DEVICE,
-    .bcdUSB             = UD_USB_2_0,
-    .bDeviceClass       = 0xFF, // 00 means each interface defines its own class; FF means vendor-defined class; Any other value must be a class code
-    .bDeviceSubClass    = 0,
-    .bDeviceProtocol    = 0,
-    .bMaxPacketSize     = CONTROLSIZE,
-    .idVendor           = 0xA791,
-    .idProduct          = 0x01,
-    .bcdDevice          = 0x01,
-    .iManufacturer      = 1,
-    .iProduct           = 2,
-    .iSerialNumber      = SERIALNO_IDX,
-    .bNumConfigurations = 1,
-};
-static const usb_config_descriptor_t x_test_conf_desc = {
-    .bLength             = sizeof(usb_config_descriptor_t),
-    .bDescriptorType     = USB_DTYPE_CONFIGURATION,
-    .wTotalLength        = sizeof(usb_config_descriptor_t),
-    .bNumInterface       = 1,
-    .bConfigurationValue = 0,
-    .iConfiguration      = 2,
-    .bmAttributes        = 0x80,
-    .bMaxPower           = 250,
-};
-
-static const usb_wdata_descriptor_t lang_desc    = { 4,  USB_DTYPE_STRING, USB_LANG_EN_US };
-static const usb_wdata_descriptor_t x_manuf_desc = { 12, USB_DTYPE_STRING, u"OS/J5" };
-static const usb_wdata_descriptor_t x_prod_desc  = { 10, USB_DTYPE_STRING, u"test"  };
-
- const usbd_config_t x_test_config = {
-    .dmap = {
-        { (USB_DTYPE_DEVICE<<8),	0, &x_test_dev_desc },
-        { (USB_DTYPE_CONFIGURATION<<8),	0, &x_test_conf_desc },
-        { (USB_DTYPE_STRING<<8) | 0,    0, &lang_desc },
-        { (USB_DTYPE_STRING<<8) | 1,	0, &x_manuf_desc },
-        { (USB_DTYPE_STRING<<8) | 2,	0, &x_prod_desc },
-        {0, 0, 0},
-    }
-};
 
 int
 usbd_init(struct Device_Conf *dev){
@@ -76,8 +35,6 @@ usbd_init(struct Device_Conf *dev){
     trace_init();
 
     usbd[i].dev = usb;
-    usbd[i].cf = &x_test_config;	// XXX
-
 }
 
 usbd_t *
@@ -144,7 +101,7 @@ usbd_cb_reset(usbd_t *u){
     u->curr_config = 0;
     u->curr_state  = USBD_STATE_RESET;
 
-    if( u->cf->cb_reset )
+    if( u->cf && u->cf->cb_reset )
         u->cf->cb_reset(u->cbarg);
 }
 
@@ -156,7 +113,6 @@ usbd_cb_suspend(usbd_t *u){
 void
 usbd_cb_wakeup(usbd_t *u){
     u->curr_state  &= ~USBD_STATE_SUSPEND;
-
 }
 
 /****************************************************************/
@@ -184,6 +140,7 @@ usbd_reply_descr(usbd_t *u, const char *buf){
     }
 
     trace_crumb1("usbd", "!descr", req->wValue);
+    kprintf("!descr %x\n", req->wValue);
     return 0;
 }
 
@@ -192,7 +149,7 @@ usbd_reply_descr(usbd_t *u, const char *buf){
 static void
 _configure(usbd_t *u){
 
-    if( u->cf->cb_configure )
+    if( u->cf && u->cf->cb_configure )
         u->cf->cb_configure(u->cbarg);
 }
 
@@ -291,7 +248,7 @@ usbd_process_setup(usbd_t *u){
     char *buf = u->ctlreq;
     usb_device_request_t *req = buf;
 
-    trace_fdata("usbd", "ctl type %x, req %x, wlen %d, have %d", 4, req->bmRequestType, req->bRequest, req->wLength, u->reqlen);
+    trace_fdata("usbd", "ctl type %x, idx %x req %x, wlen %d", 4, req->bmRequestType, req->wIndex, req->bRequest, req->wLength);
 
     switch (req->bmRequestType & ~USB_REQ_TYPE_READ){
 
@@ -311,7 +268,7 @@ usbd_process_setup(usbd_t *u){
 
     if(r) return;
 
-    if( u->cf->cb_recv_setup )
+    if( u->cf && u->cf->cb_recv_setup )
         r = u->cf->cb_recv_setup(u->cbarg, buf, u->reqlen);
 
     if( r ) return;
@@ -368,7 +325,9 @@ usbd_cb_recv(usbd_t *u, int ep, int len){
         return;
     }
 
-    if( u->cf->cb_recv[ep] )
+    // trace_crumb2("usbd", "recv/data", ep, len);
+
+    if( u->cf && u->cf->cb_recv[ep] )
         u->cf->cb_recv[ep](u->cbarg, ep, len);
 }
 
@@ -386,7 +345,7 @@ usbd_send_more(usbd_t *u, int ep){
     if( (u->epd[epa].wlen != 0) || u->epd[epa].wzlp ){
         int l = usb_send(u, ep, u->epd[epa].wbuf, u->epd[epa].wlen);
 
-        trace_crumb2("usbd", "send", ep, l);
+        // trace_crumb2("usbd", "send", ep, l);
 
         if( l < 0 ){
             // error
@@ -475,13 +434,13 @@ _set_addr(usbd_t *u){
 void
 usbd_cb_send_complete(usbd_t *u, int ep){
 
-    trace_crumb2("usbd", "send/c", ep, u->epd[ep].wpending);
+    // trace_crumb2("usbd", "send/c", ep, u->epd[ep].wpending);
 
     if( ! u->epd[ep].wpending ){
         u->epd[ep].wbusy = 0;
 
         if( u->setaddrreq ) _set_addr(u);
-        if( u->cf->cb_tx_complete[ep] ) u->cf->cb_tx_complete[ep](u->cbarg, ep);
+        if( u->cf && u->cf->cb_tx_complete[ep] ) u->cf->cb_tx_complete[ep](u->cbarg, ep);
 
         return;
     }

@@ -82,6 +82,8 @@
 #define USB_SUBCLASS_NONE           0x00
 #define USB_PROTO_NONE              0x00
 #define USB_CLASS_AUDIO             0x01
+#define USB_CLASS_CDC               0x02
+#define USB_CLASS_HID               0x03
 #define USB_CLASS_PHYSICAL          0x05
 #define USB_CLASS_STILL_IMAGE       0x06
 #define USB_CLASS_PRINTER           0x07
@@ -102,7 +104,6 @@
 #define USB_SUBCLASS_VENDOR         0xFF
 #define USB_PROTO_VENDOR            0xFF
 
-
 #define USB_DTYPE_DEVICE            0x01
 #define USB_DTYPE_CONFIGURATION     0x02
 #define USB_DTYPE_STRING            0x03
@@ -113,7 +114,7 @@
 #define USB_DTYPE_INTERFACEPOWER    0x08
 #define USB_DTYPE_OTG               0x09
 #define USB_DTYPE_DEBUG             0x0A
-#define USB_DTYPE_INTERFASEASSOC    0x0B
+#define USB_DTYPE_INTERFACEASSOC    0x0B
 #define USB_DTYPE_CS_INTERFACE      0x24
 #define USB_DTYPE_CS_ENDPOINT       0x25
 
@@ -198,6 +199,19 @@ typedef struct {
 typedef struct {
         uint8_t           bLength;
         uint8_t           bDescriptorType;
+        uint8_t           bFirstInterface;
+        uint8_t           bInterfaceCount;
+        uint8_t           bFunctionClass;
+        uint8_t           bFunctionSubClass;
+        uint8_t           bFunctionProtocol;
+#  define AF_VERSION_02_00 0x20
+        uint8_t           iFunction;
+} PACKED usb_interfaceassoc_descriptor_t;
+
+
+typedef struct {
+        uint8_t           bLength;
+        uint8_t           bDescriptorType;
         uint8_t           bEndpointAddress;
 #define UE_GET_DIR(a)   ((a) & 0x80)
 #define UE_SET_DIR(a,d) ((a) | (((d)&1) << 7))
@@ -216,6 +230,9 @@ typedef struct {
 #define  UE_ISO_ASYNC   0x04
 #define  UE_ISO_ADAPT   0x08
 #define  UE_ISO_SYNC    0x0c
+#define  UE_ISO_FEEDBACK 0x10
+#define  UE_ISO_EXPLICIT 0x20
+
 #define UE_GET_ISO_TYPE(a)      ((a) & UE_ISO_TYPE)
         uint16_t           wMaxPacketSize;
 #define UE_GET_TRANS(a)         (((a) >> 11) & 0x3)

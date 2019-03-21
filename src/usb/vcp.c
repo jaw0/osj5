@@ -259,7 +259,7 @@ vcp_init(struct Device_Conf *dev){
     v->usbd = u;
     trace_init();
 
-#ifndef USE_VCPMSC
+#if !defined(USE_VCPMSC) && !defined(USE_USBCOMP)
     usbd_configure( u, &cdc_usbd_config, vcom + i );
     usb_connect( u );
 #endif
