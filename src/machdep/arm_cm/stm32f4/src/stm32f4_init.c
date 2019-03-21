@@ -27,6 +27,8 @@
 
 
 unsigned long bootflags = 0;
+uint16_t stm32f4_cpuid;
+
 void stm32_putchar(int);
 
 int freq_sys=HSICLOCK, freq_apb1=HSICLOCK, freq_apb2=HSICLOCK, freq_usb=HSICLOCK;
@@ -203,6 +205,8 @@ extern char _sdata, _estack;
 void
 init_hw2(void){
     int i;
+
+    stm32f4_cpuid = *R_DBGID & 0xFFF;
 
     int ram = (&_estack - &_sdata)/1024;
     bootmsg("bootflags = 0x%x, cpuid %x (%x), %dk flash, %dk RAM\n", bootflags, SCB->CPUID, *R_DBGID, *R_FLASHKB, ram);

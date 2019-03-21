@@ -473,6 +473,15 @@ sdio_bread(FILE*f, char*d, int len, offset_t pos){
 
         kcprintf("sd read error %qx, %d => %x, %x\n", pos, len, r, SDIO->RESP1);
         usleep(10000);
+
+#ifdef PLATFORM_STM32F4
+        // errata DM00037591 2.12.3 - SDIO clock divider BYPASS mode may not work properly
+        // tested - some chips work fine, some don't
+        // if we have read errors, disable the bypass and run at 24MHz :-(
+        if( SDIO->CLKCR & (1<<10) ){
+            SDIO->CLKCR &= ~( 0xFF | (1<<10) );
+        }
+#endif
         if( tries > 2 ) sdio_clear( ii );
     }
 
