@@ -32,6 +32,7 @@ uint16_t stm32f4_cpuid;
 void stm32_putchar(int);
 
 int freq_sys=HSICLOCK, freq_apb1=HSICLOCK, freq_apb2=HSICLOCK, freq_usb=HSICLOCK;
+int freq_pll=0;
 
 int sys_clock_freq(void){  return freq_sys;  }
 int apb1_clock_freq(void){ return freq_apb1; }
@@ -116,6 +117,7 @@ clock_init(void){
 #  define PLLFVCO 	(PLLFVIN * PLLN)
 #  define PLLQ		((PLLFVCO + USBFREQ/2) / USBFREQ)
 
+        freq_pll = PLLFVIN;
         freq_sys = PLLFVCO / PLLP;
         freq_usb = PLLFVCO / PLLQ;
 

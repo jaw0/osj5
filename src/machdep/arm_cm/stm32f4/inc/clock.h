@@ -13,6 +13,10 @@
 #  endif
 #endif
 
+#ifndef PLLVCOTARGET
+// ST recommends 2MHz, but other values may be prefered
+#  define PLLVCOTARGET    2000000
+#endif
 
 #ifdef STM32F411
 #  define SYSMAX	100000000
@@ -22,7 +26,6 @@
 #  define ADCBMAX  	 36000000       /* NB: depends on voltage */
 #  define USBFREQ  	 48000000
 #  define FLASHMAX 	 30000000       /* NB: depends on voltage */
-#  define PLLVCOTARGET    2000000
 #  define PLLVCOMIN     100000000
 #  define PLLVCOMAX     432000000
 #else
@@ -33,7 +36,6 @@
 #  define ADCBMAX  	 36000000       /* NB: depends on voltage */
 #  define USBFREQ  	 48000000
 #  define FLASHMAX 	 30000000       /* NB: depends on voltage */
-#  define PLLVCOTARGET    2000000
 #  define PLLVCOMIN     192000000
 #  define PLLVCOMAX     432000000
 #endif
