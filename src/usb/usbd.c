@@ -115,6 +115,12 @@ usbd_cb_wakeup(usbd_t *u){
     u->curr_state  &= ~USBD_STATE_SUSPEND;
 }
 
+void
+usbd_cb_sof(usbd_t *u){
+    if( u->cf && u->cf->cb_sof )
+        u->cf->cb_sof(u->cbarg);
+}
+
 /****************************************************************/
 static int
 usbd_reply_descr(usbd_t *u, const char *buf){

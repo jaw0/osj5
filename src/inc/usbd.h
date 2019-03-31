@@ -40,6 +40,7 @@ typedef struct {
     int  (*cb_recv_setup)(void *, const char *, int);
     void (*cb_tx_complete[NUMENDPOINTS])(void *, int);
     void (*cb_recv[NUMENDPOINTS])(void *, int, int);
+    void (*cb_sof)(void*);
 
     // ...
 

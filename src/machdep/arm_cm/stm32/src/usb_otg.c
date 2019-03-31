@@ -26,11 +26,15 @@
 #include <trace.h>
 
 
+
 #define CONTROL_SIZE	64
 
 #ifndef RX_FIFO_SIZE
 #  define RX_FIFO_SIZE	256
 #endif
+
+#define EP_IS_ISO(otg, ep) 	(((otg->epo[ep & 0x7F].DOEPCTL >> 18) & 3) == 1)
+
 
 
 typedef struct {
@@ -111,7 +115,8 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
     otg->d.DIEPMSK = USB_OTG_DIEPMSK_XFRCM;
     otg->g.GINTMSK  = USB_OTG_GINTMSK_USBRST |
         // USB_OTG_GINTMSK_ENUMDNEM | USB_OTG_GINTMSK_USBSUSPM | USB_OTG_GINTMSK_WUIM |
-        USB_OTG_GINTMSK_IEPINT | USB_OTG_GINTMSK_RXFLVLM;
+        USB_OTG_GINTMSK_IISOIXFRM |
+        USB_OTG_GINTMSK_IEPINT | USB_OTG_GINTMSK_RXFLVLM | USB_OTG_GINTMSK_SOFM;
 
     /* clear pending interrupts */
     otg->g.GINTSTS = 0xFFFFFFFF;
@@ -322,6 +327,32 @@ get_fifo(usbotg_t *u, int epa){
     return u->otg->fifo + (epa << 10);
 }
 
+static void
+_iso_cancel(USB_OTG_t *otg, int ep){
+
+    if( otg->epi[ep].DIEPCTL & USB_OTG_DIEPCTL_EPENA ){
+        // cancel pending xfer
+        otg->epi[ep].DIEPCTL |= USB_OTG_DIEPCTL_SNAK;
+        otg->epi[ep].DIEPCTL |= USB_OTG_DIEPCTL_EPDIS;
+
+        // flush pending xfer
+        otg->g.GRSTCTL = (ep << 6) | USB_OTG_GRSTCTL_TXFFLSH;
+    }
+}
+
+
+static void
+_iso_prepare(USB_OTG_t *otg, int ep){
+
+    // set even/odd to match most recent SOF
+    int frn = (otg->d.DSTS >> 8) & 0x3FFF;
+    if( frn & 1 ){
+        otg->epi[ep].DIEPCTL |= 1 << 29; // -> odd
+    }else{
+        otg->epi[ep].DIEPCTL |= 1 << 28; // -> even
+    }
+}
+
 int
 usb_send(usbd_t *u, int ep, const char *buf, int len){
     usbotg_t *usb = u->dev;
@@ -329,7 +360,13 @@ usb_send(usbd_t *u, int ep, const char *buf, int len){
 
     ep &= 0x7F;
     if( len > u->epd[ep].bufsize ) len = u->epd[ep].bufsize;
-    if( ep && !(otg->epi[ep].DIEPCTL & USB_OTG_DIEPCTL_USBAEP) ) return -1;	// ep not enabled
+
+    if( EP_IS_ISO(otg, ep) ){
+        _iso_cancel(otg, ep);
+        _iso_prepare(otg, ep);
+    }
+
+    if( ep && !(otg->epi[ep].DIEPCTL & USB_OTG_DIEPCTL_USBAEP) ) return -3;	// ep not enabled
     if( ep &&  (otg->epi[ep].DIEPCTL & USB_OTG_DIEPCTL_EPENA) )  return -2;	// ep currently sending
 
     volatile uint32_t *fifo = get_fifo(usb, ep);
@@ -357,7 +394,19 @@ usb_recv_ack(usbd_t *u, int ep){
     USB_OTG_t *otg = usb->otg;
 
     trace_crumb1("usbotg", "ack", ep);
-    otg->epo[ep & 0x7f].DOEPCTL |= USB_OTG_DOEPCTL_CNAK | USB_OTG_DOEPCTL_EPENA;
+
+    ep &= 0x7F;
+
+    if( EP_IS_ISO(otg, ep) ){
+        // isochronous - need to manually toggle even/odd bit
+        if( otg->epo[ep].DOEPCTL & (1 << 16) ){
+            otg->epo[ep].DOEPCTL |= 1 << 28; // odd -> even
+        }else{
+            otg->epo[ep].DOEPCTL |= 1 << 29; // even -> odd
+        }
+    }
+
+    otg->epo[ep].DOEPCTL |= USB_OTG_DOEPCTL_CNAK | USB_OTG_DOEPCTL_EPENA;
 }
 
 void
@@ -383,7 +432,7 @@ usb_read(usbd_t *u, int ep, char *buf, int len){
     USB_OTG_t *otg = usb->otg;
 
     ep &= 0x7F;
-    uint32_t *fifo = get_fifo(usb, ep); // QQQ
+    volatile uint32_t *fifo = get_fifo(usb, ep);
 
     if( !(otg->g.GINTSTS & USB_OTG_GINTSTS_RXFLVL) ) return -1; // no data in fifo
 
@@ -396,11 +445,57 @@ usb_read(usbd_t *u, int ep, char *buf, int len){
     int i;
     for(i=0; i<l; ){
         uint32_t v = *fifo;
-        if( i >= len ) continue; // read and discard if no space
+        if( i >= len ){
+            i += 4;
+            continue; // read and discard if no space
+        }
         buf[i++] = v & 0xFF;
         buf[i++] = (v >> 8) & 0xFF;
         buf[i++] = (v >> 16) & 0xFF;
         buf[i++] = (v >> 24) & 0xFF;
+    }
+
+    usb->readflag = 1;
+    return l;
+}
+
+// read + unzip interleaved data
+//  123456123456 -> 1212 3434 5656 (frame=8(bytes), sect=3)
+int
+usb_read_unzip(usbd_t *u, int ep, char *buf, int len, int frame, int sect){
+    usbotg_t *usb = u->dev;
+    USB_OTG_t *otg = usb->otg;
+
+    ep &= 0x7F;
+    volatile uint32_t *fifo = get_fifo(usb, ep);
+
+    if( !(otg->g.GINTSTS & USB_OTG_GINTSTS_RXFLVL) ) return -1; // no data in fifo
+
+    uint32_t rxs = otg->g.GRXSTSR;
+    if( (rxs & USB_OTG_GRXSTSP_EPNUM) != ep ) return -1; // data is not for this ep
+
+    rxs = otg->g.GRXSTSP;	// same data, pop
+    int l = (rxs >> 4) & 0x7FF;
+
+    int i=0, p=0, s, f, slen=len/sect;
+
+    if( frame == 2 ){
+        // RSN ...
+    }else{
+        uint32_t *bw = (uint32_t*)buf;
+        frame /= 4; // bytes -> words
+
+        while( i < l ){
+            for(s=0; s<sect; s++){
+                for(f=0; f<frame; f++){
+                    uint32_t v = *fifo;
+                    i += 4;
+                    if( i >= len ) continue;
+                    buf[ s*slen + p + f ] = v;
+                }
+            }
+            p += frame;
+        }
     }
 
     usb->readflag = 1;
@@ -436,6 +531,23 @@ usb_tx_handler(usbotg_t *u){
         }
     }
 }
+
+static void
+usb_iiso_handler(usbotg_t *u){
+    USB_OTG_t *otg = u->otg;
+    int i;
+
+    for(i=0; i<16; i++){
+        if( EP_IS_ISO(otg, i) && (otg->epi[i].DIEPCTL & USB_OTG_DIEPCTL_EPENA) ){
+            // iso ep - send did not complete
+            _iso_cancel(otg, i);
+
+            trace_crumb2("usbotg", "iiso", i, otg->epi[i].DIEPCTL);
+            //usbd_cb_send_complete(u->usbd, i);
+        }
+    }
+}
+
 
 static const char *rxinfo[] = {
     "rx/0", "rx/NAK", "rx/out", "rx/out!", "rx/setup!", "rx/5", "rx/setup", "rx/7",
@@ -505,7 +617,7 @@ static void
 otg_irq_handler(usbotg_t *u){
     int isr = u->otg->g.GINTSTS;
 
-    trace_crumb1("usbotg",  "irq!", isr);
+    // trace_crumb1("usbotg",  "irq!", isr);
 
     if( isr & USB_OTG_GINTSTS_USBRST ){
         usb_reset_handler(u);
@@ -527,7 +639,15 @@ otg_irq_handler(usbotg_t *u){
     }
     if( isr & USB_OTG_GINTSTS_RXFLVL ){
         usb_rx_handler(u);
-        // set_leds_rgb(0xFFFFFF, 0xFFFFFF);
+    }
+    if( isr & USB_OTG_GINTSTS_IISOIXFR ){
+        usb_iiso_handler(u);
+        u->otg->g.GINTSTS = USB_OTG_GINTSTS_IISOIXFR;
+    }
+
+    if( isr & USB_OTG_GINTSTS_SOF ){
+        usbd_cb_sof(u->usbd);
+        u->otg->g.GINTSTS = USB_OTG_GINTSTS_SOF;
     }
 
     //u->otg->g.GINTSTS = 0xFFFFFFFF;

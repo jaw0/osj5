@@ -36,6 +36,13 @@
 
 /****************************************************************/
 
+#define USB_SPEED_UNKNOWN 0
+#define USB_SPEED_LOW     1
+#define USB_SPEED_FULL    2
+#define USB_SPEED_HIGH    3
+
+/****************************************************************/
+
 #define USB_LANG_EN_US		0x0409
 
 
@@ -126,6 +133,7 @@ typedef struct {
         uint16_t          wValue;
         uint16_t          wIndex;
         uint16_t          wLength;
+        char              bData[0];
 } PACKED usb_device_request_t;
 
 typedef struct {
