@@ -229,14 +229,14 @@ static struct VCP {
     uint8_t rblen, tblen;
     uint8_t ready;
 
-} vcom[ 1 ];
+} vcom[ N_VCP ];
 
 FILE *vcp0_port = 0;
 
 int
 vcp_init(struct Device_Conf *dev){
 
-    int i = 0; // dev->unit;
+    int i = dev->unit;
     struct VCP *v = vcom + i;
 
     bzero( v, sizeof(struct VCP));
@@ -255,7 +255,7 @@ vcp_init(struct Device_Conf *dev){
         .bDataBits          = 8,
     };
 
-    usbd_t *u = usbd_get(0);
+    usbd_t *u = usbd_get( dev->port );
     v->usbd = u;
     trace_init();
 
@@ -264,7 +264,7 @@ vcp_init(struct Device_Conf *dev){
     usb_connect( u );
 #endif
 
-    bootmsg("%s cdc/vcp on usb\n", dev->name);
+    bootmsg("%s cdc/vcp on usb%d\n", dev->name, dev->port);
 
     vcp0_port = &v->file;
     return (int) &v->file;
@@ -396,7 +396,7 @@ vcp_putchar(FILE *f, char ch){
 
     p = (struct VCP*)f->d;
 
-    trace_crumb3("vcp", "putchar", p->txq.len, p->txq.head, p->txq.tail);
+    //trace_crumb3("vcp", "putchar", p->txq.len, p->txq.head, p->txq.tail);
 
     while(1){
         plx = spldisk();

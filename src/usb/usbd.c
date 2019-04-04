@@ -33,8 +33,10 @@ usbd_init(struct Device_Conf *dev){
     void *usb = usb_init(dev, usbd + i);
 
     trace_init();
+    trace_crumb3("usbd", "init", i, usb, usbd + i);
 
     usbd[i].dev = usb;
+    return 0;
 }
 
 usbd_t *
@@ -48,6 +50,7 @@ usbd_configure(usbd_t *u, const usbd_config_t *cf, const void *cbarg){
     u->cf = cf;
     u->cbarg = cbarg;
 
+    trace_crumb2("usbd", "cf", u, u->curr_state);
     if( (u->curr_state & 0x7F) >= USBD_STATE_RESET ){
         if( cf->cb_reset ) cf->cb_reset(u->cbarg);
     }
@@ -101,6 +104,7 @@ usbd_cb_reset(usbd_t *u){
     u->curr_config = 0;
     u->curr_state  = USBD_STATE_RESET;
 
+    trace_crumb1("usbd", "reset", u);
     if( u->cf && u->cf->cb_reset )
         u->cf->cb_reset(u->cbarg);
 }

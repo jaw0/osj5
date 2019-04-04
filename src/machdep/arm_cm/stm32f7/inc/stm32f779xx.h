@@ -455,6 +455,7 @@ typedef struct
   __IO uint32_t HISR;   /*!< DMA high interrupt status register,     Address offset: 0x04 */
   __IO uint32_t LIFCR;  /*!< DMA low interrupt flag clear register,  Address offset: 0x08 */
   __IO uint32_t HIFCR;  /*!< DMA high interrupt flag clear register, Address offset: 0x0C */
+    DMA_Stream_TypeDef stream[8];
 } DMA_TypeDef;
 
 /**
@@ -891,6 +892,15 @@ typedef struct
   __IO uint32_t CLRFR;    /*!< SAI block x clear flag register,          Address offset: 0x1C */
   __IO uint32_t DR;       /*!< SAI block x data register,                Address offset: 0x20 */
 } SAI_Block_TypeDef;
+
+
+typedef struct {
+    __IO uint32_t PLL1;
+    uint32_t     _dummy1[2];
+    __IO uint32_t TUNE;
+    uint32_t     _dummy2[2];
+    __IO uint32_t LDO;
+} USBPHYC_Typedef;
 
 /**
   * @brief SPDIF-RX Interface
@@ -1555,6 +1565,7 @@ typedef struct
 #define LTDC_Layer1_BASE      (LTDC_BASE + 0x84U)
 #define LTDC_Layer2_BASE      (LTDC_BASE + 0x104U)
 #define DSI_BASE              (APB2PERIPH_BASE + 0x6C00U)
+#define USBPHYC_BASE          (APB2PERIPH_BASE + 0x7C00U)
 #define DFSDM1_BASE           (APB2PERIPH_BASE + 0x7400U)
 #define DFSDM1_Channel0_BASE  (DFSDM1_BASE + 0x00U)
 #define DFSDM1_Channel1_BASE  (DFSDM1_BASE + 0x20U)
@@ -1711,6 +1722,7 @@ typedef struct
 #define SAI1_Block_B        ((SAI_Block_TypeDef *)SAI1_Block_B_BASE)
 #define SAI2_Block_A        ((SAI_Block_TypeDef *)SAI2_Block_A_BASE)
 #define SAI2_Block_B        ((SAI_Block_TypeDef *)SAI2_Block_B_BASE)
+#define USBPHYC		    ((USBPHYC_Typedef *)USBPHYC_BASE)
 #define LTDC                ((LTDC_TypeDef *)LTDC_BASE)
 #define LTDC_Layer1         ((LTDC_Layer_TypeDef *)LTDC_Layer1_BASE)
 #define LTDC_Layer2         ((LTDC_Layer_TypeDef *)LTDC_Layer2_BASE)

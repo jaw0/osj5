@@ -35,7 +35,8 @@
 
 #define EP_IS_ISO(otg, ep) 	(((otg->epo[ep & 0x7F].DOEPCTL >> 18) & 3) == 1)
 
-
+static void usb_hs_phyc_init();
+static void usb_reset(USB_OTG_t  *);
 
 typedef struct {
     usbd_t *usbd;
@@ -48,60 +49,100 @@ typedef struct {
 
 } usbotg_t;
 
-static usbotg_t usb[N_USBD];
+static usbotg_t usbdev[N_USBD];
 
 // unit 0 -> FS, 1 -> HS
+// flags:
+#define FLAG_HS_INTERNAL	0 // FS or HS
+#define FLAG_HS_ULPI		1
+#define FLAG_HS_FS		4 // full-speed on HS phy
 
 void *
 usb_init(struct Device_Conf *dev, usbd_t *usbd){
     int i    = dev->unit;
-    int irq;
+    int irq, cnt;
     const char *name;
+    int mode = dev->flags;
+    int phy   = 3; // default: internal FS PHY
 
-    bzero(usb + i, sizeof(usbotg_t));
-    usb[i].usbd = usbd;
+    bzero(usbdev + i, sizeof(usbotg_t));
+    usbdev[i].usbd = usbd;
 
-    switch(i){
+
+    switch(dev->unit){
     case 0: // FS
-        usb[i].otg = USB_OTG_FS_PERIPH_BASE;
-        usb[i].bufsize = USB_FS_FIFOSIZE;
+        usbdev[i].otg = USB_OTG_FS_PERIPH_BASE;
+        usbdev[i].bufsize = USB_FS_FIFOSIZE;
         irq = USB_FS_IRQN;
         _usb_otg_fs_init();
-        name = "full-speed";
+        name = "otgfs/fsphy";
         break;
     case 1: // HS
-        usb[i].otg = USB_OTG_HS_PERIPH_BASE;
-        usb[i].bufsize = USB_HS_FIFOSIZE;
+        usbdev[i].otg = USB_OTG_HS_PERIPH_BASE;
+        usbdev[i].bufsize = USB_HS_FIFOSIZE;
         irq = USB_HS_IRQN;
         _usb_otg_hs_init();
-        name = "high-speed";
-        // QQQ - using: FS PHY, ULPI (FS or HS), I2C (FS) ?
+        name = "otghs/fsphy";
+
+        // is there an internal HS PHY? (F7x3)
+#ifdef USBPHYC_BASE
+        if( USBPHYC->LDO & 1 ){
+            usb_hs_phyc_init();
+            if( mode & FLAG_HS_FS ){
+                phy = 1; // FS on HS phy
+            }else{
+                name = "otghs/hsphy";
+                phy = 0; // HS on HS phy
+            }
+        }
+#endif
+
         break;
     }
 
-    USB_OTG_t *otg = usb[i].otg;
+    USB_OTG_t *otg = usbdev[i].otg;
 
     /* wait for idle */
     while( otg->g.GRSTCTL & USB_OTG_GRSTCTL_AHBIDL == 0 ) {}
-    /* select internal PHY, device mode */
-    otg->g.GUSBCFG = USB_OTG_GUSBCFG_FDMOD | USB_OTG_GUSBCFG_PHYSEL |
-        (9 << 10) | 4; /* trdt = minimum */
 
-    /* override Vbus sense */
-    otg->g.GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN | USB_OTG_GOTGCTL_BVALOVAL;
-    /* activate transceiver */
-    otg->g.GCCFG = USB_OTG_GCCFG_PWRDWN
+
+    if( dev->unit == 1 ){ // OTG-HS
+        otg->g.GCCFG &= ~USB_OTG_GCCFG_PWRDWN;
+        if( phy == 3 ){
+            otg->g.GCCFG |= USB_OTG_GUSBCFG_PHYSEL; // enable FS-phy
+        }else{
+            // this bit is not documented:
+            otg->g.GCCFG |= 1 << 23; // enable HS-phy
+        }
+
+        otg->g.GUSBCFG = USB_OTG_GUSBCFG_FDMOD |
+            // internal HS via utmi, 480MHz
+            (9 << 10) | 4; /* trdt = minimum */
+
+        otg->g.GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN | USB_OTG_GOTGCTL_BVALOVAL;
+
+        if( phy == 3 )
+            otg->g.GCCFG |= USB_OTG_GCCFG_PWRDWN;
+
+
+    }else{ // OTG-FS
+        /* select internal PHY, device mode */
+        otg->g.GUSBCFG = USB_OTG_GUSBCFG_FDMOD | USB_OTG_GUSBCFG_PHYSEL |
+            (9 << 10) | 4; /* trdt = minimum */
+        /* override Vbus sense */
+        otg->g.GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN | USB_OTG_GOTGCTL_BVALOVAL;
+        /* activate transceiver */
+        otg->g.GCCFG = USB_OTG_GCCFG_PWRDWN
 #ifdef NOVBUSSENS
-        // the newer + older usb peripherals have inverse behaviour of this bit
-        | (1 << 21)  // AKA - VBDEN(newer periph) or NOVBUSSENS(older periph)
-        // NB - several other bits in this register also vary, but not used in this code
+            // the newer + older usb peripherals have inverse behaviour of this bit
+            | (1 << 21)  // AKA - VBDEN(newer periph) or NOVBUSSENS(older periph)
+            // NB - several other bits in this register also vary, but not used in this code
 #endif
-        ;
+            ;
+    }
 
-    /* reset */
-    otg->g.GRSTCTL |= USB_OTG_GRSTCTL_CSRST;
-    while( otg->g.GRSTCTL & USB_OTG_GRSTCTL_CSRST ) {}
-    
+    usb_reset(otg);
+
     /* restart phy */
     otg->PCGCCTL &= ~0xFF;
     /* soft disconnect device */
@@ -109,7 +150,7 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
     /* Setup USB FS speed and frame interval */
     otg->d.DCFG = (otg->d.DCFG & ~(USB_OTG_DCFG_PERSCHIVL | USB_OTG_DCFG_DSPD))
         | (0 << USB_OTG_DCFG_PERSCHIVL_Pos)
-        | (3 << USB_OTG_DCFG_DSPD_Pos); /* full-speed */
+        | (phy << USB_OTG_DCFG_DSPD_Pos);
 
     /* unmask interrupts */
     otg->d.DIEPMSK = USB_OTG_DIEPMSK_XFRCM;
@@ -129,17 +170,78 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
     /* setting up EP0 TX FIFO SZ */
     otg->g.DIEPTXF0_HNPTXFSIZ = (RX_FIFO_SIZE >> 2) | ((CONTROL_SIZE >> 2) << 16);
 
-    usb[i].bufnext = RX_FIFO_SIZE + CONTROL_SIZE;
+    usbdev[i].bufnext = RX_FIFO_SIZE + CONTROL_SIZE;
 
 
     nvic_enable( irq, IPL_DISK );
 
-    bootmsg("usb otg device %s\n", name);
+    bootmsg("usb%d otg device %s @%x irq %d\n", i, name, otg, irq);
 
     trace_init();
+    trace_crumb1("usbotg", "init", usbdev + i);
 
-    return usb + i;
+    return usbdev + i;
 }
+
+static void
+usb_reset(USB_OTG_t  *otg){
+    int cnt;
+
+    /* wait for idle */
+    while( (otg->g.GRSTCTL & USB_OTG_GRSTCTL_AHBIDL) == 0 ) {}
+
+    otg->g.GRSTCTL |= USB_OTG_GRSTCTL_CSRST;
+    cnt = 0;
+    while( otg->g.GRSTCTL & USB_OTG_GRSTCTL_CSRST ) {
+        if( cnt++ > 10000 ) break;
+    }
+
+}
+
+
+#ifdef USBPHYC_BASE
+static void
+usb_hs_phyc_init(){
+    int cnt;
+
+    RCC->APB2ENR |= 1 << 31; // HS PHY
+    RCC->AHB1ENR |= 1 << 30; // ulpi (NB - must not be enabled if using the FS phy)
+
+    // enable ldo
+    // the manual says "1 = disable LDO". the manual is wrong.
+    USBPHYC->LDO |= (1 << 2);
+    // wait for it
+    while( (USBPHYC->LDO & (1<<1)) == 0 ){
+        if( cnt++ > 500000 ) break;
+    }
+
+#if HSECLOCK == 12000000
+    USBPHYC->PLL1 = 0;
+#elif HSECLOCK == 12500000
+    USBPHYC->PLL1 = 1 << 1;
+#elif HSECLOCK == 16000000
+    USBPHYC->PLL1 = 3 << 1;
+#elif HSECLOCK == 24000000
+    USBPHYC->PLL1 = 4 << 1;
+#elif HSECLOCK == 25000000
+    USBPHYC->PLL1 = 5 << 1;
+#else
+#  error "unsupported HSE frequency"
+#endif
+
+    USBPHYC->TUNE = 0x00000F13;
+
+    // enable pll
+    USBPHYC->PLL1 |= 1;
+    // wait a "little while" (hardware botch - no bit to test)
+    for(cnt=0; cnt<500000; cnt++){
+        __asm("nop");
+    }
+}
+#else
+static void
+usb_hs_phyc_init(){}
+#endif
 
 static int
 pma_alloc(usbotg_t *u, int size){
@@ -161,6 +263,23 @@ set_pma_tx(usbotg_t *u, int epa, int addr, int cnt){
     trace_crumb2("usbotg", "pma", epa, addr);
 }
 
+int
+usb_speed(usbd_t *u){
+    usbotg_t * usb = u->dev;
+
+    switch( (usb->otg->d.DSTS & 6) >> 1 ){
+    case 3:
+        // this is the only value listed in the documentation (RM0431)
+        return USB_SPEED_FULL;
+    case 2:
+        return USB_SPEED_LOW;
+    case 1:
+        return USB_SPEED_FULL; // FS on HS phy?
+    case 0:
+        return USB_SPEED_HIGH;
+    }
+}
+
 uint64_t
 usb_serialnumber(void){
     return fnv64_hash(R_UNIQUE, 12);
@@ -169,6 +288,7 @@ usb_serialnumber(void){
 int
 usb_connect(usbd_t *u){
     usbotg_t * usb = u->dev;
+    trace_crumb3("usbotg", "connect", u, usb, usb->otg);
     usb->otg->d.DCTL &= ~USB_OTG_DCTL_SDIS;
     u->curr_state = USBD_STATE_CONNECT;
 }
@@ -243,6 +363,8 @@ usb_isstalled(usbd_t *u, int ep){
 static void
 usb_config_ep0(usbd_t *u){
     usbotg_t *usb = u->dev;
+
+    trace_crumb0("usbotg", "cf0");
 
     /* enabling RX and TX interrupts from EP0 */
     usb->otg->d.DAINTMSK |= 0x00010001;
@@ -504,7 +626,7 @@ usb_read_unzip(usbd_t *u, int ep, char *buf, int len, int frame, int sect){
 
 static void
 usb_drain(usbotg_t *u, int ep){
-    USB_OTG_t *otg = usb->otg;
+    USB_OTG_t *otg = u->otg;
     ep &= 0x7F;
 
     uint32_t rxs = otg->g.GRXSTSP;
@@ -543,7 +665,6 @@ usb_iiso_handler(usbotg_t *u){
             _iso_cancel(otg, i);
 
             trace_crumb2("usbotg", "iiso", i, otg->epi[i].DIEPCTL);
-            //usbd_cb_send_complete(u->usbd, i);
         }
     }
 }
@@ -563,8 +684,6 @@ usb_rx_handler(usbotg_t *u){
         int ep  = rxs & 0xF;
         int len = (rxs >> 4)  & 0x7FF;
         int pt  = (rxs >> 17) & 0xF;
-
-        //kprintf("rx %x: %x %x %x\n", rxs, ep, pt, len);
 
         u->readflag = 0;
 
@@ -591,7 +710,7 @@ usb_reset_handler(usbotg_t *u){
     u->otg->g.GRSTCTL |= USB_OTG_GRSTCTL_RXFFLSH; // flush rx
 
     u->bufnext = RX_FIFO_SIZE + CONTROL_SIZE;
-    trace_crumb1("usbotg", "reset", 0);
+    trace_crumb2("usbotg", "reset", u, u->usbd);
     usb_config_ep0(u->usbd);
     usbd_cb_reset(u->usbd);
 
@@ -617,7 +736,8 @@ static void
 otg_irq_handler(usbotg_t *u){
     int isr = u->otg->g.GINTSTS;
 
-    // trace_crumb1("usbotg",  "irq!", isr);
+    //trace_crumb1("usbotg",  "irq!", isr);
+    //kprintf("irq %x\n", isr);
 
     if( isr & USB_OTG_GINTSTS_USBRST ){
         usb_reset_handler(u);
@@ -657,12 +777,12 @@ otg_irq_handler(usbotg_t *u){
 
 void
 USB_FS_IRQ_HANDLER(void){
-    otg_irq_handler(usb + 0);
+    otg_irq_handler(usbdev + 0);
 }
 
 void
 USB_HS_IRQ_HANDLER(void){
-    otg_irq_handler(usb + 1);
+    otg_irq_handler(usbdev + 1);
 }
 
 
@@ -673,18 +793,18 @@ DEFUN(usbtest, "usb test")
 
     printf("usb: %x pma: %x\n", USB_OTG_FS_PERIPH_BASE, USB_OTG_FS->fifo);
 
-    usb_send(usb[0].usbd, 0x8081, "XYZ=", 3);
+    usb_send(usbdev[0].usbd, 0x8081, "XYZ=", 3);
     return 0;
 
-    usb_disconnect(usb[0].usbd );
+    usb_disconnect(usbdev[0].usbd );
     sleep(1);
 
     trace_reset();
-    usb_connect( usb[0].usbd );
+    usb_connect( usbdev[0].usbd );
 
     usleep(10000000);
     printf(".\n");
-    usb_disconnect( usb[0].usbd );
+    usb_disconnect( usbdev[0].usbd );
     usleep(1000);
 
     trace_dump(0, 0);
@@ -692,7 +812,7 @@ DEFUN(usbtest, "usb test")
     return  0;
 }
 
-DEFUN(usbinfo, "usb test")
+DEFUN(xusbinfo, "usb test")
 {
 
     trace_dump(0, 0);
@@ -701,16 +821,74 @@ DEFUN(usbinfo, "usb test")
     return 0;
 }
 
+DEFUN(usbinfo, "test")
+{
+    int n = 0;
+    if( argc > 1 ){
+        n = atoi( argv[1] );
+        argc --;
+        argv ++;
+    }
+
+    usbotg_t *u = usbdev + n;
+    USB_OTG_t *otg = u->otg;
+
+    printf("usb %d (%x)\n", n, otg);
+    printf("gccfg:  %08x\n", otg->g.GCCFG);
+    printf("rstctl: %08x\n", otg->g.GRSTCTL);
+    printf("gotctl: %08x\n", otg->g.GOTGCTL);
+    printf("gotint: %08x\n", otg->g.GOTGINT);
+    printf("guscfg: %08x\n", otg->g.GUSBCFG);
+    printf("intsts: %08x\n", otg->g.GINTSTS);
+    printf("devsts: %08x\n", otg->d.DSTS);	// 22,23 = DM,DP
+    printf("devctl: %08x\n", otg->d.DCTL);
+
+    printf("phyc: %x\n", USBPHYC);
+    printf("pll1: %08x ldo: %08x\n", USBPHYC->PLL1, USBPHYC->LDO);
+
+
+    return 0;
+}
+
+DEFUN(plltest, "")
+{
+    int n;
+    if( argc > 1 ){
+        n = atoi( argv[1] );
+    }
+
+
+    USBPHYC->PLL1 |= 1;
+    for(n=0; n<500000; n++){
+        if( USBPHYC->PLL1 & 1 ) break;
+    }
+
+    printf("n: %d\n", n);
+
+    //USBPHYC->LDO = n;
+    //sleep(1);
+    printf("pll1: %08x ldo: %08x\n", USBPHYC->PLL1, USBPHYC->LDO);
+
+    return 0;
+}
+
 DEFUN(epinfo, "test")
 {
-    usbotg_t *u = usb;
+    int n = 0;
+    if( argc > 1 ){
+        n = atoi( argv[1] );
+        argc --;
+        argv ++;
+    }
+
+    usbotg_t *u = usbdev + n;
     USB_OTG_t *otg = u->otg;
     int ep = 1;
 
     if( argc > 1 )
         ep = atoi( argv[1] );
 
-    printf("ep#: %d\n", ep);
+    printf("usb %d (%x); ep#: %d\n", n, otg, ep);
 
     printf("ctl: in %08x out %08x\n", otg->epi[ep].DIEPCTL,  otg->epo[ep].DOEPCTL);
     printf("siz: in %08x out %08x\n", otg->epi[ep].DIEPTSIZ, otg->epo[ep].DOEPTSIZ);
@@ -725,10 +903,12 @@ DEFUN(hstest, "test")
 {
     int x;
 
+    USB_OTG_t *otg = USB_OTG_HS_PERIPH_BASE;
+
+#if 0
     RCC->AHB1ENR |= 1 << 29;
     // do not actually config the pins
 
-    USB_OTG_t *otg = USB_OTG_HS_PERIPH_BASE;
 
     /* select Internal PHY */
     otg->g.GUSBCFG |= USB_OTG_GUSBCFG_PHYSEL;
@@ -743,9 +923,20 @@ DEFUN(hstest, "test")
     while( otg->g.GRSTCTL & USB_OTG_GRSTCTL_CSRST ) {
         usleep(10000);
     }
+#endif
 
+    gpio_init( GPIO_A11, GPIO_OUTPUT | GPIO_PUSH_PULL );
+    gpio_init( GPIO_A12, GPIO_OUTPUT | GPIO_PUSH_PULL );
 
+    gpio_set( GPIO_A11 );
+    gpio_set( GPIO_A12 );
 
+    usleep( 10000 );
+    printf("devsts: %08x\n", otg->d.DSTS);	// 22,23 = DM,DP
+    usleep( 10000 );
+
+    gpio_init( GPIO_A11, GPIO_INPUT );
+    gpio_init( GPIO_A12, GPIO_INPUT );
 
     return 0;
 }
