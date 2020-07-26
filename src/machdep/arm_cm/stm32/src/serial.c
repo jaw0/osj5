@@ -73,22 +73,22 @@ struct serialDevConf {
 } dev_conf[] = {
     { USART1, USART1_IRQn },
     { USART2, USART2_IRQn },
-#if defined(USART3) && defined(USART3_IRQn)
+#if defined(USART3)
     { USART3, USART3_IRQn },
 #endif
-#if defined(UART4) && defined(UART4_IRQn)
+#if defined(UART4)
     { UART4,  UART4_IRQn  },
 #endif
-#if defined(UART5) && defined(UART5_IRQn)
+#if defined(UART5)
     { UART5,  UART5_IRQn  },
 #endif
-#if defined(USART6) && defined(USART6_IRQn)
+#if defined(USART6)
     { USART6, USART6_IRQn },
 #endif
-#if defined(UART7) && defined(UART7_IRQn)
+#if defined(UART7)
     { UART7,  UART7_IRQn  },
 #endif
-#if defined(UART8) && defined(UART8_IRQn)
+#if defined(UART8)
     { UART8,  UART8_IRQn  },
 #endif
 };
@@ -254,11 +254,11 @@ serial_getchar(FILE *f){
 
 static void
 serial_irq(int unit){
-    USART_TypeDef *addr = com[unit].addr;
+    volatile USART_TypeDef *addr = com[unit].addr;
 
     int sr = SERIAL_STATUS(addr);
 
-    //kprintf("s %d %x\n", unit, sr);
+    // kprintf("s %d %x\n", unit, sr);
 
     if( sr & SR_TXE ){
         /* transmitter empty */
