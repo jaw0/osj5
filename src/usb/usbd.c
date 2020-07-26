@@ -103,8 +103,9 @@ usbd_cb_reset(usbd_t *u){
 
     u->curr_config = 0;
     u->curr_state  = USBD_STATE_RESET;
+    u->enumspeed   = USB_SPEED_UNKNOWN;
 
-    trace_crumb1("usbd", "reset", u);
+    trace_crumb1("usbd", "reset", u->enumspeed);
     if( u->cf && u->cf->cb_reset )
         u->cf->cb_reset(u->cbarg);
 }
@@ -133,11 +134,19 @@ usbd_reply_descr(usbd_t *u, const char *buf){
 
     if( ! u->cf ) return 0;
 
+    if( u->enumspeed == USB_SPEED_UNKNOWN ){
+        u->enumspeed = usb_speed(u);
+        trace_crumb1("usbd", "speed", u->enumspeed);
+    }
+
     // search for requested descriptor
     while(1){
         struct usbd_config_dmap *dm = u->cf->dmap + i;
         if( ! dm->desc ) break;
-        if( dm->num == req->wValue ){
+        if( (dm->speed != USB_SPEED_ANY) && (dm->speed != u->enumspeed) ){
+
+        }
+        else if( dm->num == req->wValue ){
             usb_descriptor_t *d = dm->desc;
             int len = dm->len ? dm->len : d->bLength;
 

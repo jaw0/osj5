@@ -26,7 +26,7 @@
 
 
 
-#define CDC_SIZE	      64	/* usb cdc packet size (see also usbd_conf.h) */
+#define CDC_SIZE    64
 #define CDC_RXD_EP  0x01
 #define CDC_TXD_EP  0x81
 #define CDC_NTF_EP  0x82
@@ -162,7 +162,6 @@ static const struct cdc_config cdc_config ALIGN2 = {
 };
 
 
-
 struct VCP;
 void vcp_tx_complete(struct VCP *, int);
 void vcp_recv_chars(struct VCP*, int, int);
@@ -172,10 +171,9 @@ int  vcp_recv_setup(struct VCP*, const char *, int);
 static void maybe_tx(struct VCP* p);
 
 static const usb_wdata_descriptor_t lang_desc      ALIGN2 = { 4,  USB_DTYPE_STRING, USB_LANG_EN_US };
-static const usb_wdata_descriptor_t cdc_manuf_desc ALIGN2 = { 2 + 2*sizeof(USB_MANUF_DESC), USB_DTYPE_STRING,
-                                                              CONCAT(u, USB_MANUF_DESC) };
-static const usb_wdata_descriptor_t cdc_prod_desc  ALIGN2 = { 2 + 2 * sizeof(USB_PROD_DESC), USB_DTYPE_STRING,
-                                                              CONCAT(u, USB_PROD_DESC)  };
+USB_DESCR(cdc_manuf_desc, USB_MANUF_DESC);
+USB_DESCR(cdc_prod_desc,  USB_PROD_DESC);
+
 
 static const usbd_config_t cdc_usbd_config = {
     .cb_reset       = vcp_reset,
@@ -185,12 +183,12 @@ static const usbd_config_t cdc_usbd_config = {
     .cb_recv = { [CDC_RXD_EP & 0x7f] = vcp_recv_chars },
 
     .dmap = {
-        { (USB_DTYPE_DEVICE<<8),	0, &cdc_dev_desc },
-        { (USB_DTYPE_CONFIGURATION<<8),	sizeof(cdc_config), &cdc_config },
-        { (USB_DTYPE_STRING<<8) | 0,    0, &lang_desc },
-        { (USB_DTYPE_STRING<<8) | 1,	0, &cdc_manuf_desc },
-        { (USB_DTYPE_STRING<<8) | 2,	0, &cdc_prod_desc },
-        {0, 0, 0},
+        { USB_SPEED_ANY,  (USB_DTYPE_DEVICE<<8),	0, &cdc_dev_desc },
+        { USB_SPEED_ANY,  (USB_DTYPE_CONFIGURATION<<8),	sizeof(cdc_config), &cdc_config },
+        { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 0,	0, &lang_desc },
+        { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 1,	0, &cdc_manuf_desc },
+        { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 2,	0, &cdc_prod_desc },
+        {0, 0, 0, 0},
     }
 };
 
@@ -371,7 +369,7 @@ maybe_tx(struct VCP* p){
     // tx
     p->tblen = i;
     int plx = spldisk();
-    trace_crumb2("vcp", "tx", i, p->txq.len);
+    trace_crumb3("vcp", "tx", i, p->txq.len, plx);
     usbd_write(p->usbd, CDC_TXD_EP, p->txbuf, i, !(i & (CDC_SIZE - 1)) );
     splx(plx);
 }
@@ -382,10 +380,11 @@ vcp_tx_complete(struct VCP *p, int ep){
 
     p->tblen = 0;
 
-    trace_crumb1("vcp", "tx/c", ep);
+    trace_crumb2("vcp", "tx/c", ep, splget());
     maybe_tx(p);
     maybe_dequeue(p);
     wakeup( &p->txq );
+    trace_crumb1("vcp", "/tx/c", ep);
 }
 
 static int
@@ -396,7 +395,7 @@ vcp_putchar(FILE *f, char ch){
 
     p = (struct VCP*)f->d;
 
-    //trace_crumb3("vcp", "putchar", p->txq.len, p->txq.head, p->txq.tail);
+    trace_crumb3("vcp", "putchar", p->txq.len, p->txq.head, p->txq.tail);
 
     while(1){
         plx = spldisk();
@@ -408,6 +407,7 @@ vcp_putchar(FILE *f, char ch){
             break;
         }
 
+        trace_crumb1("vcp", "putchar+", plx);
         maybe_tx(p);
         splx(plx);
         if( p->txq.len != TX_QUEUE_SIZE ) continue;
@@ -416,11 +416,12 @@ vcp_putchar(FILE *f, char ch){
         if( !usbd_isactive(p->usbd) ) break;
         if( !p->ready ) break;
 
-        trace_crumb1("vcp", "block", f->flags);
+        trace_crumb2("vcp", "block", f->flags, plx);
 
         // wait for buffer to empty
         tsleep( &p->txq, -1, "usb/o", 10000 );
     }
+
     return 1;
 }
 

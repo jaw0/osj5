@@ -207,10 +207,9 @@ static void comp_recv_data(struct COMP*, int, int);
 
 
 static const usb_wdata_descriptor_t lang_desc      ALIGN2 = { 4,  USB_DTYPE_STRING, USB_LANG_EN_US };
-static const usb_wdata_descriptor_t comp_manuf_desc ALIGN2 = { 2 + 2*sizeof(USB_MANUF_DESC), USB_DTYPE_STRING,
-                                                              CONCAT(u, USB_MANUF_DESC) };
-static const usb_wdata_descriptor_t comp_prod_desc  ALIGN2 = { 2 + 2 * sizeof(USB_PROD_DESC), USB_DTYPE_STRING,
-                                                              CONCAT(u, USB_PROD_DESC)  };
+
+USB_DESCR(comp_manuf_desc, USB_MANUF_DESC);
+USB_DESCR(comp_prod_desc,  USB_PROD_DESC);
 
 static const usbd_config_t comp_usbd_config = {
     .cb_reset       = comp_reset,
@@ -220,12 +219,12 @@ static const usbd_config_t comp_usbd_config = {
     .cb_recv = { [CDC_RXD_EP & 0x7f] = comp_recv_data, [MSC_RXD_EP & 0x7f] = comp_recv_data },
 
     .dmap = {
-        { (USB_DTYPE_DEVICE<<8),	0, &comp_dev_desc },
-        { (USB_DTYPE_CONFIGURATION<<8),	sizeof(comp_config), &comp_config },
-        { (USB_DTYPE_STRING<<8) | 0,    0, &lang_desc },
-        { (USB_DTYPE_STRING<<8) | 1,	0, &comp_manuf_desc },
-        { (USB_DTYPE_STRING<<8) | 2,	0, &comp_prod_desc },
-        {0, 0, 0},
+        { USB_SPEED_ANY,  (USB_DTYPE_DEVICE<<8),	0, &comp_dev_desc },
+        { USB_SPEED_ANY,  (USB_DTYPE_CONFIGURATION<<8),	sizeof(comp_config), &comp_config },
+        { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 0,    0, &lang_desc },
+        { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 1,	0, &comp_manuf_desc },
+        { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 2,	0, &comp_prod_desc },
+        {0, 0, 0, 0},
     }
 };
 

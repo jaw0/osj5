@@ -124,10 +124,10 @@ static const struct msc_config msc_config ALIGN2 = {
 
 
 static const usb_wdata_descriptor_t lang_desc      ALIGN2 = { 4,  USB_DTYPE_STRING, USB_LANG_EN_US };
-static const usb_wdata_descriptor_t msc_manuf_desc ALIGN2 = { 2 + 2*sizeof(USB_MANUF_DESC), USB_DTYPE_STRING,
-                                                              CONCAT(u, USB_MANUF_DESC) };
-static const usb_wdata_descriptor_t msc_prod_desc  ALIGN2 = { 2 + 2 * sizeof(USB_PROD_DESC), USB_DTYPE_STRING,
-                                                              CONCAT(u, USB_PROD_DESC)  };
+
+USB_DESCR(msc_manuf_desc, USB_MANUF_DESC);
+USB_DESCR(msc_prod_desc,  USB_PROD_DESC);
+
 static const umass_bbb_inquiry_t msc_inquiry_res = {
     {
         0x00, // Peripheral qualifier & device type
@@ -164,12 +164,12 @@ static const usbd_config_t msc_usbd_config = {
     .cb_recv = { [MSC_RXD_EP & 0x7f] = msc_recv_data },
 
     .dmap = {
-        { (USB_DTYPE_DEVICE<<8),	0, &msc_dev_desc },
-        { (USB_DTYPE_CONFIGURATION<<8),	sizeof(msc_config), &msc_config },
-        { (USB_DTYPE_STRING<<8) | 0,    0, &lang_desc },
-        { (USB_DTYPE_STRING<<8) | 1,	0, &msc_manuf_desc },
-        { (USB_DTYPE_STRING<<8) | 2,	0, &msc_prod_desc },
-        {0, 0, 0},
+        { USB_SPEED_ANY,  (USB_DTYPE_DEVICE<<8),	0, &msc_dev_desc },
+        { USB_SPEED_ANY,  (USB_DTYPE_CONFIGURATION<<8),	sizeof(msc_config), &msc_config },
+        { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 0,    0, &lang_desc },
+        { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 1,	0, &msc_manuf_desc },
+        { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 2,	0, &msc_prod_desc },
+        {0, 0, 0, 0},
     }
 };
 
@@ -883,13 +883,13 @@ msc_run(void){
 
 /****************************************************************/
 
-#ifdef KTESTING
+#ifdef MSCTESTMODE
 
 static usb_msc_iocf_t usbconf[2];
 
 static int is_ready(void){ return 1; }
 static int not_ready(void){ return 0; }
-static void active_blink(void){ set_led1_rgb(0xFFFF00); }
+static void active_blink(void){ set_msc_rgb(0xFFFF00); }
 
 void msc_test(void){
 
@@ -898,7 +898,7 @@ void msc_test(void){
     usbconf[0].ready = is_ready;
     usbconf[0].readonly = 0;
     usbconf[0].fio = fopen("dev:sd0", "rw");
-    usbconf[0].prod = "Crypto Jawn";
+    usbconf[0].prod = "OSJ5";
     usbconf[0].activity = active_blink;
 
     if( ! usbconf[0].fio ){
