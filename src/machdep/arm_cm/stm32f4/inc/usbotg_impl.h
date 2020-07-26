@@ -15,7 +15,7 @@
 #define USB_HS_IRQN	OTG_HS_IRQn
 
 #define USB_FS_FIFOSIZE	1280
-#define USB_HS_FIFOSIZE	40996
+#define USB_HS_FIFOSIZE	4096
 
 
 #define USB_FS_IRQ_HANDLER OTG_FS_IRQHandler
@@ -42,7 +42,7 @@ _usb_otg_fs_init(void){
 static inline void
 _usb_otg_hs_init(void){
 
-    RCC->AHB1ENR |= 3 << 29;
+    RCC->AHB1ENR |= 1 << 29;
 
     // XXX - various options. B14,15 = builtin FS PHY
     gpio_init( GPIO_B14, GPIO_AF(12) | GPIO_PUSH_PULL | GPIO_SPEED_100MHZ );
