@@ -14,7 +14,7 @@
 
 static int tick_base;
 
-#define nvic_setprio(irq, prio) NVIC_SetPriority((irq), (prio)>>4)
+#define nvic_setprio(irq, prio) NVIC_SetPriority((irq), (prio)>>(8U - __NVIC_PRIO_BITS))
 
 // NB: nvic handles external interrupts only, not internal exceptions
 void
