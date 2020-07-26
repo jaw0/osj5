@@ -24,8 +24,8 @@
 
 #define USBD_STATE_SUSPEND	0x80
 
-
 struct usbd_config_dmap {
+    uint8_t	speed;
     uint16_t	num;
     uint16_t    len;
     const void *desc;
@@ -67,6 +67,7 @@ typedef struct _usbd {
     uint8_t  curr_state;
     uint8_t  curr_config;
     uint8_t  reqlen, reqpos;
+    uint8_t  enumspeed;
     uint16_t setaddrreq;
 
     const usbd_config_t *cf;

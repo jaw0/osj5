@@ -34,12 +34,16 @@
 #endif
 
 
+#define USB_DESCR(name, text) \
+static const usb_wdata_descriptor_t name ALIGN2 = { 2 + 2*sizeof(text), USB_DTYPE_STRING, CONCAT(u, text) }
+
 /****************************************************************/
 
 #define USB_SPEED_UNKNOWN 0
 #define USB_SPEED_LOW     1
 #define USB_SPEED_FULL    2
 #define USB_SPEED_HIGH    3
+#define USB_SPEED_ANY 	  USB_SPEED_UNKNOWN
 
 /****************************************************************/
 
@@ -117,7 +121,7 @@
 #define USB_DTYPE_INTERFACE         0x04
 #define USB_DTYPE_ENDPOINT          0x05
 #define USB_DTYPE_QUALIFIER         0x06
-#define USB_DTYPE_OTHER             0x07
+#define USB_DTYPE_OTHERSPEED        0x07
 #define USB_DTYPE_INTERFACEPOWER    0x08
 #define USB_DTYPE_OTG               0x09
 #define USB_DTYPE_DEBUG             0x0A
@@ -267,7 +271,7 @@ typedef struct {
         uint8_t           bDeviceClass;
         uint8_t           bDeviceSubClass;
         uint8_t           bDeviceProtocol;
-        uint8_t           bMaxPacketSize0;
+        uint8_t           bMaxPacketSize;
         uint8_t           bNumConfigurations;
         uint8_t           bReserved;
 } PACKED usb_device_qualifier_t;

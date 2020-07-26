@@ -380,11 +380,11 @@ vcp_tx_complete(struct VCP *p, int ep){
 
     p->tblen = 0;
 
-    trace_crumb2("vcp", "tx/c", ep, splget());
+    //trace_crumb2("vcp", "tx/c", ep, splget());
     maybe_tx(p);
     maybe_dequeue(p);
     wakeup( &p->txq );
-    trace_crumb1("vcp", "/tx/c", ep);
+    //trace_crumb1("vcp", "/tx/c", ep);
 }
 
 static int
@@ -395,7 +395,7 @@ vcp_putchar(FILE *f, char ch){
 
     p = (struct VCP*)f->d;
 
-    trace_crumb3("vcp", "putchar", p->txq.len, p->txq.head, p->txq.tail);
+    //trace_crumb3("vcp", "putchar", p->txq.len, p->txq.head, p->txq.tail);
 
     while(1){
         plx = spldisk();
@@ -407,7 +407,7 @@ vcp_putchar(FILE *f, char ch){
             break;
         }
 
-        trace_crumb1("vcp", "putchar+", plx);
+        //trace_crumb1("vcp", "putchar+", plx);
         maybe_tx(p);
         splx(plx);
         if( p->txq.len != TX_QUEUE_SIZE ) continue;
