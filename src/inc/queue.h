@@ -9,14 +9,18 @@
 #ifndef __osj5_queue_h__
 #define __osj5_queue_h__
 
+#ifndef QUEUE_TYPE
+#  define QUEUE_TYPE char
+#endif
+
 struct queue {
     uint16_t head, tail, len, size;
-    char *d;
+    QUEUE_TYPE *d;
 };
 
 static void
 queue_init(struct queue *q, int size){
-    q->d = malloc(size);
+    q->d = malloc(size * sizeof(QUEUE_TYPE));
     if( !q->d ){
         PANIC("cannot malloc queue");
     }
