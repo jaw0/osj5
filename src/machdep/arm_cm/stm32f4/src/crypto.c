@@ -20,6 +20,7 @@ static int crypto_blksz;
 static int crypto_inbuf;
 static int crypto_bufsz;
 static int crypto_insz;
+static int crypto_aadsz;
 
 #define DMASTRO	DMA2_Stream5
 #define DMASTRI	DMA2_Stream6
@@ -35,7 +36,7 @@ crypto_init(void){
 static void
 _reset_crypto(void){
 
-    CRYP->CR &= ~0xC3FC;
+    CRYP->CR &= ~0xBC3FC;
     CRYP->CR |= (2 << 6);	// byte-mode
     CRYP->CR |= 1<<14;		// flush fifo
 
@@ -208,7 +209,6 @@ crypto_decrypt_start(int alg, const u_char *key, int keylen, const u_char *iv, i
     _start_crypto(alg);
 }
 
-
 static inline void
 _wait_for_infifo(void){
     while( !(CRYP->SR & SR_IFNF) ){}
@@ -259,15 +259,15 @@ crypto_add(const u_char *in, int inlen){
     }
 }
 
-int
-crypto_final(void){
-
-    _wait_for_indma();
+static void
+_crypto_flush_input(int use_pkcs){
 
     // apply pkcs7 padding only if padding is needed
     // (caller should pad if they care)
     short len = (crypto_insz + crypto_bufsz) % crypto_blksz;
     u_char pl = len ? crypto_blksz - len : 0;
+
+    if( !use_pkcs ) pl = 0; // pad with zero
 
     if( crypto_bufsz ){
         switch( crypto_bufsz ){
@@ -289,8 +289,17 @@ crypto_final(void){
         for( ; len > 0; len -= 4 ){
             _wait_for_infifo();
             CRYP->DR  = crypto_inbuf;
+            crypto_insz += 4;
         }
     }
+
+}
+
+int
+crypto_final(void){
+
+    _wait_for_indma();
+    _crypto_flush_input(1);
 
     while( CRYP->SR & SR_BUSY ){}
 
@@ -300,6 +309,94 @@ crypto_final(void){
 
     return crypto_insz;
 }
+
+
+void
+crypto_gcm_start(const u_char *key, int keylen, const u_char *iv, int ivlen){
+
+    _reset_crypto();
+    _set_key(key, keylen);
+    _set_iv(iv, ivlen);
+
+    CRYP->CR |= 1<<19;  // GCM mode
+    CRYP->CR |= 1<<15;	// enable
+
+    crypto_blksz = 16;
+
+    // wait for it to disable
+    while( CRYP->CR & (1<<15) ) {}
+
+    // aad phase
+    CRYP->CR |= 1 << 16; // CCMPH = header phase (1)
+    CRYP->CR |= 1 << 15; // enable
+    crypto_aadsz = 0;
+}
+
+
+void
+crypto_gcm_encrypt(u_char *out, int outlen){
+
+    crypto_aadsz = crypto_insz;
+    crypto_insz  = 0;
+    CRYP->CR &= ~( (1<<15) | (3 << 16)); // disable
+    CRYP->CR |= 2 << 16; // CCMPH = payload phase (2)
+
+    _start_out_dma(out, outlen);
+    CRYP->CR |= 1 << 15; // enable
+
+}
+
+void
+crypto_gcm_decrypt(u_char *out, int outlen){
+
+    crypto_aadsz = crypto_insz;
+    crypto_insz  = 0;
+    CRYP->CR &= ~( (1<<15) | (3 << 16)); // disable
+    CRYP->CR |= 2 << 16; // CCMPH = payload phase (2)
+    CRYP->CR |= 1<<2;	// decrypt mode
+
+    _start_out_dma(out, outlen);
+    CRYP->CR |= 1 << 15; // enable
+}
+
+int
+crypto_gcm_final(u_char *out, int outlen){
+
+    if( CRYP->CR & (3 <<16) == (1 << 16) ){
+        // gmac mode - no payload
+        crypto_aadsz = crypto_insz;
+        crypto_insz = 0;
+
+    }else{
+        _wait_for_indma();
+        _crypto_flush_input(0);
+    }
+
+    while( CRYP->SR & SR_BUSY ){}
+
+    _stop_in_dma();
+    _stop_out_dma();
+
+    CRYP->CR |= 3 << 16; // CCMPH = final phase (3)
+    CRYP->CR &= ~(1<<2); // dir = 0
+
+    // write length
+    CRYP->DR = crypto_insz;
+    CRYP->DR = 0;
+    CRYP->DR = crypto_aadsz;
+    CRYP->DR = 0;
+
+    // wait for it
+    while( !(CRYP->SR & SR_OFNE) ) {}
+
+    // read mac from DOUT x4
+    int *dst = (u_long*)out;
+    dst[0] = CRYP->DOUT;
+    dst[1] = CRYP->DOUT;
+    dst[2] = CRYP->DOUT;
+    dst[3] = CRYP->DOUT;
+}
+
 
 #ifdef KTESTING
 static const u_char zero128[16]  = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
@@ -313,6 +410,8 @@ static const u_char test1[32]    = {
 DEFUN(cryptotiming, "test crypto timing")
 {
     u_char *crbuf = alloc(512);
+    bzero(crbuf, 512);
+
     yield();
     int t0 = get_hrtime();
 
@@ -352,6 +451,31 @@ DEFUN(cryptotest, "crypto test")
     crypto_final( );
     printf("%32,.4H\n", buf);
 
+
+    return 0;
+}
+
+DEFUN(gcmtest, "crypto test")
+{
+    char buf[32];
+    char mac[16];
+    int n,i;
+
+    bzero(buf, sizeof(buf));
+
+    crypto_gcm_start(azero256, 32, azero128, 16);
+    // AAD
+    crypto_add(zero128, 16 );
+    crypto_add(zero128, 16 );
+
+    crypto_gcm_encrypt(buf, sizeof(buf));
+    // plaintext
+    crypto_add(zero128, 16 );
+    crypto_add(zero128, 16 );
+    crypto_gcm_final(mac, 16);
+
+    printf("%32,.4H\n", buf);
+    printf("%16,.4H\n", mac);
 
     return 0;
 }
