@@ -46,6 +46,7 @@ typedef uint32_t uregister_t;
 #define irq_disable()        __asm__("cpsid i")
 #define irq_enable()         __asm__("cpsie if")
 
+
 static inline void
 sched_yield(){
     /* cause a PendSV int to fire */
@@ -76,6 +77,16 @@ spllower(int ncpl) {
 
     /* basepri = ncpl */
     asm("msr basepri, %0" : : "r" (ncpl));
+
+    return ocpl;
+}
+
+static inline int
+splget(void){
+    int ocpl;
+
+    /* ocpl = basepri */
+    asm("mrs %0, basepri" : "=r" (ocpl));
 
     return ocpl;
 }

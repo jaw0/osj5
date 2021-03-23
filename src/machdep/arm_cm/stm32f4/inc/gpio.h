@@ -207,7 +207,7 @@ _gpio_addr(int pin){
     case 8:	return GPIOI;
 #endif
     default:
-        kprintf("invalid gpio pin %X\n", pin);
+        // kprintf("invalid gpio pin %X\n", pin);
         return 0;
     }
 }

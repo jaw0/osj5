@@ -1,9 +1,9 @@
 
-kern:           kern/alloc.c kern/fs.c kern/kprintf.c kern/locks.c kern/msgs.c
-kern:           kern/proc_f.c kern/init.c kern/time.c kern/start.c
+kern:           kern/alloc.c kern/fs.c kern/kprintf.c
+kern:           kern/init.c kern/time.c kern/start.c
 kern:           util/printf.c util/getnum.c util/misc.c util/gmtime.c
 
-proc:           kern/proc.c
+proc:           kern/proc.c kern/proc_f.c kern/locks.c kern/msgs.c
 nstdio:         kern/nstdio.c util/getline.c
 
 # libc:

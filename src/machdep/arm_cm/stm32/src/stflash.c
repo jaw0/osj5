@@ -115,9 +115,11 @@ stflash_init(struct Device_Conf *dev){
 
         if( !bank ){
             for(n=0; n<nfi; n++){
+                int b = fi[n].block_size * 1024;
                 if( addr < fi[n].addr ) continue;
-                if( addr > fi[n].addr + fi[n].nblocks * bksz ) continue;
+                if( addr > fi[n].addr + fi[n].nblocks * b ) continue;
                 bank = fi + n;
+                bksz = b;
                 break;
             }
 
@@ -344,7 +346,7 @@ erase(struct Flash_Disk *fdk, int a){
     int blk  = a / fdk->blocksize;
     int sect = fdk->blockno + blk;
 
-    // kprintf("stm32 flash erase a %x b %x (sect %x)\n", a, blk, sect);
+    //kprintf("stm32 flash erase a %x b %x (sect %x)\n", a, blk, sect);
 
     ststart(fdk);
     wait_not_busy();

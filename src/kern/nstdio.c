@@ -55,7 +55,9 @@ void fsetcchar(FILE *f, int i, int c){
 
     if( !f ) f = STDIN;
     while( f->dupped ){ f = f->dupped; }
+#ifdef USE_PROC
     f->ccpid = (proc_t)currproc;
+#endif
     f->cchars[i] = c;
 }
 

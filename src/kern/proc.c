@@ -255,7 +255,7 @@ init_proc(proc_t p){
 #endif
 
 
-#ifdef USE_CONSOLE
+#if defined(USE_CONSOLE) && defined(USE_CLI)
     if( (bootflags & BOOT_SINGLE) && kconsole_port ){
         bootmsg("proc starting single user\nexit to continue with multi user startup\n");
         splx(IPL_PROC);

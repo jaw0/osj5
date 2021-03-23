@@ -99,8 +99,9 @@ CHardFault_Handler(unsigned long *sp){
         kprintf("\n");
     }
 #endif
-
+#ifdef USE_PROC
     kprintf("  currproc %x\n", currproc);
+#endif
     PANIC("hard fault");
 }
 

@@ -33,7 +33,7 @@ static int show(int, const char**, struct cli_env*);
 static int set (int, const char**, struct cli_env*);
 static int help(int, const char**, struct cli_env*);
 int shell_eval(int, const char**, struct cli_env*);
-void fshell(FILE*, int);
+int fshell(FILE*, int);
 void shell(void);
 
 extern char *strchr(const char*, char);
@@ -1390,12 +1390,12 @@ DEFUN(if, "conditional")
 }
 
 
-void
+int
 fshell(FILE *f, int interactivep){
     Catchframe cf;
     char *argv[ARGLEN];
     int  argc;
-    int i;
+    int i, r=0;
 
     struct cli_env *env = (struct cli_env*)alloc(sizeof(struct cli_env));
     char *buf = (char*)alloc(BUFSIZE);
@@ -1430,24 +1430,29 @@ fshell(FILE *f, int interactivep){
             continue;
         if( !strcmp("exit", argv[0] )) break;
 
-        shell_eval(argc, (const char**)argv, env);
+        r = shell_eval(argc, (const char**)argv, env);
+        if( r && !interactivep ) break;
     }
 
     UNCATCH(cf);
     free(buf, BUFSIZE);
     free(env, sizeof(struct cli_env));
+    return r;
 }
 
+// 0 : ok, 1 : no file, 2 : error
 
 #if defined(USE_FILESYS)
 int
 run_script(const char* file){
     FILE *f;
+    int r = 0;
+
     f = fopen(file, "r" );
     if( f ){
-        fshell(f, 0);
+        r = fshell(f, 0);
         fclose(f);
-        return 0;
+        return r ? 2 : 0;
     }
     return 1;
 }

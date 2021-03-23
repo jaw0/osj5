@@ -227,6 +227,11 @@ trace_reset(void){
     _unlock();
 }
 
+int
+trace_size(void){
+    return logpos;
+}
+
 static void
 trace_dpy_msg(struct trace_info *ti){
     int i;

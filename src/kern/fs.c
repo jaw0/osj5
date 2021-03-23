@@ -293,6 +293,23 @@ renamefile(const char *oname, const char *nname){
         return (me->fscf->ops)(FSOP_RENAME, me, basenameoffile(oname), nname);
     return -1;
 }
+
+int
+globfile(const char *pattern, int (*fnc)(const char *, void*), void *args){
+    struct MountEntry *me;
+
+    me = find_mount(pattern);
+    if( !me ) return -1;
+
+    /* strip off devicename */
+    pattern = (const char*)basenameoffile(pattern);
+
+    if( CHK(me) )
+        return (me->fscf->ops)(FSOP_GLOB, me, pattern, fnc, args);
+
+    return -1;
+}
+
 #endif
 
 /*****************************************************************
