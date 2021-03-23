@@ -15,9 +15,6 @@
 extern uint16_t *r_flashkb;
 extern uint16_t stm32f7_cpuid;
 
-#define FLASHSTART	0x08000000
-
-
 /*
 - If nDBANK=1, Size of main memory block:
   4 sectors of 32 KBytes,
@@ -32,8 +29,45 @@ extern uint16_t stm32f7_cpuid;
 
 
 
-static struct Flash_Info finfo[3];
+static struct Flash_Info finfo[8];
 
+const struct Flash_Info finfo_72X[] = {
+    { .addr = 0x08000000, .blockno = 0, .block_size = 16, .erase_size = 16*1024, .write_size = 4, .nblocks = 4 },
+    { .addr = 0x08010000, .blockno = 4, .block_size = 64, .erase_size = 64*1024, .write_size = 4, .nblocks = 1 },
+    { .addr = 0x08020000, .blockno = 5, .block_size =128, .erase_size =128*1024, .write_size = 4, .nblocks = 3 },
+    {0},
+};
+const struct Flash_Info finfo_74X[] = {
+    { .addr = 0x08000000, .blockno = 0, .block_size = 32, .erase_size = 32*1024, .write_size = 4, .nblocks = 4 },
+    { .addr = 0x08020000, .blockno = 4, .block_size =128, .erase_size =128*1024, .write_size = 4, .nblocks = 1 },
+    { .addr = 0x08040000, .blockno = 5, .block_size =256, .erase_size =256*1024, .write_size = 4, .nblocks = 3 },
+    {0},
+};
+
+const struct Flash_Info finfo_76X1[] = { // single bank
+    { .addr = 0x08000000, .blockno = 0, .block_size = 32, .erase_size = 32*1024, .write_size = 4, .nblocks = 4 },
+    { .addr = 0x08020000, .blockno = 4, .block_size =128, .erase_size =128*1024, .write_size = 4, .nblocks = 1 },
+    { .addr = 0x08040000, .blockno = 5, .block_size =256, .erase_size =256*1024, .write_size = 4, .nblocks = 7 },
+    {0},
+};
+const struct Flash_Info finfo_76X21[] = { // dual bannk, 1MB
+    { .addr = 0x08000000, .blockno = 0, .block_size = 16, .erase_size = 16*1024, .write_size = 4, .nblocks = 4 },
+    { .addr = 0x08010000, .blockno = 4, .block_size = 64, .erase_size = 64*1024, .write_size = 4, .nblocks = 1 },
+    { .addr = 0x08020000, .blockno = 5, .block_size =128, .erase_size =128*1024, .write_size = 4, .nblocks = 3 },
+    { .addr = 0x08080000, .blockno =12, .block_size = 16, .erase_size = 16*1024, .write_size = 4, .nblocks = 4 },
+    { .addr = 0x08090000, .blockno =16, .block_size = 64, .erase_size = 64*1024, .write_size = 4, .nblocks = 1 },
+    { .addr = 0x080A0000, .blockno =17, .block_size =128, .erase_size =128*1024, .write_size = 4, .nblocks = 3 },
+    {0},
+};
+const struct Flash_Info finfo_76X22[] = { // dual bank, 2MB
+    { .addr = 0x08000000, .blockno = 0, .block_size = 16, .erase_size = 16*1024, .write_size = 4, .nblocks = 4 },
+    { .addr = 0x08010000, .blockno = 4, .block_size = 64, .erase_size = 64*1024, .write_size = 4, .nblocks = 1 },
+    { .addr = 0x08020000, .blockno = 5, .block_size =128, .erase_size =128*1024, .write_size = 4, .nblocks = 7 },
+    { .addr = 0x08100000, .blockno =12, .block_size = 16, .erase_size = 16*1024, .write_size = 4, .nblocks = 4 },
+    { .addr = 0x08110000, .blockno =16, .block_size = 64, .erase_size = 64*1024, .write_size = 4, .nblocks = 1 },
+    { .addr = 0x08120000, .blockno =17, .block_size =128, .erase_size =128*1024, .write_size = 4, .nblocks = 7 },
+    {0},
+};
 
 static int
 dualboot_enabled(){
@@ -46,43 +80,45 @@ stflash_flashinfo(){
     int size = *r_flashkb; // in kB
 
     if( stm32f7_cpuid == CPUID_STM32F72X ){
-        // 256k or 512k
-        finfo[0].addr = 0x08020000;
-        finfo[0].blockno = 5;
-        finfo[0].block_size = 128;
-        finfo[0].erase_size = 128 * 1024;
-        finfo[0].write_size = 4;
-        finfo[0].nblocks = (size == 512) ? 3 : 1;
+        // 64k, 256k or 512k
+        bcopy(finfo_72X, finfo, sizeof(finfo_72X));
 
-        finfo[1].addr = 0;
+        if( size == 64 ){
+            finfo[1].addr = 0;
+            finfo[2].addr = 0;
+            return finfo;
+        }
+
+        finfo[2].nblocks = (size == 512) ? 3 : 1;
         return finfo;
     }
 
+    if( stm32f7_cpuid == CPUID_STM32F74X ){
+        // 64k, 512k, or 1M
+        bcopy(finfo_74X, finfo, sizeof(finfo_74X));
+        if( size == 64 ){
+            finfo[0].nblocks = 2;
+            finfo[1].addr = 0;
+            finfo[2].addr = 0;
+            return finfo;
+        }
+
+        finfo[2].nblocks = (size == 1024) ? 3 : 1;
+        return finfo;
+    }
+
+    // CPUID_STM32F76X
     if( dualboot_enabled() ){
-        finfo[0].addr = 0x08020000;
-        finfo[0].blockno = 5;
-        finfo[0].block_size = 128;
-        finfo[0].erase_size = 128 * 1024;
-        finfo[0].write_size = 4;
-        finfo[0].nblocks = (size == 2048) ? 7 : 3;
-
-        finfo[1].addr = 0x08120000;
-        finfo[1].blockno = 5 | (1<<4);
-        finfo[1].block_size = 128;
-        finfo[1].erase_size = 128 * 1024;
-        finfo[1].write_size = 4;
-        finfo[1].nblocks = (size == 2048) ? 7 : 3;
-
-        finfo[2].addr = 0;
+        // 1MB or 2MB
+        if( size == 1024 ){
+            bcopy(finfo_76X21, finfo, sizeof(finfo_76X21));
+        }else{
+            bcopy(finfo_76X22, finfo, sizeof(finfo_76X22));
+        }
     }else{
-        finfo[0].addr = 0x08040000;
-        finfo[0].blockno = 5;
-        finfo[0].block_size = 256;
-        finfo[0].erase_size = 256 * 1024;
-        finfo[0].write_size = 4;
-        finfo[0].nblocks = (size == 2048) ? 7 : 3;
-
-        finfo[1].addr = 0;
+        // 1MB or 2MB
+        bcopy(finfo_76X1, finfo, sizeof(finfo_76X1));
+        finfo[2].nblocks = (size == 2048) ? 7 : 3;
     }
 
     return finfo;
