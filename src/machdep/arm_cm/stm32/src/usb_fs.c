@@ -92,6 +92,11 @@ usb_serialnumber(void){
 }
 
 int
+usb_speed(usbd_t *u){
+        return USB_SPEED_FULL;
+}
+
+int
 usb_connect(usbd_t *u){
     u->curr_state = USBD_STATE_CONNECT;
     USB->CNTR = USB_CNTR_CTRM | USB_CNTR_RESETM; //QQQ - | USB_CNTR_ERRM | USB_CNTR_PMAOVRM;

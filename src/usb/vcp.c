@@ -26,17 +26,19 @@
 
 
 
-#define CDC_SIZE    64
+#define CDC_FSSIZE    64
+#define CDC_HSSIZE    512
+
 #define CDC_RXD_EP  0x01
 #define CDC_TXD_EP  0x81
 #define CDC_NTF_EP  0x82
 
 #define CDC_NTF_SZ  8
 
-#define RX_QUEUE_SIZE	CDC_SIZE
+#define RX_QUEUE_SIZE	CDC_HSSIZE
 
 #ifndef VCP_QUEUE_SIZE
-# define TX_QUEUE_SIZE	256
+# define TX_QUEUE_SIZE	CDC_FSSIZE
 #else
 # define TX_QUEUE_SIZE	VCP_QUEUE_SIZE
 #endif
@@ -147,7 +149,7 @@ static const struct cdc_config cdc_config ALIGN2 = {
         .bDescriptorType     = USB_DTYPE_ENDPOINT,
         .bEndpointAddress    = CDC_RXD_EP,
         .bmAttributes        = UE_BULK,
-        .wMaxPacketSize      = CDC_SIZE,
+        .wMaxPacketSize      = CDC_FSSIZE,
         .bInterval           = 0,
     },
     .data_eptx               = {
@@ -155,7 +157,7 @@ static const struct cdc_config cdc_config ALIGN2 = {
         .bDescriptorType     = USB_DTYPE_ENDPOINT,
         .bEndpointAddress    = CDC_TXD_EP,
         .bmAttributes        = UE_BULK,
-        .wMaxPacketSize      = CDC_SIZE,
+        .wMaxPacketSize      = CDC_FSSIZE,
         .bInterval           = 0,
     },
 
@@ -221,11 +223,12 @@ static struct VCP {
 
     usb_cdc_line_state_t line_state;
     struct queue rxq, txq;
-    char rxbuf[ CDC_SIZE ];
-    char txbuf[ CDC_SIZE ];
+    char rxbuf[ CDC_HSSIZE ];
+    char txbuf[ CDC_FSSIZE ];
 
     uint8_t rblen, tblen;
     uint8_t ready;
+    uint8_t is_hs;
 
 } vcom[ N_VCP ];
 
@@ -302,9 +305,18 @@ vcp_reset(struct VCP *p){
 void
 vcp_configure(struct VCP *p){
 
-    usb_config_ep( p->usbd, CDC_RXD_EP, UE_BULK, CDC_SIZE );
-    usb_config_ep( p->usbd, CDC_TXD_EP, UE_BULK, CDC_SIZE );
-    usb_config_ep( p->usbd, CDC_NTF_EP, UE_BULK, CDC_NTF_SZ );
+    if( usb_speed(p->usbd) == USB_SPEED_HIGH ){
+        p->is_hs = 1;
+        usb_config_ep( p->usbd, CDC_RXD_EP, UE_BULK, CDC_HSSIZE );
+        usb_config_ep( p->usbd, CDC_TXD_EP, UE_BULK, CDC_FSSIZE );
+        usb_config_ep( p->usbd, CDC_NTF_EP, UE_BULK, CDC_NTF_SZ );
+
+    }else{
+        p->is_hs = 0;
+        usb_config_ep( p->usbd, CDC_RXD_EP, UE_BULK, CDC_FSSIZE );
+        usb_config_ep( p->usbd, CDC_TXD_EP, UE_BULK, CDC_FSSIZE );
+        usb_config_ep( p->usbd, CDC_NTF_EP, UE_BULK, CDC_NTF_SZ );
+    }
 
     p->rblen = p->tblen = 0;
     p->ready = 0;
@@ -362,7 +374,7 @@ maybe_tx(struct VCP* p){
     if( !usbd_isactive(p->usbd) ) return;
 
     // copy to buffer
-    for(i=0; p->txq.len && (i<CDC_SIZE); i++){
+    for(i=0; p->txq.len && (i<CDC_FSSIZE); i++){
         p->txbuf[i] = qpop( &p->txq );
     }
 
@@ -370,7 +382,9 @@ maybe_tx(struct VCP* p){
     p->tblen = i;
     int plx = spldisk();
     trace_crumb3("vcp", "tx", i, p->txq.len, plx);
-    usbd_write(p->usbd, CDC_TXD_EP, p->txbuf, i, !(i & (CDC_SIZE - 1)) );
+    int zp = p->is_hs ? 1 : !(i & (CDC_FSSIZE - 1));
+
+    usbd_write(p->usbd, CDC_TXD_EP, p->txbuf, i, zp );
     splx(plx);
 }
 

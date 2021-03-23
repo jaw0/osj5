@@ -57,6 +57,13 @@ static usbotg_t usbdev[N_USBD];
 #define FLAG_HS_ULPI		1
 #define FLAG_HS_FS		4 // full-speed on HS phy
 
+static void
+_wait(int cnt){
+    while(cnt-->0){
+        __asm("nop");
+    }
+}
+
 void *
 usb_init(struct Device_Conf *dev, usbd_t *usbd){
     int i    = dev->unit;
@@ -67,7 +74,6 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
 
     bzero(usbdev + i, sizeof(usbotg_t));
     usbdev[i].usbd = usbd;
-
 
     switch(dev->unit){
     case 0: // FS
@@ -86,17 +92,21 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
 
         // is there an internal HS PHY? (F7x3)
 #ifdef USBPHYC_BASE
+        // XXX F732 has the phyc  but no phy (ulpi only)
+        // (is a 732 a 733 that failed QA?)
+
+
         if( USBPHYC->LDO & 1 ){
             usb_hs_phyc_init();
             if( mode & FLAG_HS_FS ){
+                name = "otghs/hsphy/fs";
                 phy = 1; // FS on HS phy
             }else{
-                name = "otghs/hsphy";
+                name = "otghs/hsphy/hs";
                 phy = 0; // HS on HS phy
             }
         }
 #endif
-
         break;
     }
 
@@ -108,22 +118,33 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
 
     if( dev->unit == 1 ){ // OTG-HS
         otg->g.GCCFG &= ~USB_OTG_GCCFG_PWRDWN;
+
         if( phy == 3 ){
-            otg->g.GCCFG |= USB_OTG_GUSBCFG_PHYSEL; // enable FS-phy
+            otg->g.GUSBCFG = USB_OTG_GUSBCFG_FDMOD | USB_OTG_GUSBCFG_PHYSEL // enable FS-phy
+                //QQQ | (1 << 15) //USB_OTG_GUSBCFG_PHYLPCS
+                | (9 << 10) | 4; /* trdt = minimum */
+            _wait(168*25000);
         }else{
             // this bit is not documented:
             otg->g.GCCFG |= 1 << 23; // enable HS-phy
+
+            otg->g.GUSBCFG = USB_OTG_GUSBCFG_FDMOD |
+                // internal HS via utmi, 480MHz
+                (9 << 10) | 4; /* trdt = minimum */
         }
 
-        otg->g.GUSBCFG = USB_OTG_GUSBCFG_FDMOD |
-            // internal HS via utmi, 480MHz
-            (9 << 10) | 4; /* trdt = minimum */
-
+        // XXX - F7 only?
         otg->g.GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN | USB_OTG_GOTGCTL_BVALOVAL;
 
-        if( phy == 3 )
-            otg->g.GCCFG |= USB_OTG_GCCFG_PWRDWN;
-
+        if( phy == 3 ){
+            otg->g.GCCFG |= USB_OTG_GCCFG_PWRDWN
+#ifdef NOVBUSSENS
+                // the newer + older usb peripherals have inverse behaviour of this bit
+                | (1 << 21)  // AKA - VBDEN(newer periph) or NOVBUSSENS(older periph)
+                // NB - several other bits in this register also vary, but not used in this code
+#endif
+                ;
+        }
 
     }else{ // OTG-FS
         /* select internal PHY, device mode */
@@ -150,6 +171,7 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
     /* Setup USB FS speed and frame interval */
     otg->d.DCFG = (otg->d.DCFG & ~(USB_OTG_DCFG_PERSCHIVL | USB_OTG_DCFG_DSPD))
         | (0 << USB_OTG_DCFG_PERSCHIVL_Pos)
+        | (2 << USB_OTG_DCFG_PFIVL_Pos)		// end-of-frame = 90%
         | (phy << USB_OTG_DCFG_DSPD_Pos);
 
     /* unmask interrupts */
@@ -157,7 +179,10 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
     otg->g.GINTMSK  = USB_OTG_GINTMSK_USBRST |
         // USB_OTG_GINTMSK_ENUMDNEM | USB_OTG_GINTMSK_USBSUSPM | USB_OTG_GINTMSK_WUIM |
         USB_OTG_GINTMSK_IISOIXFRM |
-        USB_OTG_GINTMSK_IEPINT | USB_OTG_GINTMSK_RXFLVLM | USB_OTG_GINTMSK_SOFM;
+        USB_OTG_GINTMSK_IEPINT | USB_OTG_GINTMSK_RXFLVLM |
+        USB_OTG_GINTMSK_EOPFM
+        //USB_OTG_GINTMSK_SOFM
+        ;
 
     /* clear pending interrupts */
     otg->g.GINTSTS = 0xFFFFFFFF;
@@ -172,10 +197,9 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
 
     usbdev[i].bufnext = RX_FIFO_SIZE + CONTROL_SIZE;
 
-
     nvic_enable( irq, IPL_DISK );
 
-    bootmsg("usb%d otg device %s @%x irq %d\n", i, name, otg, irq);
+    bootmsg("usb%d otg device %s @%x irq %d cid %x\n", i, name, otg, irq, otg->g.CID);
 
     trace_init();
     trace_crumb1("usbotg", "init", usbdev + i);
@@ -375,6 +399,7 @@ usb_config_ep0(usbd_t *u){
     usb->otg->epo[0].DOEPCTL  = USB_OTG_DOEPCTL_EPENA | USB_OTG_DOEPCTL_CNAK;
 
     u->epd[0].bufsize = CONTROL_SIZE;
+
 }
 
 
@@ -457,6 +482,10 @@ _iso_cancel(USB_OTG_t *otg, int ep){
         otg->epi[ep].DIEPCTL |= USB_OTG_DIEPCTL_SNAK;
         otg->epi[ep].DIEPCTL |= USB_OTG_DIEPCTL_EPDIS;
 
+        // wait for disabled
+        while( (otg->epi[ep].DIEPINT & (1<<1)) == 0 ) {}
+        otg->epi[ep].DIEPINT |= 1<<1;
+
         // flush pending xfer
         otg->g.GRSTCTL = (ep << 6) | USB_OTG_GRSTCTL_TXFFLSH;
     }
@@ -468,11 +497,17 @@ _iso_prepare(USB_OTG_t *otg, int ep){
 
     // set even/odd to match most recent SOF
     int frn = (otg->d.DSTS >> 8) & 0x3FFF;
-    if( frn & 1 ){
+    if( !(frn & 1) ){
         otg->epi[ep].DIEPCTL |= 1 << 29; // -> odd
     }else{
         otg->epi[ep].DIEPCTL |= 1 << 28; // -> even
     }
+
+    if( otg->epi[ep].DIEPINT & (1<<4) ){
+        // already missed the in token
+        trace_crumb0("usbotg", "IITXFE");
+    }
+    
 }
 
 int
@@ -581,49 +616,6 @@ usb_read(usbd_t *u, int ep, char *buf, int len){
     return l;
 }
 
-// read + unzip interleaved data
-//  123456123456 -> 1212 3434 5656 (frame=8(bytes), sect=3)
-int
-usb_read_unzip(usbd_t *u, int ep, char *buf, int len, int frame, int sect){
-    usbotg_t *usb = u->dev;
-    USB_OTG_t *otg = usb->otg;
-
-    ep &= 0x7F;
-    volatile uint32_t *fifo = get_fifo(usb, ep);
-
-    if( !(otg->g.GINTSTS & USB_OTG_GINTSTS_RXFLVL) ) return -1; // no data in fifo
-
-    uint32_t rxs = otg->g.GRXSTSR;
-    if( (rxs & USB_OTG_GRXSTSP_EPNUM) != ep ) return -1; // data is not for this ep
-
-    rxs = otg->g.GRXSTSP;	// same data, pop
-    int l = (rxs >> 4) & 0x7FF;
-
-    int i=0, p=0, s, f, slen=len/sect;
-
-    if( frame == 2 ){
-        // RSN ...
-    }else{
-        uint32_t *bw = (uint32_t*)buf;
-        frame /= 4; // bytes -> words
-
-        while( i < l ){
-            for(s=0; s<sect; s++){
-                for(f=0; f<frame; f++){
-                    uint32_t v = *fifo;
-                    i += 4;
-                    if( i >= len ) continue;
-                    buf[ s*slen + p + f ] = v;
-                }
-            }
-            p += frame;
-        }
-    }
-
-    usb->readflag = 1;
-    return l;
-}
-
 static void
 usb_drain(usbotg_t *u, int ep){
     USB_OTG_t *otg = u->otg;
@@ -632,6 +624,8 @@ usb_drain(usbotg_t *u, int ep){
     uint32_t rxs = otg->g.GRXSTSP;
     uint32_t *fifo = get_fifo(u, ep);
     int l = (rxs >> 4) & 0x7FF;
+
+    trace_crumb2("usbotg", "drain", ep, l);
 
     int i;
     for(i=0; i<l; i+=4){
@@ -663,8 +657,15 @@ usb_iiso_handler(usbotg_t *u){
         if( EP_IS_ISO(otg, i) && (otg->epi[i].DIEPCTL & USB_OTG_DIEPCTL_EPENA) ){
             // iso ep - send did not complete
             _iso_cancel(otg, i);
+            u->usbd->epd[i].wpending = 0;
 
-            trace_crumb2("usbotg", "iiso", i, otg->epi[i].DIEPCTL);
+            trace_crumb3("usbotg", "iiso", i, otg->epi[i].DIEPCTL, otg->epi[i].DIEPINT & (1<<4)); // 4=ITTXFE
+
+            if( otg->epi[i].DIEPINT & (1<<4) ){
+                int frn = (otg->d.DSTS >> 8) & 0x3FFF;
+                kprintf("iitfxe %x\n", frn);
+                otg->epi[i].DIEPINT |= (1<<4); // clear iitfxe
+            }
         }
     }
 }
@@ -736,7 +737,7 @@ static void
 otg_irq_handler(usbotg_t *u){
     int isr = u->otg->g.GINTSTS;
 
-    //trace_crumb1("usbotg",  "irq!", isr);
+    //trace_crumb2("usbotg",  "irq!", isr, isr & u->otg->g.GINTMSK);
     //kprintf("irq %x\n", isr);
 
     if( isr & USB_OTG_GINTSTS_USBRST ){
@@ -766,12 +767,16 @@ otg_irq_handler(usbotg_t *u){
     }
 
     if( isr & USB_OTG_GINTSTS_SOF ){
-        usbd_cb_sof(u->usbd);
+        //usbd_cb_sof(u->usbd);
         u->otg->g.GINTSTS = USB_OTG_GINTSTS_SOF;
     }
 
-    //u->otg->g.GINTSTS = 0xFFFFFFFF;
+    if( isr & USB_OTG_GINTSTS_EOPF ){
+        usbd_cb_sof(u->usbd);
+        u->otg->g.GINTSTS = USB_OTG_GINTSTS_EOPF;
+    }
 
+    //u->otg->g.GINTSTS = 0xFFFFFFFF;
 }
 
 
@@ -842,14 +847,16 @@ DEFUN(usbinfo, "test")
     printf("intsts: %08x\n", otg->g.GINTSTS);
     printf("devsts: %08x\n", otg->d.DSTS);	// 22,23 = DM,DP
     printf("devctl: %08x\n", otg->d.DCTL);
-
+    printf("rxstsr: %08x\n", otg->g.GRXSTSR);
+#ifdef USBPHYC
     printf("phyc: %x\n", USBPHYC);
     printf("pll1: %08x ldo: %08x\n", USBPHYC->PLL1, USBPHYC->LDO);
-
+#endif
 
     return 0;
 }
 
+#ifdef USBPHYC
 DEFUN(plltest, "")
 {
     int n;
@@ -871,6 +878,7 @@ DEFUN(plltest, "")
 
     return 0;
 }
+#endif
 
 DEFUN(epinfo, "test")
 {
@@ -894,7 +902,7 @@ DEFUN(epinfo, "test")
     printf("siz: in %08x out %08x\n", otg->epi[ep].DIEPTSIZ, otg->epo[ep].DOEPTSIZ);
     printf("sts: in %x\n", otg->epi[ep].DTXFSTS);	// amount of free space in tx fifo. words
     printf("int: in %08x out %08x\n", otg->epi[ep].DIEPINT,   otg->epo[ep].DOEPINT);
-    printf("txf: in %08x\n", otg->g.DIEPTXF[ep - 1]);
+    printf("txf: in %08x\n", ep ? otg->g.DIEPTXF[ep - 1] : otg->g.DIEPTXF0_HNPTXFSIZ);
 
     return 0;
 }
@@ -924,6 +932,8 @@ DEFUN(hstest, "test")
         usleep(10000);
     }
 #endif
+
+    printf("devsts: %08x\n", otg->d.DSTS);	// 22,23 = DM,DP
 
     gpio_init( GPIO_A11, GPIO_OUTPUT | GPIO_PUSH_PULL );
     gpio_init( GPIO_A12, GPIO_OUTPUT | GPIO_PUSH_PULL );
