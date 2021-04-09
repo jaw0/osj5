@@ -183,7 +183,6 @@ static struct MSC {
     int8_t           maxlun;
     volatile int     txcflag, rxcflag, rcvflag;
     int              datalen;
-    struct Sense     sense;
     umass_bbb_cbw_t  cbw;
     umass_bbb_csw_t  csw;
     int              bufpos;
@@ -222,17 +221,40 @@ static int
 msc_sleep(volatile int *flag, const char *wc, int to){
     int plx;
 
-    while( 1 ){
-        plx = spldisk();
+
+    while(1){
+        plx = splproc();
+        asleep( flag, wc );
         if( *flag ) break;
-
-        tsleep( flag, currproc->prio, wc, to );
+        await( -1, to );
+        if( *flag ) break;
     }
-
+    aunsleep();
     *flag = 0;
     splx(plx);
 
     return 1;
+}
+
+static int
+msc_txc_sleep(struct MSC *p, const char *wc){
+    int plx;
+
+    while(1){
+        plx = splproc();
+        asleep( &p->txcflag, wc );
+        if( p->txcflag ) break;
+        if( p->state != STATE_DATATX ) break;
+        await( -1, 5000 );
+        if( p->txcflag ) break;
+        if( p->state != STATE_DATATX ) break;
+    }
+    aunsleep();
+    p->txcflag = 0;
+    splx(plx);
+
+    return 1;
+
 }
 
 
@@ -350,8 +372,9 @@ msc_flush_pipe(struct MSC *p){
             int len = totlen;
             if( len > sizeof(p->xbuf) ) len = sizeof(p->xbuf);
 
+            p->txcflag = 0;
             usbd_write(p->usbd, MSC_TXD_EP, p->xbuf, len, 0);
-            msc_sleep( &p->txcflag, "usb/txc", 10000 );
+            msc_txc_sleep( p, "usb/fl" );
             if( p->state != STATE_DATATX ) break;
 
             totlen -= len;
@@ -383,8 +406,11 @@ msc_send_result(struct MSC *p, char *buf, int len){
 
     trace_crumb1("msc", "result", len);
     p->state = STATE_DATATX;
+    p->txcflag = 0;
+
     usbd_write(p->usbd, MSC_TXD_EP, buf, len, 0);
-    msc_sleep( & p->txcflag, "usb/txc", 10000 );
+    msc_txc_sleep( p, "usb/sr" );
+
     p->cbw.dCBWDataTransferLength = 0;
     return 0;
     // RSN - handle send failed
@@ -548,7 +574,7 @@ msc_scsi_read10(struct MSC *p){
         return -1;
     }
 
-    int err = 0;
+    int err = 0, r;
     offset_t pos = REV32(cbd->lba) << 9;
     p->state = STATE_DATATX;
 
@@ -565,14 +591,17 @@ msc_scsi_read10(struct MSC *p){
         int r = fbread( cf->fio, p->xbuf, len, pos );
 
         if( r <= 0 ){
-            //kprintf("msc: read error %d @ %qd - %d\n", len, pos, r);
             trace_crumb3("msc", "readerr", pos, len, r);
-            //err = 1;
+            kprintf("msc: read error %d @ %qd - %d\n", len, pos, r);
+            err = 1;
             bzero(p->xbuf, len);
         }
 
+        p->txcflag = 0;
+        trace_crumb2("msc", "write", len, p->txcflag);
         usbd_write(p->usbd, MSC_TXD_EP, p->xbuf, len, 0);
-        msc_sleep( &p->txcflag, "usb/txc", 10000 );
+
+        msc_txc_sleep( p, "usb/tx" );
         if( p->state != STATE_DATATX ) return 0;
 
         totlen -= len;
@@ -766,7 +795,7 @@ msc_process_cbw(struct MSC *p, int len){
 
     // bottom half task will continue with processing the request
     // by calling msc_bottom_proccess_cbw
-    trace_crumb0("msc", "wakeup");
+    // trace_crumb0("msc", "wakeup");
 
     msc_wakeup( & p->rcvflag );
 
@@ -789,7 +818,8 @@ msc_bottom_proccess_cbw(struct MSC *p){
 void
 msc_tx_complete(struct MSC *p, int ep){
 
-    trace_crumb1("msc", "tx/c", ep);
+    trace_crumb2("msc", "tx/c", ep, p->state);
+    p->txcflag = 1;
 
     switch(p->state){
     case STATE_DATATX:
@@ -800,6 +830,7 @@ msc_tx_complete(struct MSC *p, int ep){
         // csw was sent
         break;
     default:
+        kprintf("txc unexpected\n");
         // should not happen - ignore?
         break;
     }
@@ -875,6 +906,7 @@ msc_run(void){
     currproc->prio  = 2;
 
     while(1){
+        trace_reset();
         trace_crumb0("msc", "tsleep");
         msc_sleep( &p->rcvflag, "usb/i", 0 );
         msc_bottom_proccess_cbw( p );

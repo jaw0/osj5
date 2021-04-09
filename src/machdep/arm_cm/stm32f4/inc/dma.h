@@ -71,12 +71,12 @@ dma_stop_xfer(int dman, int strn){
 }
 
 static inline void
-dma_start_xfer(int dman, int strn, int chan, void *mem, void *dr, int len, int prio, int dir){
+dma_start_xfer_b(int dman, int strn, int chan, void *mem, void *dr, int len, int prio, uint32_t bits){
 
     DMA_TypeDef *dma = _dma[dman];
     DMA_Stream_TypeDef *str = dma->stream + strn;
 
-    str->CR  &= (0xF<<28) | (1<<20);	// zero CR
+    str->CR  = 0; // &= (0xF<<28) | (1<<20);	// zero CR
 
     //dma_clear_ints(dman, strn);
 
@@ -85,15 +85,23 @@ dma_start_xfer(int dman, int strn, int chan, void *mem, void *dr, int len, int p
     str->NDTR  = len >> 2;	// bytes -> words
 
     str->CR   |= (chan << 25)
-        | DMASCR_TEIE 		// enable transfer error irq
-        | DMASCR_TCIE 		// enable transfer complete irq
-        | DMASCR_MINC		// inc mem
         | (prio<<16)		// high prio
-        | (2<<13) | (2<<11)	// 32 bit->32 bit
-        | dir			// M2P | P2M
+        | bits
         ;
 
     str->CR   |= 1;		// enable
+}
+
+static inline void
+dma_start_xfer(int dman, int strn, int chan, void *mem, void *dr, int len, int prio, int dir){
+
+    dma_start_xfer_b(dman, strn, chan, mem, dr, len, prio, (0
+        | DMASCR_TEIE 		// enable transfer error irq
+        | DMASCR_TCIE 		// enable transfer complete irq
+        | DMASCR_MINC		// inc mem
+        | (2<<13) | (2<<11)	// 32 bit->32 bit
+        | dir			// M2P | P2M
+    ));
 }
 
 static inline int

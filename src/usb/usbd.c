@@ -83,7 +83,7 @@ usbd_serial_descr(char *buf){
     uint64_t sn = usb_serialnumber();
 
     for(i=0; i<12; i++){
-        *dst ++ = serialdigits[ sn & 0x0F ];
+        dst[11-i] = serialdigits[ sn & 0x0F ];
         sn >>= 4;
     }
 
@@ -400,7 +400,9 @@ usbd_write(usbd_t *u, int ep, const char *buf, int len, int wzlp){
     u->epd[epa].wzlp = wzlp;
     u->epd[epa].wbusy = 1;
 
+    int plx = spldisk();
     usbd_send_more(u, ep);
+    splx(plx);
     return len;
 }
 
@@ -453,7 +455,7 @@ _set_addr(usbd_t *u){
 void
 usbd_cb_send_complete(usbd_t *u, int ep){
 
-    // trace_crumb2("usbd", "send/c", ep, u->epd[ep].wpending);
+    trace_crumb2("usbd", "send/c", ep, u->epd[ep].wpending);
 
     if( ! u->epd[ep].wpending ){
         u->epd[ep].wbusy = 0;

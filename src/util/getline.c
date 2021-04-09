@@ -568,7 +568,7 @@ getpass(char *s, int max){
     return getline2(s, max, GLF_STARS);
 }
 
-#ifdef TESTING
+#ifdef GETLINE_TESTING
 int
 main(){
     char buffer[1024] = "123.45.67.89";

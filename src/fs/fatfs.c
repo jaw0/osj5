@@ -49,6 +49,7 @@ int fatfs_getchar(FILE*);
 int fatfs_close(FILE*);
 int fatfs_flush(FILE*);
 int fatfs_noop(FILE*);
+int fatfs_seek(FILE*, long, int);
 int fatfs_status(FILE*);
 int fatfs_read(FILE*, char*, int);
 int fatfs_write(FILE*, const char*, int);
@@ -63,7 +64,7 @@ const struct io_fs fatfs_iofs = {
     fatfs_read,
     fatfs_write,
     0, 0, 		/* bread, bwrite */
-    0, 0,		/* seek, tell */
+    fatfs_seek, 0,		/* seek, tell */
     fatfs_stat,
     0,			/* ioctl */
 };
@@ -506,6 +507,26 @@ fatfs_putchar(FILE *f, char c){
     if( r != FR_OK )
         return -1;
     return 1;
+}
+
+int
+fatfs_seek(FILE *f, long off, int whence){
+    struct FileData *fd = f->d;
+    int r;
+
+    switch(whence){
+    case 1:
+        off += f_tell(&fd->fil);
+        // fall through
+    case 0:
+        r = f_lseek(&fd->fil, off);
+        if( r != FR_OK ) return 1;
+        return 0;
+    case 2:
+        // unsupported
+        break;
+    }
+
 }
 
 int

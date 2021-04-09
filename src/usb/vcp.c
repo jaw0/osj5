@@ -163,6 +163,16 @@ static const struct cdc_config cdc_config ALIGN2 = {
 
 };
 
+static const usb_device_qualifier_t device_qualifier = {
+    .bLength            = sizeof(usb_device_qualifier_t),
+    .bDescriptorType    = USB_DTYPE_QUALIFIER,
+    .bcdUSB             = 0x200,
+    .bDeviceClass       = 0,
+    .bDeviceSubClass    = 0,
+    .bDeviceProtocol    = 0,
+    .bMaxPacketSize     = 0,
+    .bNumConfigurations = 1,
+};
 
 struct VCP;
 void vcp_tx_complete(struct VCP *, int);
@@ -188,6 +198,10 @@ static const usbd_config_t cdc_usbd_config = {
         { USB_SPEED_ANY,  (USB_DTYPE_DEVICE<<8),	0, &cdc_dev_desc },
         { USB_SPEED_ANY,  (USB_DTYPE_CONFIGURATION<<8),	sizeof(cdc_config), &cdc_config },
         { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 0,	0, &lang_desc },
+
+        { USB_SPEED_ANY,  (USB_DTYPE_QUALIFIER<<8),     0, &device_qualifier },
+        { USB_SPEED_ANY,  (USB_DTYPE_OTHERSPEED<<8),	sizeof(cdc_config), &cdc_config },
+
         { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 1,	0, &cdc_manuf_desc },
         { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 2,	0, &cdc_prod_desc },
         {0, 0, 0, 0},
@@ -278,6 +292,7 @@ vcp_reconnect(int i){
 
     usbd_t *u = v->usbd;
 
+    usb_disconnect( u );
     usbd_configure( u, &cdc_usbd_config, v );
     usb_connect( u );
 

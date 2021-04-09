@@ -27,6 +27,7 @@ my %usefiles;
 my @appfiles;
 my @appdirs;
 my @makeopt;
+my %excludecli;
 my($arch, $variant);
 
 my $ident   = $confile;
@@ -170,7 +171,7 @@ for my $file (@appfiles){
 
     print CONFD "$base.o: $dir$file\n";
     push @objs, "$base.o";
-    push @srcs, "$dir$file";
+    push @srcs, "$dir$file" unless $excludecli{ $file };
 }
 
 # icky - but backwards compat
@@ -262,6 +263,11 @@ sub process_file {
         elsif( $cmd eq 'srcfile' ){
             # app src code
             push @appfiles, $f[1];
+        }
+        elsif( $cmd eq 'libfile' ){
+            # app lib code
+            push @appfiles, $f[1];
+            $excludecli{ $f[1] } = 1;
         }
         elsif( $cmd eq 'font' ){
             # font fontname
