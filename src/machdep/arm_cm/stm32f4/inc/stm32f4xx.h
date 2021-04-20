@@ -47,10 +47,20 @@
 #ifndef __STM32F4xx_H
 #define __STM32F4xx_H
 
+
+
 #ifdef __cplusplus
  extern "C" {
 #endif /* __cplusplus */
-  
+
+
+#define CPUID_STM32F40X	0x413
+#define CPUID_STM32F42X	0x419
+#define CPUID_STM32F411	0x431
+#define CPUID_STM32F46X	0x434
+
+
+
 /** @addtogroup Library_configuration_section
   * @{
   */

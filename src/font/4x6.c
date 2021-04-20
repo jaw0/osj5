@@ -13,6 +13,7 @@ const struct Font font_4x6 = {
     .numcol     = 4,
     .startchar  = 33,
     .lastchar	= 127,
+    .metrics    = 0,
     .data       = {
 	0x0, 0x17, 0x0, 0x0, 	// 33	exclam
 	0x3, 0x0, 0x3, 0x0, 	// 34	quotedbl

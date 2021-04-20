@@ -10,7 +10,8 @@ FONTS=`ls -1 font | grep bdf | sed s/.bdf//`
 
 for f in $FONTS; do
     echo $f
-    bin/bdftoc font/$f.bdf > src/font/`basename $f`.c
-    bin/bdftoc -n font/$f.bdf > src/font/`basename $f`_n.c
+    bf=`basename $f | sed 's/-/_/g'`
+    bin/bdftoc font/$f.bdf > src/font/$bf.c
+    bin/bdftoc -n font/$f.bdf > src/font/$bf\_n.c
 done
 

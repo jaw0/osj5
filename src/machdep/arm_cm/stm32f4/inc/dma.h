@@ -68,6 +68,7 @@ dma_stop_xfer(int dman, int strn){
     DMA_Stream_TypeDef *str = dma->stream + strn;
 
     str->CR   &= ~1;
+    dma_clear_ints(dman, strn);
 }
 
 static inline void
@@ -78,7 +79,7 @@ dma_start_xfer_b(int dman, int strn, int chan, void *mem, void *dr, int len, int
 
     str->CR  = 0; // &= (0xF<<28) | (1<<20);	// zero CR
 
-    //dma_clear_ints(dman, strn);
+    dma_clear_ints(dman, strn);
 
     str->PAR   = dr;
     str->M0AR  = mem;

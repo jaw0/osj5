@@ -19,6 +19,7 @@
 
 
 #define MAXX3ARG 4
+#define MAXXTEXT 16
 
 #define ATTR_REVERSE	1
 #define ATTR_ULINE	2
@@ -53,12 +54,16 @@ public:
 
 private:
     short  cx,cy;		// current cursor position
+    char   residue;		// for proportional font rendering
 
     // putchar ansi x3.64 state
     s_char x3_arg[MAXX3ARG];
     char   x3_argn;
     u_char x3_flags;
     short  x3_mode;
+    // x3.64(ish) extensions
+    char   xx_text[MAXXTEXT+1];
+    char   xx_text_n;
 
     const Font *font;		// current font
 
@@ -79,8 +84,10 @@ public:
     void set_pixel_rgb(int x, int y, int c) {set_pixel(x,y, get_color(c));}
     void set_orientation(int);
     void scroll(void);
-    void scroll_horiz(int,int,int);
-    void scroll_vert(int,int,int);
+    void scroll_horiz(int ya,int yz,int dx){ scroll_horiz(0,ya, width,yz-1, dx); }
+    void scroll_vert(int xa,int xz,int dy){ scroll_vert(xa,0, xz-1,height, dy); }
+    void scroll_horiz(int,int,int,int,int);
+    void scroll_vert(int,int,int,int,int);
     void render_glyph(int);
     void putchar(int);
     void puts(const char *);
@@ -93,7 +100,6 @@ public:
     static const Font* find_font(const char *);
 
     void hline(int,int, int,int, int);
-
     void line(int,int, int,int, int, unsigned p=0xFFFFFFFF);
     void rect(int,int, int,int, int, unsigned p=0xFFFFFFFF);
     void rect_filled(int,int, int,int, int);

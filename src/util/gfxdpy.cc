@@ -10,6 +10,7 @@ extern "C" {
 # ifdef USE_NSTDIO
 #  include <nstdio.h>
 # endif
+#include <stdint.h>
 };
 
 #include <gfxdpy.h>
@@ -49,6 +50,7 @@ extern "C" int  strcmp(const char*, const char*);
 
 #define GOTESC		0x100
 #define GOTBRACK	0x200
+#define GOTTEXT		0x400
 #define FLAGMINUS	1
 #define ABS(x)		((x)<0 ? -(x) : (x))
 
@@ -58,6 +60,8 @@ extern "C" int  strcmp(const char*, const char*);
 void
 GFXdpy::init(void){
     orientation = cx = cy = text_attr = text_flags = x3_argn = x3_mode = 0;
+    xx_text_n = 0;
+    residue = 0;
     text_scale = 1;
     font = fonts[0];
     text_fg  = 7;
@@ -168,52 +172,52 @@ GFXdpy::scroll(void){
 }
 
 void
-GFXdpy::scroll_horiz(int ya, int yz, int dx){
+GFXdpy::scroll_horiz(int xa, int ya, int xz,int yz, int dx){
     int x;
 
     if( dx > 0 ){
-        for( ; ya<yz; ya++){
-            for(x=0; x<width-dx; x++){
+        for( ; ya<=yz; ya++){
+            for(x=xa; x<=xz-dx; x++){
                 int pix = get_pixel(x+dx, ya);
                 set_pixel(x, ya, pix);
             }
-            for(x=width-dx; x<width; x++)
+            for(x=xz-dx; x<xz; x++)
                 set_pixel(x, ya, color_bg);
         }
     }else{
         dx = - dx;
-        for( ; ya<yz; ya++){
-            for(x=width-1; x>=dx; x--){
+        for( ; ya<=yz; ya++){
+            for(x=xz; x>=xa+dx; x--){
                 int pix = get_pixel(x-dx, ya);
                 set_pixel(x, ya, pix);
             }
-            for(x=0; x<dx; x++)
+            for(x=xa; x<xa+dx; x++)
                 set_pixel(x, ya, color_bg);
         }
     }
 }
 
 void
-GFXdpy::scroll_vert(int xa, int xz, int dy){
+GFXdpy::scroll_vert(int xa, int ya, int xz, int yz, int dy){
     int y;
 
     if( dy > 0 ){
-        for( ; xa<xz; xa++){
-            for(y=0; y<height-dy; y++){
+        for( ; xa<=xz; xa++){
+            for(y=ya; y<=yz-dy; y++){
                 int pix = get_pixel(xa, y+dy);
                 set_pixel(xa, y, pix);
             }
-            for(y=height-dy; y<height; y++)
+            for(y=yz-dy; y<yz; y++)
                 set_pixel(xa, y, color_bg);
         }
     }else{
         dy = - dy;
-        for( ; xa<xz; xa++){
-            for(y=height-1; y>=dy; y--){
+        for( ; xa<=xz; xa++){
+            for(y=yz; y>=ya+dy; y--){
                 int pix = get_pixel(xa, y-dy);
                 set_pixel(xa, y, pix);
             }
-            for(y=0; y<dy; y++)
+            for(y=ya; y<ya+dy; y++)
                 set_pixel(xa, y, color_bg);
         }
     }
@@ -276,7 +280,7 @@ GFXdpy::get_color(int rgb){
     return rgb;
 }
 
-inline int
+inline unsigned int
 get_charld(const Font *f, int ch, int x) {
 
     if( ch < f->startchar ) return 0;
@@ -289,9 +293,9 @@ get_charld(const Font *f, int ch, int x) {
     case 1:
         return f->data[e];
     case 2:
-        return ((unsigned short*)f->data)[e];
+        return ((uint16_t*)f->data)[e];
     case 4:
-        return ((unsigned long*)f->data)[e];
+        return ((uint32_t*)f->data)[e];
     }
 }
 
@@ -303,20 +307,35 @@ GFXdpy::render_glyph(int ch){
     int h = text_scale * font->height;
 
     for(x=0; x<text_scale * font->width; x++){
-        int gl = get_charld(font, ch, x / text_scale);
+        unsigned int gl = get_charld(font, ch, x / text_scale);
 
         for(y=0; y<h; y++){
             int pix = gl & (1<<(y/text_scale));
             if( text_attr & ATTR_ULINE  && y == h-1) pix = 1;
             if( text_attr & ATTR_STRIKE && y == h/2) pix = 1;
-            if( text_attr & ATTR_REVERSE ) pix = ! pix;
 
-            pix = pix ? color_fg : color_bg;
-            set_pixel(x + cx, y + cy, pix );
+            // do not re-erase overlapping proportionally spaced glyphs
+            if( (residue == 0) || pix ){
+                if( text_attr & ATTR_REVERSE ) pix = ! pix;
+                pix = pix ? color_fg : color_bg;
+                set_pixel(x + cx, y + cy, pix );
+            }
         }
+
+        if( residue > 0 ) residue --;
     }
 }
 
+int
+glyph_width(const Font *f, int ch){
+    int w = f->width;
+
+    if( f->metrics ){
+        ch -= f->startchar;
+        w += f->metrics[ch].xadj;
+    }
+    return w;
+}
 
 void
 GFXdpy::putchar(int ch){
@@ -328,12 +347,22 @@ GFXdpy::putchar(int ch){
             x3_mode  = GOTBRACK;
             x3_argn  = 0;
             x3_flags = 0;
+            xx_text_n  = 0;
             bzero( x3_arg, MAXX3ARG );
+            bzero( xx_text, MAXXTEXT+1 );
             return;
         }else{
             x3_mode = 0;
             ch = 0x80 | ch;
         }
+    }
+
+    /* text arg: esc[50;`text;51x */
+    if( (x3_mode & GOTTEXT) && (ch != ';') ){
+        if( xx_text_n < MAXXTEXT ){
+            xx_text[ xx_text_n ++ ] = ch;
+        }
+        goto done;
     }
 
     switch( ch | x3_mode ){
@@ -343,6 +372,7 @@ GFXdpy::putchar(int ch){
     case ';' | GOTBRACK:
         x3_argn ++;
         x3_flags &= ~FLAGMINUS;
+        x3_mode  &= ~GOTTEXT;
         if( x3_argn >= MAXX3ARG ) x3_argn = MAXX3ARG - 1;
         goto done;
     case '-' | GOTBRACK:
@@ -353,6 +383,13 @@ GFXdpy::putchar(int ch){
     case '8' | GOTBRACK: case '9' | GOTBRACK:
         x3_arg[ x3_argn ] *= 10;
         x3_arg[ x3_argn ] += (ch - '0') * ((x3_flags & FLAGMINUS) ? -1 : 1);
+        goto done;
+
+    case ';' | GOTBRACK | GOTTEXT:
+        x3_mode  &= ~GOTTEXT;
+        goto done;
+    case '`' | GOTBRACK:
+        x3_mode |= GOTTEXT;
         goto done;
 
     case 'A' | GOTBRACK:	// up
@@ -453,7 +490,15 @@ GFXdpy::putchar(int ch){
 
         case 10: case 11: case 12: case 13: case 14:
         case 15: case 16: case 17: case 18: case 19:
-            set_font( x3_arg[0] - 10 );
+            // set font with non-standard extensions
+            // esc[10m   esc[10;123m  esc[10;`name;m
+            if( xx_text[0] )
+                set_font( xx_text );
+            else if( x3_argn )
+                set_font( x3_arg[1] );
+            else
+                set_font( x3_arg[0] - 10 );
+            break;
         }
         break;
 
@@ -503,7 +548,9 @@ GFXdpy::putchar(int ch){
         }
 
         render_glyph(ch);
-        cx += text_scale * font->width;
+        int gw = text_scale * glyph_width(font, ch);
+        cx += gw;
+        residue = text_scale * font->width - gw;
         break;
     }
 

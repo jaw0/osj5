@@ -20,6 +20,7 @@ my $file = shift @ARGV;
 
 (my $base = $file) =~ s|.*/||;
 (my $fontname = "$base") =~ s/\..*//;
+$fontname =~ s/-/_/g;
 # RSN - clean name more...?
 
 open(F, $file) || die "cannot open $file: $!\n";
@@ -36,12 +37,15 @@ my $charnum;
 my $dwidth;
 my $spacing;
 my $pixsize;
+my $proportional;
+my $metrics = "0";
 my %font;
 
 print "\n// file: $file\n";
 
 while(<F>){
     chop;
+    s/\r//;
     my($k, $v) = split /\s+/, $_, 2;
 
     if( $k eq 'FONT' ){ print "// font: $v\n"; next; }
@@ -60,7 +64,7 @@ while(<F>){
     }
     if( $k eq 'SPACING' ){
         $v =~ s/"//g;
-        $spacing = $v;
+        $spacing = uc $v;
         next;
     }
     if( $k eq 'PIXEL_SIZE' ){
@@ -95,6 +99,14 @@ while(<F>){
             bitmap	=> [@bitmap],
         };
 
+        if( ($spacing == 'C') && ($cbh != $fbh) ){
+            $spacing = 'M';
+        }
+        if( $cbw != $fbw ){
+            $spacing = 'P';
+        }
+        $proportional = 1 if $fbw != $dwidth;
+
         $charname = $charnum = undef;
     }
 }
@@ -114,10 +126,13 @@ if( $opt{n} ){
 # analyze + determine sizing
 my($xbits, $ybits, $xbytes, $ybytes);
 
+reduce();
 analyze();
 setsize();
 
-debug( "FBBX=>\t$fbw, $fbh, $fbx, $fby" );
+$metrics = metrics() if $proportional;
+
+debug( "FBBX=>\t$fbw, $fbh, $fbx, $fby : $spacing" );
 
 die "$fontname: font too tall!\n" if $ybytes > 4;
 
@@ -137,6 +152,7 @@ const struct Font font_${fontname} = {
     .numcol     = $fbw,
     .startchar  = $START,
     .lastchar	= $LAST,
+    .metrics    = $metrics,
     .data       = {
 EOH
 ;
@@ -177,11 +193,28 @@ sub fixglyph {
         push @bitmap, $b;
     }
 
-
-    # shift up/down for y offset
-    if( $cbh + $cby < $fbh + $fby ){
-        unshift @bitmap, 0 for (1 .. $fbh + $fby - $cbh - $cby);
+    # shift up/down, pad
+    if( $cby > $fby ){
+        # pad on bottom
+        push @bitmap, 0 for (1 .. $cby - $fby);
     }
+    if( @bitmap < $fbh ){
+        # pad on top
+        unshift @bitmap, 0 for (1 .. $fbh - @bitmap);
+    }
+
+
+    # 
+    # if( $cbh + $cby < $fbh + $fby ){
+    #     my $x = $fbh + $fby - $cbh - $cby;
+    #     debug("$g->{name} up $x");
+    #     unshift @bitmap, 0 for (1 .. $fbh + $fby - $cbh - $cby);
+    # }
+    # if( $cbh + $cby > $fbh + $fby ){
+    #     my $x = $cbh + $cby - $fbh - $fby;
+    #     debug("$g->{name} dn $x");
+    #     push @bitmap, 0 for (1 .. $cbh + $cby - $fbh - $fby);
+    # }
 
     return \@bitmap;
 }
@@ -212,6 +245,28 @@ sub mkglyph {
     print "\t// $n\t$name\n";
 }
 
+# can we smoosh out any wasted space?
+sub reduce {
+
+    return if $spacing eq 'C';
+
+    for my $n ($START .. $LAST){
+        my $g = $font{ $n };
+        next unless $g;
+        my($w,$h, $x, $y) = @{ $g->{bbx} };
+        my $b = $g->{bitmap};
+
+        while( @$b > 1 ){
+            last if $b->[0] !~ /^0+$/;
+            shift @$b;
+            $h --;
+            debug("reduced!");
+        }
+
+        $g->{bitmap} = $b;
+        $g->{bbx} = [$w, $h, $x, $y];
+    }
+}
 
 sub analyze {
 
@@ -246,14 +301,14 @@ sub analyze {
         $maxy = $Y if $Y > $maxy || !defined $maxy;
 
 
-        debug( chr($n), "height $h; dx $g->{dwidth}" );
+        debug( chr($n), "height $h /$y; dx $g->{dwidth}" );
     }
 
     debug( "fbbx:\t$fbw, $fbh, $fbx, $fby" );
     debug( "dx:\t$dx; $maxdx" );
-    debug( "bb:\tx: $minx - $maxx, y: $miny - $maxy" );
+    debug( "bb:\tx: $minx .. $maxx, y: $miny .. $maxy" );
 
-    $fbh = $pixsize || int( $maxy * 1.25 - $miny );
+    $fbh = $maxy - $miny;
 
     if( $fbh > 32 ){
         # we currenly only support upto 32 bits
@@ -262,8 +317,10 @@ sub analyze {
     }
 
     $fbw = $maxdx;
+    $fbw = $maxx if $maxx > $fbw;
     $fbx = $minx;
     $fby = $miny;
+    #$proportional = 1;
 }
 
 sub setsize {
@@ -297,6 +354,21 @@ sub readext {
         $extchars{ $c } = { char => $i, name => $name };
         $i++;
     }
+}
+
+sub metrics {
+
+    my $m = "(const struct FontMetric[]){\n";
+
+    for my $n ($START .. $LAST){
+        my $g = $font{ $n };
+        my $name = $g->{name} || chr($n);
+        my $xadj = sprintf '%3d', $g->{dwidth} - $fbw;
+
+        $m .= "\t{ .xadj = $xadj },\t// $name\n";
+    }
+
+    $m .= "    }";
 }
 
 ################################################################

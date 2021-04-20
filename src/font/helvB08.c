@@ -13,6 +13,103 @@ const struct Font font_helvB08 = {
     .numcol     = 9,
     .startchar  = 33,
     .lastchar	= 127,
+    .metrics    = (const struct FontMetric[]){
+	{ .xadj =  -6 },	// exclam
+	{ .xadj =  -5 },	// quotedbl
+	{ .xadj =  -4 },	// numbersign
+	{ .xadj =  -4 },	// dollar
+	{ .xadj =  -3 },	// percent
+	{ .xadj =  -3 },	// ampersand
+	{ .xadj =  -6 },	// quotesingle
+	{ .xadj =  -6 },	// parenleft
+	{ .xadj =  -6 },	// parenright
+	{ .xadj =  -6 },	// asterisk
+	{ .xadj =  -4 },	// plus
+	{ .xadj =  -7 },	// comma
+	{ .xadj =  -5 },	// hyphen
+	{ .xadj =  -7 },	// period
+	{ .xadj =  -6 },	// slash
+	{ .xadj =  -4 },	// zero
+	{ .xadj =  -4 },	// one
+	{ .xadj =  -4 },	// two
+	{ .xadj =  -4 },	// three
+	{ .xadj =  -4 },	// four
+	{ .xadj =  -4 },	// five
+	{ .xadj =  -4 },	// six
+	{ .xadj =  -4 },	// seven
+	{ .xadj =  -4 },	// eight
+	{ .xadj =  -4 },	// nine
+	{ .xadj =  -7 },	// colon
+	{ .xadj =  -7 },	// semicolon
+	{ .xadj =  -5 },	// less
+	{ .xadj =  -4 },	// equal
+	{ .xadj =  -5 },	// greater
+	{ .xadj =  -4 },	// question
+	{ .xadj =   0 },	// at
+	{ .xadj =  -3 },	// A
+	{ .xadj =  -3 },	// B
+	{ .xadj =  -3 },	// C
+	{ .xadj =  -3 },	// D
+	{ .xadj =  -4 },	// E
+	{ .xadj =  -4 },	// F
+	{ .xadj =  -3 },	// G
+	{ .xadj =  -3 },	// H
+	{ .xadj =  -7 },	// I
+	{ .xadj =  -4 },	// J
+	{ .xadj =  -3 },	// K
+	{ .xadj =  -4 },	// L
+	{ .xadj =  -1 },	// M
+	{ .xadj =  -3 },	// N
+	{ .xadj =  -3 },	// O
+	{ .xadj =  -3 },	// P
+	{ .xadj =  -3 },	// Q
+	{ .xadj =  -3 },	// R
+	{ .xadj =  -3 },	// S
+	{ .xadj =  -3 },	// T
+	{ .xadj =  -3 },	// U
+	{ .xadj =  -3 },	// V
+	{ .xadj =   0 },	// W
+	{ .xadj =  -3 },	// X
+	{ .xadj =  -2 },	// Y
+	{ .xadj =  -3 },	// Z
+	{ .xadj =  -6 },	// bracketleft
+	{ .xadj =  -6 },	// backslash
+	{ .xadj =  -6 },	// bracketright
+	{ .xadj =  -5 },	// asciicircum
+	{ .xadj =  -4 },	// underscore
+	{ .xadj =  -6 },	// grave
+	{ .xadj =  -4 },	// a
+	{ .xadj =  -4 },	// b
+	{ .xadj =  -5 },	// c
+	{ .xadj =  -4 },	// d
+	{ .xadj =  -4 },	// e
+	{ .xadj =  -6 },	// f
+	{ .xadj =  -4 },	// g
+	{ .xadj =  -4 },	// h
+	{ .xadj =  -7 },	// i
+	{ .xadj =  -7 },	// j
+	{ .xadj =  -4 },	// k
+	{ .xadj =  -7 },	// l
+	{ .xadj =  -2 },	// m
+	{ .xadj =  -4 },	// n
+	{ .xadj =  -4 },	// o
+	{ .xadj =  -4 },	// p
+	{ .xadj =  -4 },	// q
+	{ .xadj =  -6 },	// r
+	{ .xadj =  -4 },	// s
+	{ .xadj =  -6 },	// t
+	{ .xadj =  -4 },	// u
+	{ .xadj =  -4 },	// v
+	{ .xadj =  -3 },	// w
+	{ .xadj =  -3 },	// x
+	{ .xadj =  -4 },	// y
+	{ .xadj =  -4 },	// z
+	{ .xadj =  -5 },	// braceleft
+	{ .xadj =  -7 },	// bar
+	{ .xadj =  -5 },	// braceright
+	{ .xadj =  -4 },	// asciitilde
+	{ .xadj =  -9 },	// 
+    },
     .data       = {
 	0x0, 0x6f, 0x7, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 33	exclam
 	0x0, 0x6, 0x0, 0x6, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 34	quotedbl
@@ -21,8 +118,8 @@ const struct Font font_helvB08 = {
 	0x0, 0x4c, 0x2a, 0x7e, 0x54, 0x32, 0x0, 0x0, 0x0, 	// 37	percent
 	0x0, 0x30, 0x7e, 0x5a, 0x36, 0x50, 0x0, 0x0, 0x0, 	// 38	ampersand
 	0x0, 0x0, 0x7, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 39	quotesingle
-	0x0, 0x78, 0x86, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 40	parenleft
-	0x0, 0x86, 0x78, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 41	parenright
+	0x0, 0x3c, 0xc3, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 40	parenleft
+	0x0, 0xc3, 0x3c, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 41	parenright
 	0x0, 0x4, 0xe, 0x4, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 42	asterisk
 	0x0, 0x10, 0x10, 0x7c, 0x10, 0x0, 0x0, 0x0, 0x0, 	// 43	plus
 	0x80, 0x60, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 44	comma
@@ -72,9 +169,9 @@ const struct Font font_helvB08 = {
 	0x0, 0x66, 0x7e, 0x18, 0x7e, 0x66, 0x0, 0x0, 0x0, 	// 88	X
 	0x0, 0x2, 0x1e, 0x7e, 0x70, 0x1e, 0x2, 0x0, 0x0, 	// 89	Y
 	0x0, 0x62, 0x72, 0x7e, 0x4e, 0x46, 0x2, 0x0, 0x0, 	// 90	Z
-	0x0, 0xfe, 0x2, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 91	bracketleft
+	0x0, 0xff, 0x81, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 91	bracketleft
 	0x0, 0x6, 0x18, 0x60, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 92	backslash
-	0x0, 0x2, 0xfe, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 93	bracketright
+	0x0, 0x81, 0xff, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 93	bracketright
 	0x0, 0x8, 0x6, 0x6, 0x8, 0x0, 0x0, 0x0, 0x0, 	// 94	asciicircum
 	0x0, 0x80, 0x80, 0x80, 0x80, 0x80, 0x0, 0x0, 0x0, 	// 95	underscore
 	0x0, 0x1, 0x2, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 	// 96	grave

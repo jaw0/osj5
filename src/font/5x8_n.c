@@ -13,6 +13,7 @@ const struct Font font_5x8_n = {
     .numcol     = 5,
     .startchar  = 33,
     .lastchar	= 63,
+    .metrics    = 0,
     .data       = {
 	0x0, 0x0, 0x5e, 0x0, 0x0, 	// 33	exclam
 	0x0, 0xe, 0x0, 0xe, 0x0, 	// 34	quotedbl
