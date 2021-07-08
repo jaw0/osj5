@@ -36,30 +36,24 @@ dma_init(int n){
     }
 }
 
-static inline void
-_dma_clear_ints(volatile uint32_t *reg, int str){
-    switch(str){
-    case 0:
-        *reg |= 0x3D; break;
-    case 1:
-        *reg |= 0x3D << 6; break;
-    case 2:
-        *reg |= 0x3D << 16; break;
-    case 3:
-        *reg |= 0x3D << 22; break;
-    }
-}
-
-static inline void
+static inline int
 dma_clear_ints(int dman, int strn){
     DMA_TypeDef *dma = _dma[dman];
+    int isr;
+    int pos = (strn & 3) * 8 - (strn & 1) * 2;
 
-    if( strn < 4 ){
-        _dma_clear_ints( &dma->LIFCR, strn);
+    if( strn > 3 ){
+        isr = (dma->HISR >> pos) & 0x3F;
+        dma->HIFCR = (0x3D << pos);
     }else{
-        _dma_clear_ints( &dma->HIFCR, strn - 4);
+        isr = (dma->LISR >> pos) & 0x3F;
+        dma->LIFCR = (0x3D << pos);
     }
+
+    return isr;
 }
+
+
 
 static inline void
 dma_stop_xfer(int dman, int strn){
@@ -67,17 +61,23 @@ dma_stop_xfer(int dman, int strn){
     DMA_TypeDef *dma = _dma[dman];
     DMA_Stream_TypeDef *str = dma->stream + strn;
 
-    str->CR   &= ~1;
+    str->CR   &= ~DMASCR_EN;
     dma_clear_ints(dman, strn);
 }
 
-static inline void
+static inline int
 dma_start_xfer_b(int dman, int strn, int chan, void *mem, void *dr, int len, int prio, uint32_t bits){
-
+    int max = 1000000;
     DMA_TypeDef *dma = _dma[dman];
     DMA_Stream_TypeDef *str = dma->stream + strn;
 
-    str->CR  = 0; // &= (0xF<<28) | (1<<20);	// zero CR
+    str->CR  = 0; // zero CR
+    while( (str->CR & DMASCR_EN) && max-- ){ __asm("nop"); } // wait for it
+
+    if( str->CR & DMASCR_EN ){
+        trace_crumb1("dma", "err", str->CR);
+        return -1;
+    }
 
     dma_clear_ints(dman, strn);
 
@@ -90,13 +90,14 @@ dma_start_xfer_b(int dman, int strn, int chan, void *mem, void *dr, int len, int
         | bits
         ;
 
-    str->CR   |= 1;		// enable
+    str->CR   |= DMASCR_EN;		// enable
+    return 0;
 }
 
-static inline void
+static inline int
 dma_start_xfer(int dman, int strn, int chan, void *mem, void *dr, int len, int prio, int dir){
 
-    dma_start_xfer_b(dman, strn, chan, mem, dr, len, prio, (0
+    return dma_start_xfer_b(dman, strn, chan, mem, dr, len, prio, (0
         | DMASCR_TEIE 		// enable transfer error irq
         | DMASCR_TCIE 		// enable transfer complete irq
         | DMASCR_MINC		// inc mem

@@ -20,13 +20,15 @@
 typedef uint32_t uregister_t;
 
 #define IPL_ZERO	0x00	// basepri 0 enables all
-#define IPL_PROC	0xF0
-#define IPL_TTY		0xD0
-#define IPL_DISK	0xC0
-#define IPL_MOTOR	0xB0
+#define IPL_XLOW	0xF0
+#define IPL_PROC	0xE0
+#define IPL_TTY		0xC0
+#define IPL_DISK	0xA0
+#define IPL_MOTOR	0x90
 #define IPL_CLOCK	0x80
-#define IPL_I2C		0x20
-#define IPL_HIGH	0x10
+#define IPL_I2C		0x60
+#define IPL_HIGH	0x40
+#define IPL_XHIGH	0x20
 
 #define splproc()	splraise(IPL_PROC)
 #define splalloc()	splproc()
