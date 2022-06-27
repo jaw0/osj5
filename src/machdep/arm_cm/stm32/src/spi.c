@@ -706,6 +706,7 @@ spi_write(const struct SPIConf * cf, int n, char *src, int timeout){
 
     struct SPIInfo *ii = spiinfo + cf->unit;
     SPI_TypeDef *dev   = ii->addr;
+    ii->timeout = timeout ? get_time() + timeout : 0;
 
     if( currproc ){
         int r = sync_tlock(&ii->lock, "spi.L", timeout);
@@ -722,7 +723,7 @@ spi_write(const struct SPIConf * cf, int n, char *src, int timeout){
 
     int i;
     for(i=0; i<n; i++){
-        int x = _spi_rxtx1( ii->addr, src[i] );
+        int x = _spi_tx1( ii->addr, src[i] );
     }
 
     trace_crumb1("spi", "spi-wait!busy", dev->SR);
@@ -743,6 +744,7 @@ spi_write(const struct SPIConf * cf, int n, char *src, int timeout){
     return 0;
 
 }
+
 
 int
 spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
