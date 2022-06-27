@@ -271,8 +271,10 @@ DEFUN(set, "set a var")
     for(i=0; vars[i].name; i++)
         if( !strcmp(vars[i].name, var)) break;
     if( vars[i].name ){
-        if( vars[i].type & UV_TYPE_ENV )
+        if( vars[i].type & UV_TYPE_ENV ){
+            if( !env ) return 0;
             off = (int)env;
+        }
         if( vars[i].type & UV_TYPE_PROC )
             off = (int)currproc;
         if( vars[i].type & UV_TYPE_RO ){
@@ -1438,6 +1440,18 @@ fshell(FILE *f, int interactivep){
     free(buf, BUFSIZE);
     free(env, sizeof(struct cli_env));
     return r;
+}
+
+int
+shell_eval_buffer(char *buf){
+    char *argv[ARGLEN];
+    int  argc;
+
+    argc = shell_parse_line(0, buf, argv);
+
+    if( !argc ) return 0;
+
+    return shell_eval(argc, (const char**)argv, 0);
 }
 
 // 0 : ok, 1 : no file, 2 : error
