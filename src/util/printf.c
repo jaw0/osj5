@@ -3,13 +3,10 @@
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 1998
   Function:
-
-  $Id$
-
 */
 
 
-//#include <conf.h>
+#include <conf.h>
 #include <stdarg.h>
 #include <sys/types.h>
 #ifndef TESTING
@@ -23,6 +20,13 @@
 //   NOPRINTFTIME	- do not include support for timestamps %T
 //   NOPRINTFIP		- do not include support for ip addresses %I
 //   PRINTFFLOATTYPE	- use (float|double) for floating point math
+
+#ifdef PRINTF_SMALL
+#  define NOPRINTF64
+#  define NOPRINTFFLOAT
+#  define NOPRINTFTIME
+#  define NOPRINTFIP
+#endif
 
 #ifdef TESTING
 //# define NOPRINTF64

@@ -73,22 +73,22 @@ struct serialDevConf {
 } dev_conf[] = {
     { USART1, USART1_IRQn },
     { USART2, USART2_IRQn },
-#if defined(USART3)
+#if defined(USART3) && defined(USART3_IRQn)
     { USART3, USART3_IRQn },
 #endif
-#if defined(UART4)
+#if defined(UART4) && defined(USART4_IRQn)
     { UART4,  UART4_IRQn  },
 #endif
-#if defined(UART5)
+#if defined(UART5) && defined(USART5_IRQn)
     { UART5,  UART5_IRQn  },
 #endif
-#if defined(USART6)
+#if defined(USART6) && defined(USART6_IRQn)
     { USART6, USART6_IRQn },
 #endif
-#if defined(UART7)
+#if defined(UART7) && defined(USART7_IRQn)
     { UART7,  UART7_IRQn  },
 #endif
-#if defined(UART8)
+#if defined(UART8) && defined(USART8_IRQn)
     { UART8,  UART8_IRQn  },
 #endif
 };

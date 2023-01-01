@@ -166,7 +166,7 @@ kcprintffnc(void *a, char c){
 
 static int
 ktprintffnc(void *a, char c){
-#ifdef USE_PROC
+#if defined(USE_PROC) && defined(USE_NSTDIO)
     if(currproc && currproc->stderr){
         fputc(c, currproc->stderr);
     }

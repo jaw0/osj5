@@ -14,6 +14,10 @@
 #include <nstdio.h>
 #include <md_proc.h>
 
+#ifndef USE_PROC
+#  define currproc 0
+#endif
+
 void
 panic(const char *m, int l, const char *f){
 

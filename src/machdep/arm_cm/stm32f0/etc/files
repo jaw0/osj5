@@ -13,3 +13,5 @@ gpio:   machdep/arm_cm/stm32f4/src/gpio.c
 rtc:    machdep/arm_cm/stm32/src/rtc.c
 
 usbd:   machdep/arm_cm/stm32/src/usb_fs.c
+usbd:   util/trace.c
+

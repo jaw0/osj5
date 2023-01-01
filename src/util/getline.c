@@ -49,12 +49,14 @@ struct History history = {
 #endif
 #endif
 
+#ifndef GETLINE_SMALL
 /* used to find word-boundaries for word-by-word moving */
 int
 isnonword(char c){
 
     return strchr(" \t\n\r.,-;:|!@/&(){}[]", c) ? 1 : 0;
 }
+#endif
 
 /* move cursor */
 static void
@@ -97,6 +99,7 @@ insert(char *s, int max, int *i, char c, u_long flags){
     move(s, max, i, j, *i, 0);
 }
 
+#ifndef GETLINE_SMALL
 /* SOOPER-SECRET UNDOCUMENTED FUNCTION!!! */
 static int
 tty_debug(char *s, int max, int *i, char c){
@@ -117,6 +120,7 @@ tty_debug(char *s, int max, int *i, char c){
     printf("] len=%d" NEWLINE, j);
     return G_CONT;
 }
+#endif
 
 /* quote the next char */
 static int
@@ -130,6 +134,7 @@ tty_quote(char*s, int max, int *i, char c){
     return G_CONT;
 }
 
+#ifndef GETLINE_SMALL
 /* send SIGSUSPEND */
 static int
 tty_stop(char*s, int max, int *i, char c){
@@ -137,7 +142,9 @@ tty_stop(char*s, int max, int *i, char c){
     puts(NEWLINE "Job control not supported" );
     return G_CONT;
 }
+#endif
 
+#ifndef GETLINE_SMALL
 /* reprint the input buffer */
 static int
 tty_rprnt(char *s, int max, int *i, char c){
@@ -149,6 +156,7 @@ tty_rprnt(char *s, int max, int *i, char c){
         ;
     return G_CONT;
 }
+#endif
 
 /* abort input */
 static int
@@ -168,12 +176,14 @@ tty_eol(char *s, int max, int *i, char c){
     return G_DONE;
 }
 
+#ifndef GETLINE_SMALL
 /* display version */
 static int tty_version(char *s, int max, int *i, char c){
 
     puts(NEWLINE VERSION);
     return G_CONT;
 }
+#endif
 
 /* move to the beginning of the input buffer */
 static int
@@ -279,6 +289,7 @@ tty_killl(char *s, int max, int *i, char c){
     return G_CONT;
 }
 
+#ifndef GETLINE_SMALL
 /* delete the word to the left */
 static int
 tty_wordl(char *s, int max, int *i, char c){
@@ -338,6 +349,7 @@ tty_towordl(char *s, int max, int *i, char c){
     }
     return G_CONT;
 }
+#endif
 
 /* honk */
 static int
@@ -347,6 +359,7 @@ tty_beep(char*s, int max, int *i, char c){
     return G_CONT;
 }
 
+#ifndef GETLINE_SMALL
 /* move up in history */
 static int
 tty_uphist(char*s, int max, int *i, char c){
@@ -358,6 +371,7 @@ static int
 tty_dnhist(char*s, int max, int *i, char c){
     return G_NEXT;
 }
+#endif
 
 /* key binding map */
 static const struct {
@@ -368,16 +382,18 @@ static const struct {
 
     /* std. UNIX tty bindings */
     { CTRL('c'), tty_quit       },
-    { CTRL('r'), tty_rprnt      },
-    { CTRL('z'), tty_stop       },
     { CTRL('v'), tty_quote      },
     { CTRL('h'), tty_bksp       },
     { CTRL('j'), tty_eol        },
     { CTRL('m'), tty_eol        },
     { CTRL('u'), tty_killl      },
-    { CTRL('w'), tty_wordl      },
     { 28,        tty_quit       }, /* ^\ */
     { 127,       tty_bksp       },
+#ifndef GETLINE_SMALL
+    { CTRL('r'), tty_rprnt      },
+    { CTRL('z'), tty_stop       },
+    { CTRL('w'), tty_wordl      },
+#endif
 
     /* and some emacs-isms */
     { CTRL('a'), tty_toleftend  },
@@ -387,27 +403,36 @@ static const struct {
     { CTRL('f'), tty_toright    },
     { CTRL('k'), tty_killr      },
     { CTRL('q'), tty_quote      },
+#ifndef GETLINE_SMALL
     { CTRL('p'), tty_uphist     },
     { CTRL('n'), tty_dnhist     },
     { META('b'), tty_towordl    },
     { META('d'), tty_wordr      },
     { META('f'), tty_towordr    },
+#endif
 
     /* vt100 arrows (ansi X3.64) */
+#ifndef GETLINE_SMALL
+
     { BRKT('A'), tty_uphist     },	/* up */
     { BRKT('B'), tty_dnhist     },	/* down */
+#endif
     { BRKT('C'), tty_toright    },
     { BRKT('D'), tty_toleft     },
 
     /* vt52 arrows */
+#ifndef GETLINE_SMALL
     { META('A'), tty_uphist     },	/* up */
     { META('B'), tty_dnhist     },	/* down */
+#endif
     { META('C'), tty_toright    },
     { META('D'), tty_toleft     },
 
+#ifndef GETLINE_SMALL
     /* for debugging */
     { META('x'), tty_debug      },
     { META('v'), tty_version    },
+#endif
 
     /* this *must* be last */
     { 0,         0              }
@@ -583,4 +608,3 @@ main(){
 
 }
 #endif
-
