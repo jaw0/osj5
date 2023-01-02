@@ -310,9 +310,9 @@ static inline void
 _disable_irq_dma(struct SPIInfo *ii){
     SPI_TypeDef *dev = ii->addr;
 
-    //dev->CR2 &= ~( CR2_TXEIE | CR2_RXNEIE | CR2_TXDMAEN | CR2_RXDMAEN );
-    //ii->rxdma->CR &= ~(DMASCR_EN | DMASCR_TEIE | DMASCR_TCIE);
-    //ii->txdma->CR &= ~(DMASCR_EN | DMASCR_TEIE | DMASCR_TCIE);
+    dev->CR2 &= ~( CR2_TXEIE | CR2_RXNEIE | CR2_TXDMAEN | CR2_RXDMAEN );
+    ii->rxdma->CR &= ~(DMASCR_EN | DMASCR_TEIE | DMASCR_TCIE);
+    ii->txdma->CR &= ~(DMASCR_EN | DMASCR_TEIE | DMASCR_TCIE);
 }
 
 static void
@@ -337,6 +337,11 @@ _dma_enable_read(struct SPIInfo *ii){
     dcache_flush(ii->msg->data, ii->msg->dlen);
     // rx dma to buffer; tx dummy
     int plx = splhigh();
+#if 0
+    // not needed - tested F4, F7
+    _dma_isr_clear_irqs( ii->dma, ii->dmanrx );
+    _dma_isr_clear_irqs( ii->dma, ii->dmantx );
+#endif
     _dma_conf( ii->rxdma, ii->dmachan, (char*)& dev->DR, ii->msg->data, ii->msg->dlen, DMASCR_MINC );
     _dma_conf( ii->txdma, ii->dmachan, (char*)& dev->DR, &dma_idle_source, 0, DMASCR_DIR_M2P );
 
@@ -352,6 +357,10 @@ _dma_enable_write(struct SPIInfo *ii){
     dcache_flush(ii->msg->data, ii->msg->dlen);
     // tx dma from buffer, rx discard
     int plx = splhigh();
+#if 0
+    _dma_isr_clear_irqs( ii->dma, ii->dmanrx );
+    _dma_isr_clear_irqs( ii->dma, ii->dmantx );
+#endif
     _dma_conf( ii->txdma, ii->dmachan, (char*)& dev->DR, ii->msg->data, ii->msg->dlen, DMASCR_MINC | DMASCR_DIR_M2P );
     _dma_conf( ii->rxdma, ii->dmachan, (char*)& dev->DR, &dma_idle_sink, 0, 0 );
 
@@ -744,7 +753,6 @@ spi_write(const struct SPIConf * cf, int n, char *src, int timeout){
     return 0;
 
 }
-
 
 int
 spi_xfer(const struct SPIConf * cf, int nmsg, spi_msg *msgs, int timeout){
