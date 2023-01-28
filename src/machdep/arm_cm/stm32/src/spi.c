@@ -98,8 +98,8 @@ spi_init(struct Device_Conf *dev){
 
     trace_init();
 
-    bootmsg("%s at io 0x%x irq %d dma %d+%d speed %dkHz\n",
-            dev->name, ii->addr, ii->irq, ii->dmanrx, ii->dmantx, speed/1000);
+    bootmsg("%s at io 0x%x irq %d dma %d+%d speed %dkHz clock %d\n",
+            dev->name, ii->addr, ii->irq, ii->dmanrx, ii->dmantx, speed/1000, ii->clock/1000);
 
     return 0;
 }
@@ -337,8 +337,9 @@ _dma_enable_read(struct SPIInfo *ii){
     dcache_flush(ii->msg->data, ii->msg->dlen);
     // rx dma to buffer; tx dummy
     int plx = splhigh();
-#if 0
-    // not needed - tested F4, F7
+#ifndef PLATFORM_STM32F7
+    // is needed  - F411
+    // not needed - tested F413, F7
     _dma_isr_clear_irqs( ii->dma, ii->dmanrx );
     _dma_isr_clear_irqs( ii->dma, ii->dmantx );
 #endif
@@ -357,7 +358,7 @@ _dma_enable_write(struct SPIInfo *ii){
     dcache_flush(ii->msg->data, ii->msg->dlen);
     // tx dma from buffer, rx discard
     int plx = splhigh();
-#if 0
+#ifndef PLATFORM_STM32F7
     _dma_isr_clear_irqs( ii->dma, ii->dmanrx );
     _dma_isr_clear_irqs( ii->dma, ii->dmantx );
 #endif

@@ -33,14 +33,14 @@ play(int vol, const char *tune){
         case '-': octave --;    break;
         case '>': ratio += 4;   break;	// legato
         case '<': ratio /= 2;   break;	// staccato
-        case '#': sharp = 1;    break;
-        case '_': sharp = -1;   break;
+        case '#': sharp = 1;    break;	// sharp
+        case '_': sharp = -1;   break;	// flat
         case '~': dur *=  3;    break;	// triplet
         case '.': dots ++;      break;
-        case '0': dur  =  1;    break;
-        case '1': dur  =  2;    break;
-        case '2': dur  =  4;    break;
-        case '3': dur  =  8;    break;
+        case '0': dur  =  1;    break;	// whole note
+        case '1': dur  =  2;    break;	// half note
+        case '2': dur  =  4;    break;	// quarter note
+        case '3': dur  =  8;    break;	// eighth
         case '4': dur  = 16;    break;
         case '5': dur  = 32;    break;
         case '6': dur  = 64;    break;

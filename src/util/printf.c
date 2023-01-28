@@ -9,7 +9,8 @@
 #include <conf.h>
 #include <stdarg.h>
 #include <sys/types.h>
-#ifndef TESTING
+
+#ifndef  _PRINTF_TESTING
 #include <nstdio.h>
 #endif
 #include <time.h>
@@ -28,7 +29,7 @@
 #  define NOPRINTFIP
 #endif
 
-#ifdef TESTING
+#ifdef _PRINTF_TESTING
 //# define NOPRINTF64
 //# define NOPRINTFFLOAT
 # define NOPRINTFTIME
@@ -675,7 +676,7 @@ void vprintf(const char *fmt, va_list ap){
 }
 
 /* **************************************************************** */
-#ifndef TESTING
+#ifndef _PRINTF_TESTING
 
 static int fprintffnc(void *f, char c){
     fputc(c, f);
@@ -752,7 +753,7 @@ fncprintf(int (*ofnc)(void*, char), void *arg, const char *fmt, ...){
 /* **************************************************************** */
 
 
-#ifdef TESTING
+#ifdef _PRINTF_TESTING
 #include <math.h>
 #include <string.h>
 

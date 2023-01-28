@@ -6,12 +6,13 @@
 */
 
 
-#ifndef TESTING
+#ifndef _GETLINE_TESTING
 #include <conf.h>
 #include <nstdio.h>
 #include <proc.h>
 #include <alloc.h>
 #define NEWLINE	"\n"
+
 #else
 #include <stdio.h>
 #include "../include/conf.h"
@@ -483,7 +484,7 @@ getline2(char *s, int max, u_long flags ){
     }
 #endif
 
-#ifdef TESTING
+#ifdef _GETLINE_TESTING
     system("stty raw -echo");
 #endif
 
@@ -538,7 +539,7 @@ getline2(char *s, int max, u_long flags ){
                     hist->n++;
             }
 #endif
-#ifdef TESTING
+#ifdef _GETLINE_TESTING
             system("stty -raw echo");
 #endif
             return s;
@@ -593,7 +594,7 @@ getpass(char *s, int max){
     return getline2(s, max, GLF_STARS);
 }
 
-#ifdef GETLINE_TESTING
+#ifdef _GETLINE_TESTING
 int
 main(){
     char buffer[1024] = "123.45.67.89";
