@@ -1828,7 +1828,7 @@ flfs2_renamefile(MountEntry *me, const char *oname, const char *nname){
 }
 
 static int
-flfs2_glob(MountEntry *me, const char *pattern, int (*fnc)(const char *, void*), void *args){
+flfs2_glob(MountEntry *me, const char *pattern, int (*fnc)(const char *, void*, MountEntry*), void *args){
     struct FLFS *flfs = me->fsdat;
     offset_t offset = 0;
     int rv=0, i;
@@ -1857,7 +1857,7 @@ flfs2_glob(MountEntry *me, const char *pattern, int (*fnc)(const char *, void*),
                 /* found it */
 
                 sync_unlock( &flfs->lock );
-                rv = (fnc)(d->name, args);
+                rv = (fnc)(d->name, args, me);
                 sync_lock( &flfs->lock, "flfs.L" );
             }
         }

@@ -1249,7 +1249,7 @@ flfs_renamefile(MountEntry *me, const char *oname, const char *nname){
 }
 
 int
-flfs_glob(MountEntry *me, const char *pattern, int (*fnc)(const char *, void*), void *args){
+flfs_glob(MountEntry *me, const char *pattern, int (*fnc)(const char *, void*, MountEntry*), void *args){
     struct FLFS *flfs = me->fsdat;
     struct FSFile *ff;
     struct FSChunk *fc;
@@ -1274,7 +1274,7 @@ flfs_glob(MountEntry *me, const char *pattern, int (*fnc)(const char *, void*), 
             && !fnmatch(pattern, ff->name, 0)){
             /* found it */
 
-            rv = (fnc)(ff->name, args);
+            rv = (fnc)(ff->name, args, me);
         }
 
         if( fc->type == FCT_BLANK || fc->type == FCT_UNUSED ){

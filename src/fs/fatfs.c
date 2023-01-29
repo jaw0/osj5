@@ -378,7 +378,7 @@ fatfs_dir(MountEntry *me, int how, const char *dname){
 
 
 int
-fatfs_glob(MountEntry *me, const char *pattern, int (*fnc)(const char *, void*), void *args){
+fatfs_glob(MountEntry *me, const char *pattern, int (*fnc)(const char *, void*, MountEntry *), void *args){
     struct FatFS *fs = me->fsdat;
     DIR dir;
     FILINFO fi;
@@ -430,9 +430,9 @@ fatfs_glob(MountEntry *me, const char *pattern, int (*fnc)(const char *, void*),
         if( dirlen ){
             // re-assemble: dir + file
             snprintf(filebuf, fblen, "%s/%s", dirname, fi.fname);
-            rv = (fnc)(filebuf, args);
+            rv = (fnc)(filebuf, args, me);
         }else{
-            rv = (fnc)(fi.fname, args);
+            rv = (fnc)(fi.fname, args, me);
         }
     }
 

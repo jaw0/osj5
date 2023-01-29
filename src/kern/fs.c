@@ -171,16 +171,11 @@ basenameoffile(const char *name){
 }
 
 FILE *
-fopen(const char *name, const char *how){
-    MountEntry *me;
+me_open(MountEntry *me, const char *name, const char *how){
 
-    me = find_mount(name);
-    if( me )
-        name = basenameoffile(name);
-#ifdef USE_PROC
-    if( currproc && !me )
-        me = currproc->cwd;
-#endif
+    if( !me )
+        me = find_mount(name);
+
     if( !me )
         return 0;
 
@@ -191,6 +186,27 @@ fopen(const char *name, const char *how){
         return (me->fscf->open)(me, name, how);
     else
         return me->fdev;
+}
+
+FILE *
+dev_open(const char *dev, const char *name, const char *how){
+    return me_open(find_mount(dev), name, how);
+}
+
+
+FILE *
+fopen(const char *name, const char *how){
+    MountEntry *me;
+
+    me = find_mount(name);
+    if( me )
+        name = basenameoffile(name);
+#ifdef USE_PROC
+    if( currproc && !me )
+        me = currproc->cwd;
+#endif
+
+    return me_open(me, name, how);
 }
 
 #ifdef USE_FILESYS
@@ -295,7 +311,7 @@ renamefile(const char *oname, const char *nname){
 }
 
 int
-globfile(const char *pattern, int (*fnc)(const char *, void*), void *args){
+globfile(const char *pattern, int (*fnc)(const char *, void*, MountEntry*), void *args){
     struct MountEntry *me;
 
     me = find_mount(pattern);

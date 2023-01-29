@@ -84,7 +84,10 @@ struct stat {
 #define SSF_BIGERASE	16	/* can only erase entire device */
 };
 
+struct MountEntry;
 extern FILE *fopen(const char *, const char *);
+extern FILE *dev_open(const char *, const char *, const char *);
+extern FILE *me_open(struct MountEntry *, const char *, const char *);
 extern int finit(FILE*);
 extern int fputc(char, FILE*);
 extern int fgetc(FILE*);
