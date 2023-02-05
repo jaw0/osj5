@@ -28,6 +28,9 @@
 
 unsigned long bootflags = 0;
 uint16_t stm32f4_cpuid;
+uint32_t *r_unique = R_UNIQUE;
+uint16_t *r_flashkb = R_FLASHKB;
+
 
 void stm32_putchar(int);
 
