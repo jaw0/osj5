@@ -44,7 +44,7 @@ const struct Flash_Info *
 stflash_flashinfo(){
 
     int size = *R_FLASHKB; // in kB: 512, 1024, 2048
-#if 0
+#if 1
     if( stm32f4_cpuid == CPUID_STM32F40X ){
         bcopy(finfo_40X, finfo, sizeof(finfo_40X));
 
