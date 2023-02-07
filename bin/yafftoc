@@ -1,0 +1,437 @@
+#!/usr/local/bin/perl
+# -*- perl -*-
+
+# Copyright (c) 2013
+# Author: Jeff Weisberg <jaw @ tcp4me.com>
+# Created: 2013-Mar-28 21:15 (EDT)
+# Function: convert yaff font to C.
+#   see also src/util/gfxdpy.c, src/inc.font.h
+
+use Getopt::Std;
+use strict;
+
+my %opt;
+getopts('dn', \%opt) || die ;
+# -d	- enable debug output
+# -n	- mini-numeric font
+
+
+my $file = shift @ARGV;
+
+(my $base = $file) =~ s|.*/||;
+(my $fontname = "$base") =~ s/\..*//;
+$fontname =~ s/-/_/g;
+# RSN - clean name more...?
+
+open(F, $file) || die "cannot open $file: $!\n";
+
+
+my %extchars;
+readext();
+
+my($fbw, $fbh, $fbx, $fby);
+my($cbw, $cbh, $cbx, $cby);
+
+my $charname;
+my $charnum;
+my $dwidth;
+my $spacing;
+my $pixsize;
+my $proportional;
+my $metrics = "0";
+my %font;
+
+print "\n// file: $file\n";
+
+while(<F>){
+    chop;
+    s/\r//;
+    my($k, $v) = split /:\s+/, $_, 2;
+
+    if( $k eq 'name' ){ print "// font: $v\n"; next; }
+    if( $k eq 'FONTBOUNDINGBOX' ){
+        ($fbw, $fbh, $fbx, $fby) = split /\s+/, $v;
+
+        next;
+    }
+    if( $k eq 'STARTCHAR' ){
+        $charname = $v;
+        next;
+    }
+    if( $k eq 'encoding' ){
+        $charnum = $v;
+        next;
+    }
+    if( $k eq 'spacing' ){
+        $v =~ s/"//g;
+        $spacing = uc $v;
+        next;
+    }
+    if( $k eq 'PIXEL_SIZE' ){
+        $pixsize = $v;
+        next;
+    }
+    if( $k eq 'BBX' ){
+        ($cbw, $cbh, $cbx, $cby) = split /\s+/, $v;
+        next;
+    }
+    if( $k eq 'DWIDTH' ){
+        $dwidth = (split /\s/, $v)[0];
+        next;
+    }
+    if( $k =~ /^0x/ || $k =~ /^\d+/ ){
+        $charnum  = hex $k;
+        $charname = chr $charnum;
+        $dwidth   = 0;
+
+        my @bitmap;
+        while(<F>){
+            chop;
+            s/^\s+//;
+            next if /^u\+/;
+            last unless $_;
+            $dwidth = length $_;
+            push @bitmap, yaff2bits($_);
+        }
+
+        $fbw = $dwidth if $dwidth > $fbw;
+        $fbh = scalar(@bitmap) if scalar(@bitmap) > $fbh;
+
+        if( my $x = $extchars{ $charnum } ){
+            $charnum  = $x->{char};
+            $charname = $x->{name};
+        }
+
+        $font{ $charnum } = {
+            name	=> $charname,
+            bbx		=> [ $dwidth, scalar(@bitmap), 0, 0 ],
+            dwidth	=> $dwidth,
+            bitmap	=> [@bitmap],
+        };
+
+        if( ($spacing == 'C') && ($cbh != $fbh) ){
+            $spacing = 'M';
+        }
+        if( $cbw != $fbw ){
+            $spacing = 'P';
+        }
+        $proportional = 1 if $fbw != $dwidth;
+
+        debug( "$k $charnum $charname : $dwidth [@bitmap]" );
+
+        $charname = $charnum = undef;
+
+    }
+}
+
+################################################################
+# what glyphs should we include?
+
+my $START = 33;
+my $LAST  = $font{144} ? 148 : 127;
+
+if( $opt{n} ){
+    # punct + numbers only
+    $fontname .= '_n';
+    $LAST  = 0x3F;
+}
+
+# analyze + determine sizing
+my($xbits, $ybits, $xbytes, $ybytes);
+
+reduce();
+analyze();
+setsize();
+
+$metrics = metrics() if $proportional;
+
+debug( "FBBX=>\t$fbw, $fbh, $fbx, $fby : $spacing" );
+
+die "$fontname: font too tall!\n" if $ybytes > 4;
+
+
+################################################################
+
+print <<EOH;
+
+#include <font.h>
+
+const struct Font font_${fontname} = {
+    .type       = 1,
+    .name	= "$fontname",
+    .height	= $fbh,
+    .width	= $fbw,
+    .bytescol	= $ybytes,
+    .numcol     = $fbw,
+    .startchar  = $START,
+    .lastchar	= $LAST,
+    .metrics    = $metrics,
+    .data       = {
+EOH
+;
+
+# print join(' ', keys %font), "\n";
+
+for my $n ($START .. $LAST){
+    mkglyph( $n );
+}
+
+print "    }\n";
+print "};\n";
+exit;
+
+################################################################
+
+sub yaff2bits {
+    my $t = shift;
+    my $n = 0;
+
+    for my $c (split //, $t){
+        $n <<= 1;
+        $n |= 1 if $c ne '.' && $c ne '-';
+    }
+    return $n;
+}
+
+sub fixglyph {
+    my $g  = shift;
+
+    return [] unless $g;
+    my($cbw, $cbh, $cbx, $cby) = @{ $g->{bbx} };
+
+    my @bitmap;
+
+    for my $x (@{$g->{bitmap}}){
+
+        # length extend if needed [ XX -> XX00 ]
+        $x .= '0' x (2 * $xbytes - length($x)) if length($x) < 2 * $xbytes;
+
+        my $b = hex($x);
+        # apply x offset
+        my $o = $cbx - $fbx;
+        if( $o > 0 ){
+            $b >>= $o;
+        }else{
+            $b <<= $o;
+        }
+        push @bitmap, $b;
+    }
+
+    debug("1: @bitmap");
+
+    # shift up/down, pad
+    if( $cby > $fby ){
+        # pad on bottom
+        push @bitmap, 0 for (1 .. $cby - $fby);
+    }
+    if( @bitmap < $fbh ){
+        # pad on top
+        unshift @bitmap, 0 for (1 .. $fbh - @bitmap);
+    }
+
+
+    # 
+    # if( $cbh + $cby < $fbh + $fby ){
+    #     my $x = $fbh + $fby - $cbh - $cby;
+    #     debug("$g->{name} up $x");
+    #     unshift @bitmap, 0 for (1 .. $fbh + $fby - $cbh - $cby);
+    # }
+    # if( $cbh + $cby > $fbh + $fby ){
+    #     my $x = $cbh + $cby - $fbh - $fby;
+    #     debug("$g->{name} dn $x");
+    #     push @bitmap, 0 for (1 .. $cbh + $cby - $fbh - $fby);
+    # }
+
+    return \@bitmap;
+}
+
+# rotate pixels
+sub mkglyph {
+    my $n = shift;
+
+    my $g = $font{ $n };
+    my $b = $g->{bitmap}; # XXX fixglyph( $g );
+    my $name = $g->{name} || chr($n);
+
+    debug("mkg $n : @$b; @{$g->{bbx}}");
+    my $bx = $g->{bbx}[0]; # char width
+
+    print "\t";
+    for my $x (0 .. $fbw-1){
+        my $line = 0;
+        for my $y (0 .. $fbh-1){
+            my $xb = $bx - $x - 1;
+            my $p = ($b->[$y] & (1<<($xb))) ? 1 : 0;
+            #debug("    ($x,$y) $b->[$y] &(1<<$xb)   -> $p");
+            $line |= $p << $y;
+        }
+        #debug(" $line");
+
+        # little endian
+        for (1 .. $ybytes){
+            printf "0x%x, ", $line & 0xFF;
+            $line >>= 8;
+        }
+    }
+
+    $name = 'backslash' if $name eq '\\';
+    print "\t// $n\t$name\n";
+
+}
+
+# can we smoosh out any wasted space?
+sub reduce {
+
+    return ; # XXX
+    return if $spacing eq 'C';
+
+    for my $n ($START .. $LAST){
+        my $g = $font{ $n };
+        next unless $g;
+        my($w,$h, $x, $y) = @{ $g->{bbx} };
+        my $b = $g->{bitmap};
+
+        while( @$b > 1 ){
+            last if $b->[0] !~ /^0+$/;
+            shift @$b;
+            $h --;
+            debug("reduced!");
+        }
+
+        $g->{bitmap} = $b;
+        $g->{bbx} = [$w, $h, $x, $y];
+
+        debug("$n: [$w, $h, $x, $y]: @$b");
+    }
+}
+
+sub analyze {
+
+    if( $spacing eq 'C' ){
+        # monospaced cell
+        # use font bounding box as-is
+
+        return;
+    }
+
+    my($minx, $maxx, $miny, $maxy, $maxdx, $dx);
+    # measure bbox of chars we want
+
+    for my $n ($START .. $LAST){
+        my $g = $font{ $n };
+        next unless $g;
+        # ignore metrics of punctuation
+        next if !$opt{n} && chr($n) !~ /[a-zA-Z0-9]/;
+
+        $dx ||= $g->{dwidth};
+        $dx = -1 if $dx != $g->{dwidth};
+
+        my($w,$h, $x, $y) = @{ $g->{bbx} };
+        my $X = $w + $x;
+        my $Y = $h + $y;
+
+        $maxdx = $g->{dwidth} if $g->{dwidth} > $maxdx;
+
+        $minx = $x if $x < $minx || !defined $minx;
+        $miny = $y if $y < $miny || !defined $miny;
+        $maxx = $X if $X > $maxx || !defined $maxx;
+        $maxy = $Y if $Y > $maxy || !defined $maxy;
+
+
+        debug( chr($n), "height $h /$y; dx $g->{dwidth}" );
+    }
+
+    debug( "fbbx:\t$fbw, $fbh, $fbx, $fby" );
+    debug( "dx:\t$dx; $maxdx" );
+    debug( "bb:\tx: $minx .. $maxx, y: $miny .. $maxy" );
+
+    $fbh = $maxy - $miny;
+
+    if( $fbh > 32 ){
+        # we currenly only support upto 32 bits
+        # can we smoosh it?
+        $fbh = 32 if $maxy - $miny <= 32;
+    }
+
+    $fbw = $maxdx;
+    $fbw = $maxx if $maxx > $fbw;
+    $fbx = $minx;
+    $fby = $miny;
+    #$proportional = 1;
+}
+
+sub setsize {
+
+    $ybytes = 1;
+    $xbytes = 1;
+
+    $ybytes = 2  if $fbh > 8;
+    $ybytes = 4  if $fbh > 16;
+    $ybytes = 8  if $fbh > 32;
+    $xbytes = 2  if $fbw > 8;
+    $xbytes = 4  if $fbw > 16;
+    $xbytes = 8  if $fbw > 32;
+
+    $xbits = $xbytes * 8;
+    $ybits = $ybytes * 8;
+}
+
+sub debug {
+    return unless $opt{d};
+
+    print STDERR "@_\n";
+}
+
+sub readext {
+    my $i = 128;
+
+    while(<DATA>){
+        s/\s+#.*//;
+        my($c, $name) = /^(\S+)\s+(.*)/;
+        $extchars{ $c } = { char => $i, name => $name };
+        $i++;
+    }
+}
+
+sub metrics {
+
+    my $m = "(const struct FontMetric[]){\n";
+
+    for my $n ($START .. $LAST){
+        my $g = $font{ $n };
+        my $name = $g->{name} || chr($n);
+        my $xadj = sprintf '%3d', $g->{dwidth} - $fbw;
+
+        $name = 'backslash' if $name eq '\\';
+        debug("metric $n : $g->{dwidth} - $fbw  -> $xadj");
+
+        $m .= "\t{ .xadj = $xadj },\t// $name\n";
+    }
+
+    $m .= "    }";
+}
+
+################################################################
+# add these starting at 128
+__END__
+8592	arrowleft
+8593	arrowup
+8594	arrowright
+8595	arrowdown
+8597	arrowupdn
+8596	arrowboth
+8598	NW arrow
+8599	NE arrow
+8600	SE arrow
+8601	SW arrow
+8624	up+left
+8625	up+right
+8630	up+left round
+8631	up+right round
+8634	ccw arrow
+8635	cw arrow
+9786	smileface
+9785	frown
+9760	skull+crossbones
+169	copyright
+9829	heart

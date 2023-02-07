@@ -17,9 +17,13 @@
 #define GFX_FLAG_AUTOFLUSH	1	// flush display every character
 #define GFX_FLAG_AUTOSHIFT	2	// left scroll line
 
+#ifdef GFXDPY_BEEPS
+#  define MAXXTEXT 64
+#else
+#  define MAXXTEXT 16
+#endif
 
 #define MAXX3ARG 4
-#define MAXXTEXT 16
 
 #define ATTR_REVERSE	1
 #define ATTR_ULINE	2
@@ -51,13 +55,17 @@ public:
 
     u_char text_fg,  text_bg;	// ANSI code
     int	   color_fg, color_bg;	// native value
+#ifdef GFXDPY_BEEPS
+    u_char volume;
+#endif
 
 private:
     short  cx,cy;		// current cursor position
+    short  sx,sy;		// saved position
     char   residue;		// for proportional font rendering
 
     // putchar ansi x3.64 state
-    s_char x3_arg[MAXX3ARG];
+    short  x3_arg[MAXX3ARG];
     char   x3_argn;
     u_char x3_flags;
     short  x3_mode;
@@ -90,25 +98,36 @@ public:
     void scroll_vert(int,int,int,int,int);
     void render_glyph(int);
     void putchar(int);
+    void x3draw(void);
+    void x3report(void);
     void puts(const char *);
     void get_pos(int*, int*);
     void _set_pos(int, int);
     void set_pos(int, int);
-    void set_font(int);
-    void set_font(const Font*);
+    void bound_pos(void);
+    bool set_font(int);
+    bool set_font(int, int);
+    bool set_font(const Font*);
     bool set_font(const char *);
-    static const Font* find_font(const char *);
 
     void hline(int,int, int,int, int);
     void line(int,int, int,int, int, unsigned p=0xFFFFFFFF);
     void rect(int,int, int,int, int, unsigned p=0xFFFFFFFF);
     void rect_filled(int,int, int,int, int);
+    void rrect(int,int, int,int, int, int, unsigned p=0xFFFFFFFF);
+    void rrect_filled(int,int, int,int, int, int);
     void triangle(int,int, int,int, int,int, int, unsigned p=0xFFFFFFFF);
     void triangle_filled(int,int, int,int, int,int, int);
-    void circle(int,int,int,int);
-    void circle_filled(int,int,int,int);
+    void circle(int,int,int,int, int s=0xF);
+    void circle_filled(int,int,int,int, int w=0, int s=0xF);
     void bitblit(const u_char *, int, int, int, int, int);
 
 };
+
+const Font *find_font(const char *name);
+
+#ifdef GFXDPY_BEEPS
+extern "C" beep(int, int, int), play(int, const char*);
+#endif
 
 #endif /* __gfxdpy_h__ */

@@ -46,7 +46,8 @@ extern const struct Font * const fonts[];
 
 extern "C" void bzero(void*, int);
 extern "C" int  strcmp(const char*, const char*);
-
+extern "C" int  strcasecmp(const char*, const char*);
+extern "C" void printf(const char*, ...);
 
 #define GOTESC		0x100
 #define GOTBRACK	0x200
@@ -74,24 +75,38 @@ GFXdpy::init(void){
     file.d  = (void*)this;
     file.codepage = CODEPAGE_GFXDPY;
 #endif
+#ifdef GFXDPY_BEEPS
+    volume = 127;
+#endif
+
 }
 
 void
+GFXdpy::bound_pos(void){
+    if( cx < 0 ) cx = 0;
+    if( cy < 0 ) cy = 0;
+    if( cx > width - 1 ) cx = width  - 1;
+    if( cy > height - 1) cy = height - 1;
+}
+
+bool
 GFXdpy::set_font(int f){
     font = fonts[ f % N_FONT ];
+    return 1;
 }
 
-void
+bool
 GFXdpy::set_font(const Font *f){
     font = f;
+    return 1;
 }
 
 const Font *
-GFXdpy::find_font(const char *name){
+find_font(const char *name){
     short i;
 
     for(i=0; i<N_FONT; i++){
-        if( !strcmp(name, fonts[i]->name) ){
+        if( !strcasecmp(name, fonts[i]->name) ){
             return fonts[i];
         }
     }
@@ -99,11 +114,48 @@ GFXdpy::find_font(const char *name){
     return 0;
 }
 
+const Font *
+find_font(int w, int h){
+    short i;
+
+    for(i=0; i<N_FONT; i++){
+        if( (fonts[i]->width == w) && (fonts[i]->height == h) ){
+            return fonts[i];
+        }
+    }
+    // not found
+    return 0;
+}
+
+void
+list_fonts(void){
+    // report to stdout
+
+    short i;
+
+    for(i=0; i<N_FONT; i++){
+        printf("%3d %c %2d x %2d %s\n", i, (fonts[i]->metrics ? 'p' : 'm'),
+               fonts[i]->width, fonts[i]->height, fonts[i]->name);
+
+    }
+}
+
 bool
 GFXdpy::set_font(const char *name){
     short i;
 
     const Font *f = find_font(name);
+    if(f){
+        font = f;
+        return 1;
+    }
+    return 0;
+}
+bool
+GFXdpy::set_font(int w, int h){
+    short i;
+
+    const Font *f = find_font(w, h);
     if(f){
         font = f;
         return 1;
@@ -341,14 +393,14 @@ void
 GFXdpy::putchar(int ch){
 
     /* minimal X3.64 support */
-    /* RSN - DEC ReGIS graphics */
+    /* RSN - DEC ReGIS graphics, tek4014, ...? */
     if( x3_mode == GOTESC ){
         if( ch == '[' ){
             x3_mode  = GOTBRACK;
             x3_argn  = 0;
             x3_flags = 0;
             xx_text_n  = 0;
-            bzero( x3_arg, MAXX3ARG );
+            bzero( x3_arg, sizeof(x3_arg) );
             bzero( xx_text, MAXXTEXT+1 );
             return;
         }else{
@@ -386,6 +438,10 @@ GFXdpy::putchar(int ch){
         goto done;
 
     case ';' | GOTBRACK | GOTTEXT:
+        if( xx_text_n && (xx_text[xx_text_n-1] == '`')){
+            // remove trailing `
+            xx_text[ --xx_text_n ] = 0;
+        }
         x3_mode  &= ~GOTTEXT;
         goto done;
     case '`' | GOTBRACK:
@@ -429,12 +485,6 @@ GFXdpy::putchar(int ch){
         if( cx > width - text_scale * font->width ) cx = width - text_scale * font->width;
         break;
 
-    case 'J' | GOTBRACK:	// clear screen
-        // RSN - animated wipes
-        clear_screen();
-        cx = cy = 0;
-        break;
-
     case 'H' | GOTBRACK: 	// move cursor (0 based, not 1 based); negative -> from right/bottom
         cy = x3_arg[0] * font->height * text_scale;
         cx = x3_arg[1] * font->width  * text_scale;
@@ -442,11 +492,24 @@ GFXdpy::putchar(int ch){
         if( cy < 0 ) cy = height + cy;
         break;
 
-    case '=' | GOTBRACK: 	// move cursor, by pixels
-        cy = x3_arg[0];
-        cx = x3_arg[1];
-        if( cx < 0 ) cx = width  + cx;
-        if( cy < 0 ) cy = height + cy;
+    case 'h' | GOTBRACK: 	// private mode settings (non-standard)
+        switch(x3_arg[0]){
+        case 1:
+            set_orientation(x3_arg[1]);
+            break;
+        case 2:
+            text_scale = x3_arg[2];
+            if( text_scale < 1 ) text_scale = 1;
+            break;
+        case 3:
+            text_flags = x3_arg[1];
+            break;
+        }
+        break;
+
+    case 'J' | GOTBRACK:	// clear screen
+        clear_screen();
+        cx = cy = 0;
         break;
 
     case 'm' | GOTBRACK:
@@ -491,9 +554,18 @@ GFXdpy::putchar(int ch){
         case 10: case 11: case 12: case 13: case 14:
         case 15: case 16: case 17: case 18: case 19:
             // set font with non-standard extensions
-            // esc[10m   esc[10;123m  esc[10;`name;m
-            if( xx_text[0] )
+            // esc[10m
+            // esc[10;123m	- font by index
+            // esc[10;8;6m	- font by size
+            // esc[10;`name;m	- font by name
+            // esc[10;`?;m	- list fonts
+
+            if( xx_text[0] == '?' && xx_text[1] == 0 )
+                list_fonts();
+            else if( xx_text[0] )
                 set_font( xx_text );
+            else if( x3_argn == 3)
+                set_font( x3_arg[1], x3_arg[2] );
             else if( x3_argn )
                 set_font( x3_arg[1] );
             else
@@ -502,6 +574,22 @@ GFXdpy::putchar(int ch){
         }
         break;
 
+#ifdef GFXDPY_BEEPS
+    case '\a':
+        beep(880, volume, 100000 );
+        break;
+
+    case 'p' | GOTBRACK:
+        // esc[123p		- set volume
+        // esc[`eg#eg#ab;p 	- play
+
+        if( xx_argn ) volume = x3_arg[0];
+        if( xx_text[0] ) play( volume, xx_text );
+        break;
+
+#endif
+
+#if 0 // -> esc[h
     case 'r' | GOTBRACK:
         // rotation - non-standard
         set_orientation(x3_arg[0]);
@@ -512,6 +600,42 @@ GFXdpy::putchar(int ch){
         text_scale = x3_arg[0];
         text_flags = x3_arg[1];
         if( text_scale < 1 ) text_scale = 1;
+        break;
+#endif
+
+    case 'r' | GOTBRACK:
+        // RSN - set scroll region esc[top;bot;r
+        break;
+
+    case 's' | GOTBRACK:
+        // save cursor pos
+        sx = cx;
+        sy = cy;
+        break;
+
+    case 'u' | GOTBRACK:
+        // restore cursor pos
+        cx = sx;
+        cy = sy;
+        bound_pos();
+        break;
+
+    case '=' | GOTBRACK: 	// move cursor, by pixels
+        cy = x3_arg[0];
+        cx = x3_arg[1];
+        if( cx < 0 ) cx = width  + cx;
+        if( cy < 0 ) cy = height + cy;
+        break;
+
+    case '?' | GOTBRACK:
+        // report queries - non-standard
+        // esc[`param;?
+        x3report();
+        break;
+
+    case '*' | GOTBRACK:
+        // graphics - non-standard
+        x3draw();
         break;
 
     case '<' | GOTBRACK:
@@ -564,6 +688,136 @@ done:
 /****************************************************************/
 
 void
+GFXdpy::x3report(void){
+
+    if( !strcmp(xx_text, "fonts") ){
+        list_fonts();
+        return;
+    }
+    if( !strcmp(xx_text, "x") ){
+        printf("%d\n", cx);
+        return;
+    }
+    if( !strcmp(xx_text, "y") ){
+        printf("%d\n", cy);
+        return;
+    }
+    if( !strcmp(xx_text, "width") ){
+        printf("%d\n", width);
+        return;
+    }
+    if( !strcmp(xx_text, "height") ){
+        printf("%d\n", height);
+        return;
+    }
+
+    printf("unknown?\n");
+}
+
+#define PATTERN(x) ( (x) | ((x)<< 16) )
+void
+GFXdpy::x3draw(void){
+    unsigned pattern = 0xFFFFFFFF;
+    unsigned color   = color_fg;
+
+    // esc[1;2;3;4;`b;*
+    // m - move relative
+    // M - move absolute
+    // l,L line
+    // r,R, rf, RF rect
+    // c, cf circle
+    // s,S,sf,SF  rounded rect
+    // h,H horiz
+    // v,V vert
+
+    // esc[7m = reverse color
+    if( text_attr & ATTR_REVERSE ) color = color_bg;
+
+    if( !strcmp(xx_text, "m") ){
+        cx += x3_arg[0];
+        cy += x3_arg[1];
+    }
+    if( !strcmp(xx_text, "M") ){
+        cx = x3_arg[0];
+        cy = x3_arg[1];
+    }
+
+    // esc[x1,y1;`l*
+    if( !strcmp(xx_text, "l") ){
+        if( x3_argn > 2 ) pattern = PATTERN(x3_arg[2]);
+        line(cx, cy, cx+x3_arg[0], cy+x3_arg[1], color, pattern);
+        cx += x3_arg[0];
+        cy += x3_arg[1];
+    }
+    if( !strcmp(xx_text, "L") ){
+        if( x3_argn > 2 ) pattern = PATTERN(x3_arg[2]);
+        line(cx, cy, x3_arg[0], x3_arg[1], color, pattern);
+        cx = x3_arg[0];
+        cy = x3_arg[1];
+    }
+
+    // esc[radius;`c*
+    if( !strcmp(xx_text, "c") ){
+        circle(cx, cy, x3_arg[0], color);
+    }
+    if( !strcmp(xx_text, "cf") ){
+        circle_filled(cx, cy, x3_arg[0], color);
+    }
+
+    // esc[x1,y1;`r*
+    if( !strcmp(xx_text, "r") ){
+        if( x3_argn > 2 ) pattern = PATTERN(x3_arg[2]);
+        rect(cx, cy, cx+x3_arg[0], cy+x3_arg[1], color, pattern);
+        cx += x3_arg[0];
+        cy += x3_arg[1];
+    }
+    if( !strcmp(xx_text, "rf") ){
+        rect_filled(cx, cy, cx+x3_arg[0], cy+x3_arg[1], color);
+        cx += x3_arg[0];
+        cy += x3_arg[1];
+    }
+    if( !strcmp(xx_text, "R") ){
+        if( x3_argn > 2 ) pattern = PATTERN(x3_arg[2]);
+        rect(cx, cy, x3_arg[0], x3_arg[1], color, pattern);
+        cx = x3_arg[0];
+        cy = x3_arg[1];
+    }
+    if( !strcmp(xx_text, "RF") ){
+        rect_filled(cx, cy, x3_arg[0], x3_arg[1], color);
+        cx = x3_arg[0];
+        cy = x3_arg[1];
+    }
+
+    // rounded corner rects - esc[x1,y1;rad;`rr*
+    if( !strcmp(xx_text, "rr") ){
+        if( x3_argn > 3 ) pattern = PATTERN(x3_arg[3]);
+        rrect(cx, cy, cx+x3_arg[0], cy+x3_arg[1], x3_arg[2], color, pattern);
+        cx += x3_arg[0];
+        cy += x3_arg[1];
+    }
+    if( !strcmp(xx_text, "rrf") ){
+        rrect_filled(cx, cy, cx+x3_arg[0], cy+x3_arg[1], x3_arg[2], color);
+        cx += x3_arg[0];
+        cy += x3_arg[1];
+    }
+    if( !strcmp(xx_text, "RR") ){
+        if( x3_argn > 3 ) pattern = PATTERN(x3_arg[3]);
+        rrect(cx, cy, x3_arg[0], x3_arg[1], x3_arg[2], color, pattern);
+        cx = x3_arg[0];
+        cy = x3_arg[1];
+    }
+    if( !strcmp(xx_text, "RRF") ){
+        rrect_filled(cx, cy, x3_arg[0], x3_arg[1], x3_arg[2], color);
+        cx = x3_arg[0];
+        cy = x3_arg[1];
+    }
+
+    bound_pos();
+}
+
+/****************************************************************/
+
+void
 GFXdpy::line(int x0, int y0, int x1, int y1, int color, unsigned pattern){
     short  dx = x1 - x0;
     short  dy = y1 - y0;
@@ -573,6 +827,7 @@ GFXdpy::line(int x0, int y0, int x1, int y1, int color, unsigned pattern){
     s_char sy = dy < 0 ? -1 : 1;
     unsigned i = 1;
 
+    //printf(">>> line %d %d %d %d, %x %x\n", x0,y0,x1,y1, color, pattern);
     if( ax > ay ){
         short d = ay - (ax>>1);
 
@@ -617,6 +872,21 @@ GFXdpy::rect(int x0, int y0, int x1, int y1, int color, unsigned pattern){
 }
 
 void
+GFXdpy::rrect(int x0, int y0, int x1, int y1, int r, int color, unsigned pattern){
+
+    line(x0+r,y0, x1-r,y0, color, pattern);
+    line(x0+r,y1, x1-r,y1, color, pattern);
+    line(x0,y0+r, x0,y1-r, color, pattern);
+    line(x1,y0+r, x1,y1-r, color, pattern);
+
+    circle(x0+r, y0+r, r, color, 4 );	// top left
+    circle(x0+r, y1-r, r, color, 2 );	// bottom left
+    circle(x1-r, y0+r, r, color, 8 );	// top right
+    circle(x1-r, y1-r, r, color, 1 );	// bottom right
+}
+
+
+void
 GFXdpy::hline(int x0, int y0, int x1, int y1, int color){
 
     if( x0 < x1 ){
@@ -637,6 +907,14 @@ GFXdpy::rect_filled(int x0, int y0, int x1, int y1, int color){
             set_pixel(i,j, color);
         }
     }
+}
+
+void
+GFXdpy::rrect_filled(int x0, int y0, int x1, int y1, int r, int color){
+
+    circle_filled(x0+r,y0+r, r, color, x1-x0-2*r, 1); 	// top
+    rect_filled(x0, y0+r, x1, y1-r, color); 		// middle
+    circle_filled(x0+r,y1-r, r, color, x1-x0-2*r, 2); 	// bottom
 }
 
 
@@ -731,21 +1009,29 @@ GFXdpy::triangle_filled(int x0, int y0, int x1, int y1, int x2, int y2, int colo
 // based on:
 //   https://en.wikipedia.org/wiki/Midpoint_circle_algorithm
 void
-GFXdpy::circle(int x0, int y0, int r, int color){
+GFXdpy::circle(int x0, int y0, int r, int color, int sects){
     short x = r;
     short y = 0;
     short d2 = 1 - x;
 
     while( y <= x ){
 
-        set_pixel( x + x0,  y + y0, color);
-        set_pixel( y + x0,  x + y0, color);
-        set_pixel(-x + x0,  y + y0, color);
-        set_pixel(-y + x0,  x + y0, color);
-        set_pixel(-x + x0, -y + y0, color);
-        set_pixel(-y + x0, -x + y0, color);
-        set_pixel( x + x0, -y + y0, color);
-        set_pixel( y + x0, -x + y0, color);
+        if( sects & 1 ){
+            set_pixel( x + x0,  y + y0, color);
+            set_pixel( y + x0,  x + y0, color);
+        }
+        if( sects & 2 ){
+            set_pixel(-x + x0,  y + y0, color);
+            set_pixel(-y + x0,  x + y0, color);
+        }
+        if( sects & 4 ){
+            set_pixel(-x + x0, -y + y0, color);
+            set_pixel(-y + x0, -x + y0, color);
+        }
+        if( sects & 8 ){
+            set_pixel( x + x0, -y + y0, color);
+            set_pixel( y + x0, -x + y0, color);
+        }
 
         y++;
 
@@ -759,17 +1045,22 @@ GFXdpy::circle(int x0, int y0, int r, int color){
 }
 
 void
-GFXdpy::circle_filled(int x0, int y0, int r, int color){
+GFXdpy::circle_filled(int x0, int y0, int r, int color, int wid, int sects){
     short x = r;
     short y = 0;
     short d2 = 1 - x;
 
     while( y <= x ){
-        hline( -x + x0,  y + y0, x + x0,  y + y0, color );
-        hline( -x + x0, -y + y0, x + x0, -y + y0, color );
-        hline( -y + x0,  x + y0, y + x0,  x + y0, color );
-        hline( -y + x0, -x + y0, y + x0, -x + y0, color );
+        if( sects & 1 ){
+            hline( -x + x0, -y + y0, x + x0 + wid, -y + y0, color );
+            hline( -y + x0, -x + y0, y + x0 + wid, -x + y0, color );
+        }
 
+        if( sects & 2 ){
+            hline( -x + x0,  y + y0, x + x0 + wid,  y + y0, color );
+            hline( -y + x0,  x + y0, y + x0 + wid,  x + y0, color );
+        }
+        
         y++;
 
         if( d2 <= 0 ){
