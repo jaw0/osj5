@@ -11,8 +11,8 @@ FONTS=`ls -1 font | grep bdf | sed s/.bdf//`
 for f in $FONTS; do
     echo $f
     bf=`basename $f | sed 's/-/_/g'`
-    bin/bdftoc font/$f.bdf > src/font/$bf.c
-    bin/bdftoc -n font/$f.bdf > src/font/$bf\_n.c
+    bin/bdftoc -t font/$f.bdf > src/font/$bf.c
+    bin/bdftoc -t -n font/$f.bdf > src/font/$bf\_n.c
 done
 
 
@@ -21,6 +21,6 @@ FONTS=`ls -1 font | grep 'yaff\|draw'`
 for f in $FONTS; do
     echo $f
     bf=`basename $f | sed -e 's/-/_/g' -e s/.yaff// -e s/.draw//`
-    bin/yafftoc font/$f > src/font/$bf.c
+    bin/yafftoc -t font/$f > src/font/$bf.c
 done
 

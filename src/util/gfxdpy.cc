@@ -9,6 +9,8 @@ extern "C" {
 # include <conf.h>
 # ifdef USE_NSTDIO
 #  include <nstdio.h>
+#else
+#  include <stdio.h>
 # endif
 #include <stdint.h>
 };
@@ -47,7 +49,7 @@ extern const struct Font * const fonts[];
 extern "C" void bzero(void*, int);
 extern "C" int  strcmp(const char*, const char*);
 extern "C" int  strcasecmp(const char*, const char*);
-extern "C" void printf(const char*, ...);
+
 
 #define GOTESC		0x100
 #define GOTBRACK	0x200
@@ -60,14 +62,9 @@ extern "C" void printf(const char*, ...);
 
 void
 GFXdpy::init(void){
-    orientation = cx = cy = text_attr = text_flags = x3_argn = x3_mode = 0;
+    x3_argn = x3_mode = 0;
     xx_text_n = 0;
-    residue = 0;
-    text_scale = 1;
-    font = fonts[0];
-    text_fg  = 7;
-    text_bg  = 0;
-    set_colors();
+    reset();
 
 #ifdef USE_NSTDIO
     finit( & file );
@@ -79,6 +76,19 @@ GFXdpy::init(void){
     volume = 127;
 #endif
 
+}
+
+void
+GFXdpy::reset(void){
+    orientation = 0;
+    cx = cy = sx = sy = 0;
+    text_attr = text_flags = 0;
+    text_scale = 1;
+    residue = 0;
+    font = fonts[0];
+    text_fg  = 7;
+    text_bg  = 0;
+    set_colors();
 }
 
 void
@@ -351,6 +361,66 @@ get_charld(const Font *f, int ch, int x) {
     }
 }
 
+// new compressed format
+int
+GFXdpy::render_glyph2(int ch){
+    char x, y, xx, yy;
+    char h = text_scale * font->height;
+
+    const struct FontData *fd = 0;
+    const u_char *cd=0;
+    char l0=font->width*text_scale, r0=0, ncol=0;
+
+    if( (ch <= font->lastchar) && (ch >= font->startchar) ){
+        ch -= font->startchar;
+        fd = font->fdata + ch;
+    }
+    if( fd ){
+        l0 = fd->l0 * text_scale;
+        r0 = fd->r0 * text_scale;
+        ncol = fd->ncol;
+        cd = font->data + fd->pos;
+    }
+
+    // pad left side 0s
+    for(x=0; x<l0; x++){
+        for(y=0; y<h; y++){
+            set_pixel(x + cx, y + cy, color_bg );
+        }
+    }
+
+    for(x=0; x<ncol; x++){
+        char x0 = x * text_scale;
+        for(xx=x0; xx<x0+text_scale; xx++){
+            for(y=0; y<font->height; y++){
+                short bno = x * font->height + y;
+                char p  = (cd[ bno >> 3 ] & (1 << (bno & 7))) ? 1 : 0;
+                char y0 = y * text_scale;
+
+                for(yy=y0; yy<y0+text_scale; yy++){
+                    int pix = p;
+                    if( text_attr & ATTR_ULINE  && yy == h-1) pix = 1;
+                    if( text_attr & ATTR_STRIKE && yy == h/2) pix = 1;
+                    if( text_attr & ATTR_REVERSE ) pix = ! pix;
+                    pix = pix ? color_fg : color_bg;
+
+                    set_pixel(xx + cx + l0, yy + cy, pix );
+                }
+            }
+        }
+    }
+
+    // pad right side 0s
+    char x0 = l0 + ncol * text_scale;
+
+    for(x=0; x<r0; x++){
+        for(y=0; y<h; y++){
+            set_pixel(x0 + x + cx, y + cy, color_bg );
+        }
+    }
+
+    return x0 + r0;
+}
 
 void
 GFXdpy::render_glyph(int ch){
@@ -405,7 +475,7 @@ GFXdpy::putchar(int ch){
             return;
         }else{
             x3_mode = 0;
-            ch = 0x80 | ch;
+            ch = GOTESC | ch;
         }
     }
 
@@ -494,22 +564,60 @@ GFXdpy::putchar(int ch){
 
     case 'h' | GOTBRACK: 	// private mode settings (non-standard)
         switch(x3_arg[0]){
+        case 0:
+            if( x3_argn )	// esc[0h but not esc[h
+                reset();
+            break;
         case 1:
             set_orientation(x3_arg[1]);
             break;
         case 2:
-            text_scale = x3_arg[2];
+            text_scale = x3_arg[1];
             if( text_scale < 1 ) text_scale = 1;
             break;
         case 3:
-            text_flags = x3_arg[1];
+            text_flags |= GFX_FLAG_AUTOFLUSH;
+            break;
+        case 4:
+            text_flags &= ~GFX_FLAG_AUTOFLUSH;
+            break;
+        case 5:
+            text_flags |= GFX_FLAG_AUTOSHIFT;
+            break;
+        case 6:
+            text_flags &= ~GFX_FLAG_AUTOSHIFT;
             break;
         }
         break;
 
     case 'J' | GOTBRACK:	// clear screen
-        clear_screen();
-        cx = cy = 0;
+        if( !x3_argn ) x3_arg[0] = 2; // default clear all
+        switch( x3_arg[0] ){
+        case 0:
+            rect_filled(0, 0, width-1, cy-1, color_bg);
+            break;
+        case 1:
+            rect_filled(0, cy, width-1, height-1, color_bg);
+            break;
+        case 2:
+            clear_screen();
+            if( ! x3_argn ) cx = cy = 0;	// no arg - go home
+            break;
+        }
+        break;
+
+    case 'K' | GOTBRACK:	// clear line
+        switch( x3_arg[0] ){
+        case 0: // erase to right
+            rect_filled(cx, cy, width-1, cy+text_scale*font->height-1, color_bg);
+            break;
+        case 1: // erase to left
+            rect_filled(0, cy, cx, cy+text_scale*font->height-1, color_bg);
+            break;
+        case 2: // erase line
+            rect_filled(0, cy, width-1, cy+text_scale*font->height-1, color_bg);
+            break;
+        }
         break;
 
     case 'm' | GOTBRACK:
@@ -542,13 +650,23 @@ GFXdpy::putchar(int ch){
 
         case 30: case 31: case 32: case 33: case 34:
         case 35: case 36: case 37:
-            text_fg = x3_arg[0] - 30;
-            set_colors();
+            if( x3_argn == 4 ){
+                // esc[30;R;G;B;m
+                color_fg = ((x3_arg[1] & 0xFF) << 16) | ((x3_arg[2] & 0xFF) << 8) | (x3_arg[3] & 0xFF);
+            }else{
+                text_fg = x3_arg[0] - 30;
+                set_colors();
+            }
             break;
         case 40: case 41: case 42: case 43: case 44:
         case 45: case 46: case 47:
-            text_bg = x3_arg[0] - 40;
-            set_colors();
+            if( x3_argn == 4 ){
+                // esc[40;R;G;B;m
+                color_bg = ((x3_arg[1] & 0xFF) << 16) | ((x3_arg[2] & 0xFF) << 8) | (x3_arg[3] & 0xFF);
+            }else{
+                text_bg = x3_arg[0] - 40;
+                set_colors();
+            }
             break;
 
         case 10: case 11: case 12: case 13: case 14:
@@ -558,11 +676,8 @@ GFXdpy::putchar(int ch){
             // esc[10;123m	- font by index
             // esc[10;8;6m	- font by size
             // esc[10;`name;m	- font by name
-            // esc[10;`?;m	- list fonts
 
-            if( xx_text[0] == '?' && xx_text[1] == 0 )
-                list_fonts();
-            else if( xx_text[0] )
+            if( xx_text[0] )
                 set_font( xx_text );
             else if( x3_argn == 3)
                 set_font( x3_arg[1], x3_arg[2] );
@@ -607,10 +722,32 @@ GFXdpy::putchar(int ch){
         // RSN - set scroll region esc[top;bot;r
         break;
 
+    case 'S' | GOTBRACK:
+        // scroll up; chars or 0;pixels
+        if( !x3_argn ) x3_arg[0] = 1;
+        if( !x3_arg[1] ) x3_arg[1] = 1;
+        if( x3_arg[0] == 0 ){
+            scroll_vert(0, 0, width, height, x3_arg[1]);
+        }else{
+            scroll_vert(0, 0, width, height, x3_arg[0] * text_scale * font->height);
+        }
+        break;
+
     case 's' | GOTBRACK:
         // save cursor pos
         sx = cx;
         sy = cy;
+        break;
+
+    case 'T' | GOTBRACK:
+        // scroll down; chars or 0;pixels
+        if( !x3_argn ) x3_arg[0] = 1;
+        if( !x3_arg[1] ) x3_arg[1] = 1;
+        if( x3_arg[0] == 0 ){
+            scroll_vert(0, 0, width, height, -x3_arg[1]);
+        }else{
+            scroll_vert(0, 0, width, height, -x3_arg[0] * text_scale * font->height);
+        }
         break;
 
     case 'u' | GOTBRACK:
@@ -625,6 +762,7 @@ GFXdpy::putchar(int ch){
         cx = x3_arg[1];
         if( cx < 0 ) cx = width  + cx;
         if( cy < 0 ) cy = height + cy;
+        bound_pos();
         break;
 
     case '?' | GOTBRACK:
@@ -640,15 +778,27 @@ GFXdpy::putchar(int ch){
 
     case '<' | GOTBRACK:
         // scroll left by arg, move cursor to right edge (not standard)
-        if( !x3_arg[0] ) x3_arg[0] = 1;
-        scroll_horiz(cy, cy + text_scale * font->height, x3_arg[0] * text_scale * font->width);
+        // chars or 0;pixels
+        if( !x3_argn ) x3_arg[0] = 1;
+        if( !x3_arg[1] ) x3_arg[1] = 1;
+        if( x3_arg[0] == 0 ){
+            scroll_horiz(cy, cy + text_scale * font->height, x3_arg[1]);
+        }else{
+            scroll_horiz(cy, cy + text_scale * font->height, x3_arg[0] * text_scale * font->width);
+        }
         cx = width - text_scale * font->width;
         break;
 
     case '>' | GOTBRACK:
         // scroll right by arg, move cursor to left edge (not standard)
-        if( !x3_arg[0] ) x3_arg[0] = 1;
-        scroll_horiz(cy, cy + text_scale * font->height, - x3_arg[0] * text_scale * font->width);
+        // chars or 0;pixels
+        if( !x3_argn ) x3_arg[0] = 1;
+        if( !x3_arg[1] ) x3_arg[1] = 1;
+        if( x3_arg[0] == 0 ){
+            scroll_horiz(cy, cy + text_scale * font->height, - x3_arg[1]);
+        }else{
+            scroll_horiz(cy, cy + text_scale * font->height, - x3_arg[0] * text_scale * font->width);
+        }
         cx = 0;
         break;
 
@@ -671,10 +821,15 @@ GFXdpy::putchar(int ch){
             scroll_horiz(cy, cy + text_scale * font->height, text_scale * font->width);
         }
 
-        render_glyph(ch);
-        int gw = text_scale * glyph_width(font, ch);
-        cx += gw;
-        residue = text_scale * font->width - gw;
+        if( font->fdata ){
+            cx += render_glyph2(ch);
+        }else{
+            render_glyph(ch);
+            int gw = text_scale * glyph_width(font, ch);
+            cx += gw;
+            residue = text_scale * font->width - gw;
+        }
+
         break;
     }
 

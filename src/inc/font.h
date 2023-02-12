@@ -12,6 +12,12 @@ struct FontMetric {
     signed char xadj;
 };
 
+struct FontData {
+    unsigned char l0, r0, ncol;
+    signed   char xadj;
+    unsigned short pos;
+};
+
 struct Font {
     const char *name;
     char  type;
@@ -22,6 +28,7 @@ struct Font {
     short startchar;
     short lastchar;
     const struct FontMetric *metrics;
+    const struct FontData *fdata;
     unsigned char data[];
 };
 

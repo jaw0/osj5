@@ -11,9 +11,10 @@ use Getopt::Std;
 use strict;
 
 my %opt;
-getopts('dn', \%opt) || die ;
+getopts('dnt', \%opt) || die ;
 # -d	- enable debug output
 # -n	- mini-numeric font
+# -t	- new format output
 
 
 my $file = shift @ARGV;
@@ -117,7 +118,7 @@ while(<F>){
         }
         $proportional = 1 if $fbw != $dwidth;
 
-        debug( "$k $charnum $charname : $dwidth [@bitmap]" );
+        debug( "read $k $charnum $charname : $dwidth [@bitmap]" );
 
         $charname = $charnum = undef;
 
@@ -165,18 +166,34 @@ const struct Font font_${fontname} = {
     .numcol     = $fbw,
     .startchar  = $START,
     .lastchar	= $LAST,
-    .metrics    = $metrics,
-    .data       = {
 EOH
-;
 
-# print join(' ', keys %font), "\n";
+if( $opt{t} && ($fbh > 8) ){
+    print "    .metrics    = 0,\n";
+    print "    .fdata      = (const struct FontData[]){\n";
 
-for my $n ($START .. $LAST){
-    mkglyph( $n );
+    my $data = '';
+    my $pos = 0;
+
+    for my $n ($START .. $LAST){
+        my @d = mkglyph2( $n, $pos );
+        $pos += @d;
+        $data .= "\t" . join(' ', map{ "$_," } @d) . "\t// $n\n";
+    }
+    print "    },\n";
+    print "    .data       = {\n$data\n    }\n";
+
+
+}else{
+    print "    .metrics    = $metrics,\n    .data       = {\n";
+
+    for my $n ($START .. $LAST){
+        mkglyph( $n );
+    }
+    print "    }\n";
 }
 
-print "    }\n";
+
 print "};\n";
 exit;
 
@@ -243,6 +260,81 @@ sub fixglyph {
     # }
 
     return \@bitmap;
+}
+
+sub mkglyph2 {
+    my $n = shift;
+    my $pos = shift;
+
+    my $g = $font{ $n };
+    my @b = @{$g->{bitmap}};
+    my $name = $g->{name} || chr($n);
+
+    debug("mkg $n : @b; @{$g->{bbx}}");
+    my $bx = $g->{bbx}[0]; # char width
+    my $by = $g->{bbx}[1];
+    my $xadj = $g->{dwidth} - $fbw;
+
+    # rotate data
+    # each row : [31 ... 0]
+
+    my @data = (0) x $g->{dwidth};
+    for my $y (0 .. @b - 1){
+        for my $x (0 .. $g->{dwidth}-1){
+            my $pix = ($b[$y] & (1 << $x)) ? 1 : 0;
+            $data[$g->{dwidth} - $x - 1] |= $pix << $y;
+        }
+    }
+
+    # remove leading, trailing 0s
+    my $l0 = 0;
+    my $r0 = 0;
+
+    while( @data && !$data[0] ){
+        shift @data;
+        $l0 ++;
+    }
+
+    while( @data && !$data[-1] ){
+        pop @data;
+        $r0 ++;
+    }
+
+    # data
+    my $ncol   = @data;
+    my $nbytes = int( ($ncol * $by + 7) / 8 );
+
+    # compress to bytes
+    my $vec = "\0" x $nbytes;
+    for my $y (0 .. $by - 1){
+        for my $x (0 .. $ncol-1){
+            my $pix = ($data[$x] & (1 << $y)) ? 1 : 0;
+            my $pos = $x * $by + $y;
+            vec($vec, $pos, 1) = $pix;
+        }
+    }
+
+    my @res = unpack('C*', $vec);
+    debug("mkg2 $n : $l0/$r0 $bx/$by [@data] $nbytes [@res]");
+    # check2( $ncol, $by, @res );
+
+    print "\t{ .l0 = $l0, .r0 = $r0, .ncol = $ncol, .xadj = $xadj, .pos = $pos }, // $n [$nbytes]\n";
+    return @res
+}
+
+sub check2 {
+    my $ncol = shift;
+    my $ht   = shift;
+    my @data = @_;
+
+    for my $y (0 .. $ht-1){
+        for my $x (0 .. $ncol-1){
+            my $bno = $x * $ht + $y;
+            my $pix = $data[ $bno >> 3 ] & (1 << ($bno & 7));
+            print ($pix ? "#" : "-");
+        }
+        print "\n";
+    }
 }
 
 # rotate pixels

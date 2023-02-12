@@ -87,6 +87,7 @@ public:
     virtual bool is_color(void) = 0;
 
     void init(void);
+    void reset(void);
     void set_pixel(int, int, int);
     int  get_pixel(int, int);
     void set_pixel_rgb(int x, int y, int c) {set_pixel(x,y, get_color(c));}
@@ -97,6 +98,7 @@ public:
     void scroll_horiz(int,int,int,int,int);
     void scroll_vert(int,int,int,int,int);
     void render_glyph(int);
+    int render_glyph2(int);
     void putchar(int);
     void x3draw(void);
     void x3report(void);
