@@ -58,6 +58,12 @@ MEMORY
 
 SECTIONS
 {
+    .boot_header :
+    {
+		. = ALIGN(4);
+        KEEP(*(.boot_header))
+    } >FLASH
+
     /* for Cortex devices, the beginning of the startup code is stored in the .isr_vector section, which goes to FLASH */
     .isr_vector :
     {
@@ -72,6 +78,12 @@ SECTIONS
 		. = ALIGN(4);
         *(.flashtext)            /* Startup code */
 		. = ALIGN(4);
+    } >FLASH
+
+    .gnu_build_id :
+    {
+      PROVIDE(gnu_note_build_id = .);
+        *(.note.gnu.build-id)
     } >FLASH
 
     /* the program code is stored in the .text section, which goes to Flash */

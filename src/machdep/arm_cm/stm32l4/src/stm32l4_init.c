@@ -37,6 +37,9 @@
 */
 
 unsigned long bootflags = 0;
+uint32_t *r_unique = R_UNIQUE;
+uint16_t *r_flashkb = R_FLASHKB;
+
 void stm32_putchar(int);
 
 int freq_sys=MSIDEFAULT;

@@ -64,8 +64,9 @@
 #define SPI_STATE_BUSY              4
 #define SPI_STATE_ERROR             -1
 
-#define DMA_MIN_SIZE	64
-
+#ifndef DMA_MIN_SIZE
+#  define DMA_MIN_SIZE	64
+#endif
 
 static char dma_idle_source = 0xFF;
 static char dma_idle_sink;
@@ -241,6 +242,31 @@ _spi_drain_rx(SPI_TypeDef *dev){
 
 #ifdef DMA_TYPE_1
 
+# if defined(PLATFORM_STM32L4)
+// L4 has an extra step - set the channel select
+static inline void _dma_csel(struct SPIInfo *ii) {
+    char b;
+    DMA_Request_TypeDef *dmar;
+
+    if( ii->dma == DMA1 ){
+        dmar = DMA1_CSELR;
+    }else{
+        dmar = DMA2_CSELR;
+    }
+
+    b = (ii->dmanrx - 1) << 2;
+    dmar->CSELR &= 0xF << b;
+    dmar->CSELR |= ii->dmachan << b;
+
+    b = (ii->dmantx - 1) << 2;
+    dmar->CSELR &= ~(0xF << b);
+    dmar->CSELR |= ii->dmachan << b;
+
+}
+# else
+static inline void _dma_csel(struct SPIInfo *ii) {}
+#endif
+
 static inline void
 _disable_irq_dma(struct SPIInfo *ii){
     SPI_TypeDef *dev = ii->addr;
@@ -270,6 +296,7 @@ _dma_enable_read(struct SPIInfo *ii){
     // rx dma to buffer; tx dummy
     _dma_conf( ii->rxdma, (char*)& dev->DR, ii->msg->data, ii->msg->dlen, DMACCR_MINC );
     _dma_conf( ii->txdma, (char*)& dev->DR, &dma_idle_source, 0, DMACCR_DIR_M2P );
+    _dma_csel(ii);
 
     dev->CR2 |= CR2_TXDMAEN | CR2_RXDMAEN;
 }
@@ -282,6 +309,7 @@ _dma_enable_write(struct SPIInfo *ii){
     // tx dma from buffer, rx discard
     _dma_conf( ii->txdma, (char*)& dev->DR, ii->msg->data, ii->msg->dlen, DMACCR_MINC | DMACCR_DIR_M2P );
     _dma_conf( ii->rxdma, (char*)& dev->DR, &dma_idle_sink, 0, 0 );
+    _dma_csel(ii);
 
     dev->CR2 |= CR2_TXDMAEN | CR2_RXDMAEN;
 }
@@ -844,6 +872,13 @@ void DMA1_Stream2_IRQHandler(void){ _irq_spidma_handler(0, 3, DMA_Channel3); }
 void DMA1_Stream3_IRQHandler(void){ _irq_spidma_handler(1, 4, DMA_Channel4); }
 void DMA1_Stream4_IRQHandler(void){ _irq_spidma_handler(1, 5, DMA_Channel5); }
 #elif defined(PLATFORM_STM32L1)
+void DMA1_Stream1_IRQHandler(void){ _irq_spidma_handler(0, 2, DMA1_Channel2); }
+void DMA1_Stream2_IRQHandler(void){ _irq_spidma_handler(0, 3, DMA1_Channel3); }
+void DMA1_Stream3_IRQHandler(void){ _irq_spidma_handler(1, 4, DMA1_Channel4); }
+void DMA1_Stream4_IRQHandler(void){ _irq_spidma_handler(1, 5, DMA1_Channel5); }
+void DMA2_Stream1_IRQHandler(void){ _irq_spidma_handler(2, 1, DMA2_Channel1); }
+void DMA2_Stream2_IRQHandler(void){ _irq_spidma_handler(2, 2, DMA2_Channel2); }
+#elif defined(PLATFORM_STM32L4)
 void DMA1_Stream1_IRQHandler(void){ _irq_spidma_handler(0, 2, DMA1_Channel2); }
 void DMA1_Stream2_IRQHandler(void){ _irq_spidma_handler(0, 3, DMA1_Channel3); }
 void DMA1_Stream3_IRQHandler(void){ _irq_spidma_handler(1, 4, DMA1_Channel4); }
