@@ -112,7 +112,9 @@ static const usb_wdata_descriptor_t name ALIGN2 = { 2 + 2*sizeof(text), USB_DTYP
 #define USB_CLASS_MISC              0xEF
 #define USB_CLASS_APP_SPEC          0xFE
 #define USB_CLASS_VENDOR            0xFF
+#define USB_SUBCLASS_COMMON         0x02
 #define USB_SUBCLASS_VENDOR         0xFF
+#define USB_PROTO_IAD	            0x01
 #define USB_PROTO_VENDOR            0xFF
 
 #define USB_DTYPE_DEVICE            0x01
