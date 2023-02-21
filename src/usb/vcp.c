@@ -43,6 +43,14 @@
 # define TX_QUEUE_SIZE	VCP_QUEUE_SIZE
 #endif
 
+#ifndef VCP_RXBUF_SIZE
+# define VCP_RXBUF_SIZE CDC_HSSIZE
+#endif
+
+#ifndef VCP_TXBUF_SIZE
+# define VCP_TXBUF_SIZE CDC_FSSIZE
+#endif
+
 
 #define ALIGN2 __attribute__ ((aligned (2)))
 
@@ -211,6 +219,7 @@ static const usbd_config_t cdc_usbd_config = {
 
 
 static int vcp_putchar(FILE*, char);
+static int vcp_write(FILE*, const char *, int);
 static int vcp_getchar(FILE*);
 static int vcp_noop(FILE*);
 static int vcp_status(FILE*);
@@ -222,7 +231,7 @@ const static struct io_fs vcp_port_fs = {
     0,
     vcp_status,
     0,
-    0,
+    vcp_write,
     0,
     0,
     0,
@@ -237,8 +246,8 @@ static struct VCP {
 
     usb_cdc_line_state_t line_state;
     struct queue rxq, txq;
-    char rxbuf[ CDC_HSSIZE ];
-    char txbuf[ CDC_FSSIZE ];
+    char rxbuf[ VCP_RXBUF_SIZE ];
+    char txbuf[ VCP_TXBUF_SIZE ];
 
     uint8_t rblen, tblen;
     uint8_t ready;
@@ -345,15 +354,15 @@ vcp_recv_setup(struct VCP *p, const char *buf, int len){
 
     switch (req->bRequest) {
     case UCDC_SET_CONTROL_LINE_STATE:
-        trace_crumb1("vcp", "set/state", 0);
+        trace_crumb1("vcp", "set/state", req->wValue);
+        p->ready = req->wValue & 2;
         usbd_reply(p->usbd, 0, "", 0, 0);
-        p->ready = 1;
         maybe_tx(p);
         return 1;
     case UCDC_SET_LINE_CODING:
         trace_crumb2("vcp", "set/lcod", len, req->wLength);
         memcpy( &p->line_state, buf+8, sizeof(p->line_state) );
-        trace_data("vcp", "linestate", len, buf);
+        // trace_data("vcp", "linestate", len, buf);
         usbd_reply(p->usbd, 0, "", 0, 0);
         return 1;
     case UCDC_GET_LINE_CODING:
@@ -387,17 +396,19 @@ maybe_tx(struct VCP* p){
     if( p->txq.len == 0 ) return;
     if( p->tblen ) return;
     if( !usbd_isactive(p->usbd) ) return;
-
+#if 1
     // copy to buffer
-    for(i=0; p->txq.len && (i<CDC_FSSIZE); i++){
+    i = qread(&p->txq, p->txbuf, VCP_TXBUF_SIZE);
+#else
+    for(i=0; p->txq.len && (i<VCP_TXBUF_SIZE); i++){
         p->txbuf[i] = qpop( &p->txq );
     }
-
+#endif
     // tx
     p->tblen = i;
     int plx = spldisk();
-    trace_crumb3("vcp", "tx", i, p->txq.len, plx);
     int zp = p->is_hs ? 1 : !(i & (CDC_FSSIZE - 1));
+    trace_crumb3("vcp", "tx", p->tblen, p->txq.len, zp);
 
     usbd_write(p->usbd, CDC_TXD_EP, p->txbuf, i, zp );
     splx(plx);
@@ -454,6 +465,44 @@ vcp_putchar(FILE *f, char ch){
     return 1;
 }
 
+static int
+vcp_write(FILE *f, const char *buf, int len){
+    int n = 0;
+    struct VCP *p = (struct VCP*)f->d;
+    int plx;
+
+    while(len){
+        plx = spldisk();
+
+        while( p->txq.len < TX_QUEUE_SIZE ){
+            int i = qwrite(&p->txq, buf, len);
+
+            buf += i;
+            len -= i;
+            n   += i;
+
+            if( len == 0 ) break;
+        }
+
+        maybe_tx(p);
+        splx(plx);
+
+        if( !len ) break;
+        if( p->txq.len != TX_QUEUE_SIZE ) continue;
+
+        if( f->flags & F_NONBLOCK )   break;	// drop
+        if( !usbd_isactive(p->usbd) ) break;
+        if( !p->ready ) break;
+
+        trace_crumb2("vcp", "block", f->flags, plx);
+
+        // wait for buffer to empty
+        tsleep( &p->txq, -1, "usb/o", 10000 );
+    }
+
+    return n;
+}
+
 
 static void
 maybe_dequeue(struct VCP* p){
@@ -481,6 +530,7 @@ maybe_dequeue(struct VCP* p){
     }
 
     p->rblen = 0;
+    p->ready = 1;
 
     usb_recv_ack( p->usbd, CDC_RXD_EP );
 }
