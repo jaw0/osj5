@@ -86,6 +86,7 @@ static const u_char ssd1306_normal[] = { 0xA6 };
 static const u_char ssd1306_sleep[]  = { 0xAE };
 static const u_char ssd1306_awake[]  = { 0xAF };
 
+// brightness 0x81 XX
 
 //****************************************************************
 
@@ -368,4 +369,27 @@ DEFUN(oledtest, "test")
     }
 }
 
+
+extern "C" int atoi_base(int, const char*);
+
+extern "C"
+DEFUN(oledcmd, "test")
+{
+    // unit 0
+    SSD1306 *ii = ssd1306info;
+
+    u_char buf[4];
+    int i;
+
+    argc --;
+    argv ++;
+
+
+    for(i=0; i<argc; i++){
+        buf[i] = atoi_base(16, argv[i]);
+    }
+
+    _ssd1306_cmds(ii, buf, argc);
+    return 0;
+}
 #endif

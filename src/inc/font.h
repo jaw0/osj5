@@ -25,6 +25,7 @@ struct Font {
     char  width;	// width in pixels
     char  bytescol;	// height in bytes
     char  numcol;	// width in columns
+    char  lineheight;	// line height in pixels
     short startchar;
     short lastchar;
     const struct FontMetric *metrics;

@@ -9,6 +9,7 @@ const struct Font font_timB10_n = {
     .name	= "timB10_n",
     .height	= 11,
     .width	= 9,
+    .lineheight = 18,
     .bytescol	= 2,
     .numcol     = 9,
     .startchar  = 33,

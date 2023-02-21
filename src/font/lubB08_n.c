@@ -9,6 +9,7 @@ const struct Font font_lubB08_n = {
     .name	= "lubB08_n",
     .height	= 9,
     .width	= 6,
+    .lineheight = 14,
     .bytescol	= 2,
     .numcol     = 6,
     .startchar  = 33,

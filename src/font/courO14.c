@@ -9,6 +9,7 @@ const struct Font font_courO14 = {
     .name	= "courO14",
     .height	= 13,
     .width	= 10,
+    .lineheight = 14,
     .bytescol	= 2,
     .numcol     = 10,
     .startchar  = 33,

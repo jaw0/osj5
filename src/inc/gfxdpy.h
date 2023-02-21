@@ -52,6 +52,7 @@ public:
     u_char text_flags;		// GFX_FLAG_*
     u_char text_scale;		// scale factor for text
     u_char text_attr;		// ATTR_*
+    u_char text_height;		// font height * scale
 
     u_char text_fg,  text_bg;	// ANSI code
     int	   color_fg, color_bg;	// native value
@@ -59,8 +60,10 @@ public:
     u_char volume;
 #endif
 
-private:
+    const Font *font;		// current font
     short  cx,cy;		// current cursor position
+
+private:
     short  sx,sy;		// saved position
     char   residue;		// for proportional font rendering
 
@@ -72,8 +75,6 @@ private:
     // x3.64(ish) extensions
     char   xx_text[MAXXTEXT+1];
     char   xx_text_n;
-
-    const Font *font;		// current font
 
 public:
     virtual void flush(void) = 0;

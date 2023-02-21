@@ -9,6 +9,7 @@ const struct Font font_osb18 = {
     .name	= "osb18",
     .height	= 24,
     .width	= 27,
+    .lineheight = 25,
     .bytescol	= 4,
     .numcol     = 27,
     .startchar  = 33,

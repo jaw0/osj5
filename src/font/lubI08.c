@@ -9,6 +9,7 @@ const struct Font font_lubI08 = {
     .name	= "lubI08",
     .height	= 8,
     .width	= 8,
+    .lineheight = 8,
     .bytescol	= 1,
     .numcol     = 8,
     .startchar  = 33,

@@ -9,6 +9,7 @@ const struct Font font_luRS14 = {
     .name	= "luRS14",
     .height	= 13,
     .width	= 13,
+    .lineheight = 14,
     .bytescol	= 2,
     .numcol     = 13,
     .startchar  = 33,

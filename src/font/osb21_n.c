@@ -9,6 +9,7 @@ const struct Font font_osb21_n = {
     .name	= "osb21_n",
     .height	= 29,
     .width	= 26,
+    .lineheight = 36,
     .bytescol	= 4,
     .numcol     = 26,
     .startchar  = 33,

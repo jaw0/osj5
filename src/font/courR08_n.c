@@ -9,6 +9,7 @@ const struct Font font_courR08_n = {
     .name	= "courR08_n",
     .height	= 9,
     .width	= 6,
+    .lineheight = 15,
     .bytescol	= 2,
     .numcol     = 6,
     .startchar  = 33,

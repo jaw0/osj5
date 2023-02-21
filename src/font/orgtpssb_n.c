@@ -9,6 +9,7 @@ const struct Font font_orgtpssb_n = {
     .name	= "orgtpssb_n",
     .height	= 10,
     .width	= 11,
+    .lineheight = 17,
     .bytescol	= 2,
     .numcol     = 11,
     .startchar  = 33,

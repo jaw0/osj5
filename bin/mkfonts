@@ -6,7 +6,7 @@
 # Function: make fonts
 
 
-FONTS=`ls -1 font | grep bdf | sed s/.bdf//`
+FONTS=`ls -1 font | grep bdf | sed -e s/.bdf// -e s/^font.//`
 
 for f in $FONTS; do
     echo $f

@@ -9,6 +9,7 @@ const struct Font font_helvO12 = {
     .name	= "helvO12",
     .height	= 12,
     .width	= 13,
+    .lineheight = 12,
     .bytescol	= 2,
     .numcol     = 13,
     .startchar  = 33,

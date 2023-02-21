@@ -18,11 +18,7 @@ getopts('dnt', \%opt) || die ;
 
 
 my $file = shift @ARGV;
-
-(my $base = $file) =~ s|.*/||;
-(my $fontname = "$base") =~ s/\..*//;
-$fontname =~ s/-/_/g;
-# RSN - clean name more...?
+my( $fontname, $dataname ) = font_name($file, 'src/etc/fontmap');
 
 open(F, $file) || die "cannot open $file: $!\n";
 
@@ -30,7 +26,7 @@ open(F, $file) || die "cannot open $file: $!\n";
 my %extchars;
 readext();
 
-my($fbw, $fbh, $fbx, $fby);
+my($fbw, $fbh, $fbx, $fby, $fbH);
 my($cbw, $cbh, $cbx, $cby);
 
 my $charname;
@@ -52,7 +48,6 @@ while(<F>){
     if( $k eq 'FONT' ){ print "// font: $v\n"; next; }
     if( $k eq 'FONTBOUNDINGBOX' ){
         ($fbw, $fbh, $fbx, $fby) = split /\s+/, $v;
-
         next;
     }
     if( $k eq 'STARTCHAR' ){
@@ -123,6 +118,7 @@ my $LAST  = $font{144} ? 148 : 127;
 if( $opt{n} ){
     # punct + numbers only
     $fontname .= '_n';
+    $dataname .= '_n';
     $LAST  = 0x3F;
 }
 
@@ -134,10 +130,11 @@ analyze();
 setsize();
 
 $metrics = metrics() if $proportional;
+$fbH ||= $fbh;
 
-debug( "FBBX=>\t$fbw, $fbh, $fbx, $fby : $spacing" );
+debug( "FBBX=>\t$fbw, $fbh, $fbx, $fby : $fbH : $spacing" );
 
-die "$fontname: font too tall!\n" if $ybytes > 4;
+# die "$fontname: font too tall!\n" if $ybytes > 4;
 
 
 ################################################################
@@ -146,11 +143,12 @@ print <<EOH;
 
 #include <font.h>
 
-const struct Font font_${fontname} = {
+const struct Font font_${dataname} = {
     .type       = 1,
     .name	= "$fontname",
     .height	= $fbh,
     .width	= $fbw,
+    .lineheight = $fbH,
     .bytescol	= $ybytes,
     .numcol     = $fbw,
     .startchar  = $START,
@@ -422,13 +420,16 @@ sub analyze {
     debug( "dx:\t$dx; $maxdx" );
     debug( "bb:\tx: $minx .. $maxx, y: $miny .. $maxy" );
 
+    $fbH = $fbh;
     $fbh = $maxy - $miny;
+    $fbH = $pixsize if $pixsize >= $fbh;
+    debug("fbh: $fbh; max $maxy - min $miny");
 
-    if( $fbh > 32 ){
-        # we currenly only support upto 32 bits
-        # can we smoosh it?
-        $fbh = 32 if $maxy - $miny <= 32;
-    }
+    # if( $fbh > 32 ){
+    #     # we currenly only support upto 32 bits
+    #     # can we smoosh it?
+    #     $fbh = 32 if $maxy - $miny <= 32;
+    # }
 
     $fbw = $maxdx;
     $fbw = $maxx if $maxx > $fbw;
@@ -483,6 +484,26 @@ sub metrics {
     }
 
     $m .= "    }";
+}
+
+################################################################
+
+sub font_name {
+    my $file = shift;
+    my $map  = shift;
+
+    (my $base = $file) =~ s|.*/||;
+    (my $fontname = "$base") =~ s/\..*//;
+    $fontname =~ s/-/_/g;
+
+    open(M, $map);
+    while(<M>){
+        chomp;
+        my @f = split;
+        return $f[1], $fontname if $f[0] eq $fontname;
+    }
+
+    return $fontname, $fontname;
 }
 
 ################################################################

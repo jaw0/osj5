@@ -9,6 +9,7 @@ const struct Font font_ncenR10 = {
     .name	= "ncenR10",
     .height	= 10,
     .width	= 12,
+    .lineheight = 10,
     .bytescol	= 2,
     .numcol     = 12,
     .startchar  = 33,

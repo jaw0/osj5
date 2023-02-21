@@ -9,6 +9,7 @@ const struct Font font_4x6 = {
     .name	= "4x6",
     .height	= 6,
     .width	= 4,
+    .lineheight = 6,
     .bytescol	= 1,
     .numcol     = 4,
     .startchar  = 33,

@@ -9,6 +9,7 @@ const struct Font font_8x13B_n = {
     .name	= "8x13B_n",
     .height	= 13,
     .width	= 8,
+    .lineheight = 13,
     .bytescol	= 2,
     .numcol     = 8,
     .startchar  = 33,

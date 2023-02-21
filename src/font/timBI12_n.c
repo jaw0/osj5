@@ -9,6 +9,7 @@ const struct Font font_timBI12_n = {
     .name	= "timBI12_n",
     .height	= 12,
     .width	= 12,
+    .lineheight = 12,
     .bytescol	= 2,
     .numcol     = 12,
     .startchar  = 33,

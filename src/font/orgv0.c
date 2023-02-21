@@ -9,6 +9,7 @@ const struct Font font_orgv0 = {
     .name	= "orgv0",
     .height	= 9,
     .width	= 6,
+    .lineheight = 9,
     .bytescol	= 2,
     .numcol     = 6,
     .startchar  = 33,

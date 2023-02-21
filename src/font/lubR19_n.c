@@ -9,6 +9,7 @@ const struct Font font_lubR19_n = {
     .name	= "lubR19_n",
     .height	= 19,
     .width	= 13,
+    .lineheight = 19,
     .bytescol	= 4,
     .numcol     = 13,
     .startchar  = 33,

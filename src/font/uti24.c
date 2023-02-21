@@ -9,6 +9,7 @@ const struct Font font_uti24 = {
     .name	= "uti24",
     .height	= 24,
     .width	= 25,
+    .lineheight = 25,
     .bytescol	= 4,
     .numcol     = 25,
     .startchar  = 33,

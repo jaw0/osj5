@@ -9,6 +9,7 @@ const struct Font font_lutBS18 = {
     .name	= "lutBS18",
     .height	= 17,
     .width	= 11,
+    .lineheight = 18,
     .bytescol	= 4,
     .numcol     = 11,
     .startchar  = 33,

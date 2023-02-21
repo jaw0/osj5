@@ -9,6 +9,7 @@ const struct Font font_6x12_n = {
     .name	= "6x12_n",
     .height	= 12,
     .width	= 6,
+    .lineheight = 12,
     .bytescol	= 2,
     .numcol     = 6,
     .startchar  = 33,

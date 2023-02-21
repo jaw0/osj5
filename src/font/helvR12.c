@@ -9,6 +9,7 @@ const struct Font font_helvR12 = {
     .name	= "helvR12",
     .height	= 12,
     .width	= 11,
+    .lineheight = 12,
     .bytescol	= 2,
     .numcol     = 11,
     .startchar  = 33,

@@ -9,6 +9,7 @@ const struct Font font_helvBO18_n = {
     .name	= "helvBO18_n",
     .height	= 18,
     .width	= 16,
+    .lineheight = 18,
     .bytescol	= 4,
     .numcol     = 16,
     .startchar  = 33,

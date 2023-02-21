@@ -9,6 +9,7 @@ const struct Font font_timI14_n = {
     .name	= "timI14_n",
     .height	= 14,
     .width	= 12,
+    .lineheight = 14,
     .bytescol	= 2,
     .numcol     = 12,
     .startchar  = 33,

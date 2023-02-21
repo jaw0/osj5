@@ -18,11 +18,7 @@ getopts('dnt', \%opt) || die ;
 
 
 my $file = shift @ARGV;
-
-(my $base = $file) =~ s|.*/||;
-(my $fontname = "$base") =~ s/\..*//;
-$fontname =~ s/-/_/g;
-# RSN - clean name more...?
+my( $fontname, $dataname ) = font_name($file, 'src/etc/fontmap');
 
 open(F, $file) || die "cannot open $file: $!\n";
 
@@ -134,6 +130,7 @@ my $LAST  = $font{144} ? 148 : 127;
 if( $opt{n} ){
     # punct + numbers only
     $fontname .= '_n';
+    $dataname .= '_n';
     $LAST  = 0x3F;
 }
 
@@ -157,11 +154,12 @@ print <<EOH;
 
 #include <font.h>
 
-const struct Font font_${fontname} = {
+const struct Font font_${dataname} = {
     .type       = 1,
     .name	= "$fontname",
     .height	= $fbh,
     .width	= $fbw,
+    .lineheight = $fbh,
     .bytescol	= $ybytes,
     .numcol     = $fbw,
     .startchar  = $START,
@@ -318,7 +316,7 @@ sub mkglyph2 {
     debug("mkg2 $n : $l0/$r0 $bx/$by [@data] $nbytes [@res]");
     # check2( $ncol, $by, @res );
 
-    print "\t{ .l0 = $l0, .r0 = $r0, .ncol = $ncol, .xadj = $xadj, .pos = $pos }, // $n [$nbytes]\n";
+    print "\t{ .l0 = $l0, .r0 = $r0, .ncol = $ncol, .xadj = 0, .pos = $pos }, // $n [$nbytes]\n";
     return @res
 }
 
@@ -501,6 +499,26 @@ sub metrics {
     }
 
     $m .= "    }";
+}
+
+################################################################
+
+sub font_name {
+    my $file = shift;
+    my $map  = shift;
+
+    (my $base = $file) =~ s|.*/||;
+    (my $fontname = "$base") =~ s/\..*//;
+    $fontname =~ s/-/_/g;
+
+    open(M, $map);
+    while(<M>){
+        chomp;
+        my @f = split;
+        return $f[1], $fontname if $f[0] eq $fontname;
+    }
+
+    return $fontname, $fontname;
 }
 
 ################################################################

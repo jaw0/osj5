@@ -9,6 +9,7 @@ const struct Font font_profont17 = {
     .name	= "profont17",
     .height	= 14,
     .width	= 10,
+    .lineheight = 16,
     .bytescol	= 2,
     .numcol     = 10,
     .startchar  = 33,

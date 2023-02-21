@@ -9,6 +9,7 @@ const struct Font font_ncenB14_n = {
     .name	= "ncenB14_n",
     .height	= 14,
     .width	= 13,
+    .lineheight = 14,
     .bytescol	= 2,
     .numcol     = 13,
     .startchar  = 33,

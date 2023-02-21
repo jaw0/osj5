@@ -9,6 +9,7 @@ const struct Font font_courB24_n = {
     .name	= "courB24_n",
     .height	= 21,
     .width	= 15,
+    .lineheight = 24,
     .bytescol	= 4,
     .numcol     = 15,
     .startchar  = 33,

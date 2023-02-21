@@ -9,6 +9,7 @@ const struct Font font_osr18_n = {
     .name	= "osr18_n",
     .height	= 26,
     .width	= 24,
+    .lineheight = 26,
     .bytescol	= 4,
     .numcol     = 24,
     .startchar  = 33,

@@ -9,6 +9,7 @@ const struct Font font_utrg24 = {
     .name	= "utrg24",
     .height	= 24,
     .width	= 24,
+    .lineheight = 25,
     .bytescol	= 4,
     .numcol     = 24,
     .startchar  = 33,

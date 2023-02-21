@@ -9,6 +9,7 @@ const struct Font font_profont11_n = {
     .name	= "profont11_n",
     .height	= 10,
     .width	= 6,
+    .lineheight = 10,
     .bytescol	= 2,
     .numcol     = 6,
     .startchar  = 33,

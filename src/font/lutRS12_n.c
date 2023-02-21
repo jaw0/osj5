@@ -9,6 +9,7 @@ const struct Font font_lutRS12_n = {
     .name	= "lutRS12_n",
     .height	= 11,
     .width	= 7,
+    .lineheight = 12,
     .bytescol	= 2,
     .numcol     = 7,
     .startchar  = 33,
