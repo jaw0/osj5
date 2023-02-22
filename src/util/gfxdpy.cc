@@ -56,6 +56,7 @@ extern "C" int  strcasecmp(const char*, const char*);
 #define GOTBRACK	0x200
 #define GOTTEXT		0x400
 #define FLAGMINUS	1
+#define FLAGDIGIT	2
 #define ABS(x)		((x)<0 ? -(x) : (x))
 
 
@@ -501,7 +502,7 @@ GFXdpy::putchar(int ch){
             xx_text_n  = 0;
             bzero( x3_arg, sizeof(x3_arg) );
             bzero( xx_text, MAXXTEXT+1 );
-            return;
+            goto done;
         }else{
             x3_mode = 0;
             ch = GOTESC | ch;
@@ -516,6 +517,12 @@ GFXdpy::putchar(int ch){
         goto done;
     }
 
+    /* keep argn accurate - make sure e[0X -> argn=1 */
+    if( (x3_flags & FLAGDIGIT) && (ch != ';') && (ch < '0' || ch > '9') && (ch != '-') ){
+        x3_flags &= ~FLAGDIGIT;
+        x3_argn ++;
+    }
+
     switch( ch | x3_mode ){
     case '\e':
         x3_mode = GOTESC;
@@ -528,12 +535,14 @@ GFXdpy::putchar(int ch){
         goto done;
     case '-' | GOTBRACK:
         x3_flags |= FLAGMINUS;
+        x3_flags |= FLAGDIGIT;
         goto done;
     case '0' | GOTBRACK: case '1' | GOTBRACK: case '2' | GOTBRACK: case '3' | GOTBRACK:
     case '4' | GOTBRACK: case '5' | GOTBRACK: case '6' | GOTBRACK: case '7' | GOTBRACK:
     case '8' | GOTBRACK: case '9' | GOTBRACK:
         x3_arg[ x3_argn ] *= 10;
         x3_arg[ x3_argn ] += (ch - '0') * ((x3_flags & FLAGMINUS) ? -1 : 1);
+        x3_flags |= FLAGDIGIT;
         goto done;
 
     case ';' | GOTBRACK | GOTTEXT:
@@ -594,7 +603,7 @@ GFXdpy::putchar(int ch){
     case 'h' | GOTBRACK: 	// private mode settings (non-standard)
         switch(x3_arg[0]){
         case 0:
-            if( x3_argn )	// esc[0h but not esc[h
+            if( x3_argn )	// esc[0;h but not esc[h
                 reset();
             break;
         case 1:			// set orientation
@@ -722,7 +731,7 @@ GFXdpy::putchar(int ch){
                 set_font( xx_text );
             else if( x3_argn == 3)
                 set_font( x3_arg[1], x3_arg[2] );
-            else if( x3_argn )
+            else if( x3_argn > 1 )
                 set_font( x3_arg[1] );
             else
                 set_font( x3_arg[0] - 10 );
@@ -918,102 +927,171 @@ GFXdpy::x3report(void){
     printf("unknown?\n");
 }
 
+struct DrawParam {
+    const char *name;
+    char has_rad;
+    char has_patt;	// optionally specify a line pattern
+    char is_onept;
+};
+static const DrawParam draw_param[] = {
+    { "m",   0, 0, 1 }, // move
+    { "l",   0, 1, 0 }, // line
+    { "c",   1, 0, 1 }, // circle
+    { "cf",  1, 0, 1 }, // circle filled
+    { "r",   0, 1, 0 }, // rect
+    { "rf",  0, 1, 0 }, // rect, filled
+    { "rr",  1, 1, 0 }, // rect, rounded
+    { "rrf", 1, 1, 0 }, // rect, rounded, filled
+    {}, // end sentinal
+};
+
+
 #define PATTERN(x) ( (x) | ((x)<< 16) )
 void
 GFXdpy::x3draw(void){
     unsigned pattern = 0xFFFFFFFF;
     unsigned color   = color_fg;
+    short x0=0,y0=0,x1=0,y1=0, rad=0;
+    char abs1=0, abs2=0, move=0, op=0;
 
-    // esc[1;2;3;4;`b;*
-    // m - move relative
-    // M - move absolute
-    // l,L line
-    // r,R, rf, RF rect
-    // c, cf circle
-    // s,S,sf,SF  rounded rect
-    // h,H horiz
-    // v,V vert
+    // esc[x;y`op;*
+    // esc[x;y;x;y`op;*
+    // op prefix: +-@.
+    //   +  relative position
+    //   @  absolute position
+    //   -  position relative to 1st point
+    //   .  update position
 
     // esc[7m = reverse color
     if( text_attr & ATTR_REVERSE ) color = color_bg;
 
-    if( !strcmp(xx_text, "m") ){
-        cx += x3_arg[0];
-        cy += x3_arg[1];
+    // parse op string
+    if( xx_text[0] == '@' ) abs1 = '@';
+    if( xx_text[1] == '@' ) abs2 = '@';
+    if( xx_text[1] == '-' ) abs2 = '-';  // rel to x0,y0; eg. width,height
+
+    for(op=0; xx_text[op]; op++){
+        switch( xx_text[op] ){
+        case '.':
+        case '>':	// move only x
+        case '^':	// move only y
+            move = xx_text[op]; break;
+        case '-':	// relative to x0,y0
+        case '+':	// relative
+        case '@':	// absolute
+            break;
+        default:
+            goto breakfor;
+        }
     }
-    if( !strcmp(xx_text, "M") ){
-        cx = x3_arg[0];
-        cy = x3_arg[1];
+breakfor:
+
+    const struct DrawParam *dp=0;
+    char i;
+    for(i=0; draw_param[i].name; i++){
+        if( !strcmp(draw_param[i].name, xx_text+op) )
+            dp = draw_param +i;
     }
 
-    // esc[x1,y1;`l*
-    if( !strcmp(xx_text, "l") ){
-        if( x3_argn > 2 ) pattern = PATTERN(x3_arg[2]);
-        line(cx, cy, cx+x3_arg[0], cy+x3_arg[1], color, pattern);
-        cx += x3_arg[0];
-        cy += x3_arg[1];
-    }
-    if( !strcmp(xx_text, "L") ){
-        if( x3_argn > 2 ) pattern = PATTERN(x3_arg[2]);
-        line(cx, cy, x3_arg[0], x3_arg[1], color, pattern);
-        cx = x3_arg[0];
-        cy = x3_arg[1];
+    if( !dp ) return;
+
+
+    char reqd = 0;
+    if( dp->is_onept == 0 ) reqd += 2;
+    if( dp->has_rad ) reqd ++;
+    char optd = reqd;
+    if( dp->has_patt ) optd ++;
+
+    if( x3_argn > optd ){
+        // more coords
+        if( x3_argn > (reqd+2) ) pattern = PATTERN(x3_arg[reqd+2]);
+        if( dp->is_onept ){
+            x0=x1=x3_arg[0];
+            y0=y1=x3_arg[1];
+            rad=x3_arg[2];
+        }else{
+            x0=x3_arg[0];
+            y0=x3_arg[1];
+            x1=x3_arg[2];
+            y1=x3_arg[3];
+            rad=x3_arg[4];
+        }
+    }else{
+        // minimal coords
+        if( x3_argn > (reqd) ) pattern = PATTERN(x3_arg[reqd]);
+
+        if( dp->is_onept ){
+            rad = x3_arg[0];
+        }else{
+            x1=x3_arg[0];
+            y1=x3_arg[1];
+            rad=x3_arg[2];
+        }
     }
 
-    // esc[radius;`c*
-    if( !strcmp(xx_text, "c") ){
-        circle(cx, cy, x3_arg[0], color);
+    if( !abs1 ){
+        x0 += cx;
+        y0 += cy;
     }
-    if( !strcmp(xx_text, "cf") ){
-        circle_filled(cx, cy, x3_arg[0], color);
+    if( abs2 == 0 ){
+        x1 += cx;
+        y1 += cy;
     }
-
-    // esc[x1,y1;`r;*
-    if( !strcmp(xx_text, "r") ){
-        if( x3_argn > 2 ) pattern = PATTERN(x3_arg[2]);
-        rect(cx, cy, cx+x3_arg[0], cy+x3_arg[1], color, pattern);
-        cx += x3_arg[0];
-        cy += x3_arg[1];
-    }
-    if( !strcmp(xx_text, "rf") ){
-        rect_filled(cx, cy, cx+x3_arg[0], cy+x3_arg[1], color);
-        cx += x3_arg[0];
-        cy += x3_arg[1];
-    }
-    if( !strcmp(xx_text, "R") ){
-        if( x3_argn > 2 ) pattern = PATTERN(x3_arg[2]);
-        rect(cx, cy, x3_arg[0], x3_arg[1], color, pattern);
-        cx = x3_arg[0];
-        cy = x3_arg[1];
-    }
-    if( !strcmp(xx_text, "RF") ){
-        rect_filled(cx, cy, x3_arg[0], x3_arg[1], color);
-        cx = x3_arg[0];
-        cy = x3_arg[1];
+    if( abs2 == '-' ){
+        x1 += x0;
+        y1 += y0;
     }
 
-    // rounded corner rects - esc[x1,y1;rad;`rr;*
-    if( !strcmp(xx_text, "rr") ){
-        if( x3_argn > 3 ) pattern = PATTERN(x3_arg[3]);
-        rrect(cx, cy, cx+x3_arg[0], cy+x3_arg[1], x3_arg[2], color, pattern);
-        cx += x3_arg[0];
-        cy += x3_arg[1];
+#if 0
+    fprintf(stderr, "> %d, %s (%d,%d,%d,%d) cur (%d %d)\n",
+            x3_argn, xx_text, x3_arg[0], x3_arg[1], x3_arg[2], x3_arg[3], cx, cy);
+
+    fprintf(stderr, "> %s (%d,%d,%d,%d) r %d, p %x, a %d,%d, r %d, o %d, ->%d\n",
+            dp->name, x0,y0,x1,y1, rad, pattern, abs1, abs2, reqd, optd, move);
+#endif
+
+    if( !strcasecmp(xx_text+op, "m") ){
+        move = '.';
     }
-    if( !strcmp(xx_text, "rrf") ){
-        rrect_filled(cx, cy, cx+x3_arg[0], cy+x3_arg[1], x3_arg[2], color);
-        cx += x3_arg[0];
-        cy += x3_arg[1];
+    if( !strcasecmp(xx_text+op, "l") ){
+        line(x0,y0, x1,y1, color, pattern);
     }
-    if( !strcmp(xx_text, "RR") ){
-        if( x3_argn > 3 ) pattern = PATTERN(x3_arg[3]);
-        rrect(cx, cy, x3_arg[0], x3_arg[1], x3_arg[2], color, pattern);
-        cx = x3_arg[0];
-        cy = x3_arg[1];
+    if( !strcasecmp(xx_text+op, "c") ){
+        circle(x0, y0, rad, color);
     }
-    if( !strcmp(xx_text, "RRF") ){
-        rrect_filled(cx, cy, x3_arg[0], x3_arg[1], x3_arg[2], color);
-        cx = x3_arg[0];
-        cy = x3_arg[1];
+    if( !strcasecmp(xx_text+op, "cf") ){
+        circle_filled(x0, y0, rad, color);
+    }
+    if( !strcasecmp(xx_text+op, "r") ){
+        rect(x0,y0,x1,y1, color, pattern);
+    }
+    if( !strcasecmp(xx_text+op, "rf") ){
+        rect_filled(x0,y0,x1,y1, color);
+    }
+    if( !strcasecmp(xx_text+op, "rr") ){
+        rrect(x0,y0,x1,y1, rad, color, pattern);
+    }
+    if( !strcasecmp(xx_text+op, "rrf") ){
+        rrect_filled(x0,y0,x1,y1, rad, color);
+    }
+
+    if( dp->is_onept ){
+        x1 = x0;
+        y1 = y0;
+    }
+
+    // update current position
+    switch( move ){
+    case '.':
+        cx = x1;
+        cy = y1;
+        break;
+    case '>':
+        cx = x1;
+        break;
+    case '^':
+        cy = y1;
+        break;
     }
 
     bound_pos();

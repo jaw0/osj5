@@ -511,11 +511,14 @@ sub font_name {
     (my $fontname = "$base") =~ s/\..*//;
     $fontname =~ s/-/_/g;
 
+    my($font, $size) = $fontname =~ /(.*)_(\d+)$/;
+
     open(M, $map);
     while(<M>){
         chomp;
         my @f = split;
-        return $f[1], $fontname if $f[0] eq $fontname;
+        return $f[1], $fontname         if $f[0] eq $fontname;
+        return "$f[1]_$size", $fontname if $f[0] eq $font;
     }
 
     return $fontname, $fontname;

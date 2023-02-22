@@ -23,7 +23,7 @@
 #  define MAXXTEXT 16
 #endif
 
-#define MAXX3ARG 4
+#define MAXX3ARG 8
 
 #define ATTR_REVERSE	1
 #define ATTR_ULINE	2
@@ -53,12 +53,12 @@ public:
     u_char text_scale;		// scale factor for text
     u_char text_attr;		// ATTR_*
     u_char text_height;		// font height * scale
-
-    u_char text_fg,  text_bg;	// ANSI code
-    int	   color_fg, color_bg;	// native value
 #ifdef GFXDPY_BEEPS
     u_char volume;
 #endif
+
+    u_char text_fg,  text_bg;	// ANSI code
+    int	   color_fg, color_bg;	// native value
 
     const Font *font;		// current font
     short  cx,cy;		// current cursor position
