@@ -86,40 +86,6 @@ static const ssdCmd ssd1351_display[] = {
 };
 
 
-#if 0
-static const u_char ssd1351_dpy_init[] = {
-    0xFD, 0x12,                 // set command lock
-    0xFD, 0xB1,                 // set command lock
-    0xAE,                       // display off
-    0xB3, 0xF1,                 // set clock rate
-    0xCA, 0x7F,                 // set mux ratio
-    0xA0, 0x74,                 // set remap
-    0x15, 0, 0x7F,              // set columns
-    0x75, 0, 0x7F,              // set rows
-    0xA1, 0,                    // start line; 0x60 for 128x96
-    0xA2, 0,                    // display offset
-    0x85, 0,                    // set gpio
-    0xAB, 0x1,                  // function select
-    0xB1, 0x32,                 // precharge
-    0xBE, 0x5,                  // vcomh
-    0xC1, 0xC8, 0x80, 0xC8,     // contrast abc
-    0xC7, 0xF,                  // contrast master
-    0xB4, 0xA0, 0xB5, 0x55,     // set vsl
-    0xB6, 0x1,                  // precharge2
-    0xA6,                       // normal display
-    0xA5,                       // display on
-
-};
-
-
-static const u_char ssd1351_origin[] = { 0x15, 0, 127, 0x75, 0, 127 };
-static const u_char ssd1351_invert[] = { 0xA7 };
-static const u_char ssd1351_normal[] = { 0xA6 };
-static const u_char ssd1351_sleep[]  = { 0xAE };
-static const u_char ssd1351_awake[]  = { 0xAF };
-#endif
-
-
 //****************************************************************
 
 class SSD1351 : public GFXdpy {
@@ -209,82 +175,7 @@ ssd1351_init(struct Device_Conf *dev){
 
 
 /****************************************************************/
-#if 1
 
-#define SR_BSY		0x80
-#define SR_TXE		0x2
-#define SR_RXNE		0x1
-static int
-xspi_rxtx1(SPI_TypeDef *dev, int val){
-    int sr, c;
-    int x = 1000000;
-
-    // wait until ready
-    while(1){
-        sr = dev->SR;
-        if( sr & SR_TXE  ) break;
-        if( --x <= 0 ){
-            kprintf(">> %x %x %x\n", sr, dev, dev->CR1);
-            return -1;
-        }
-    }
-
-    dev->DR = c;
-
-    while(1){
-        sr = dev->SR;
-        if( sr & SR_RXNE ){
-            c = dev->DR;
-            return c;
-        }
-        if( --x <= 0 ){
-            kprintf(">> %x %x %x\n", sr, dev, dev->CR1);
-            return -1;
-        }
-    }
-}
-#endif
-
-static int
-_ssd1351_setcd(SSD1351 *ii){
-    gpio_set( ii->spicf_cmd.ss[1] );
-}
-
-#if 0
-static void
-_ssd1351_cmds(SSD1351 *ii, const struct ssdCmd *cmd, int len){
-    spi_msg m[3];
-    int i, j;
-
-    for(i=0; i<len; i++, cmd++){
-        gpio_clear( ii->spicf_cmd.ss[1] );
-        gpio_clear( ii->spicf_cmd.ss[0] );
-
-        m[0].mode = SPIMO_WRITE;
-        m[0].dlen = 1;
-        m[0].data = (char*)&cmd->cmd;
-
-        if( cmd->narg == 0 ){
-            spi_xfer(& ii->spicf_cmd, 1, m, 100000);
-            gpio_set( ii->spicf_cmd.ss[0] );
-            continue;
-        }
-
-        m[1].mode  = SPIMO_FUNC;
-        m[1].until = (int(*)(int))_ssd1351_setcd;
-        m[1].data  = (char*)ii;
-
-        m[2].mode = SPIMO_WRITE;
-        m[2].dlen = cmd->narg;
-        m[2].data = (char*)cmd->arg;
-
-        spi_xfer(& ii->spicf_cmd, 3, m, 100000);
-
-        gpio_set( ii->spicf_cmd.ss[0] );
-    }
-
-}
-#else
 static void
 _ssd1351_cmds(SSD1351 *ii, const struct ssdCmd *cmd, int len){
     spi_msg m[3];
@@ -300,6 +191,7 @@ _ssd1351_cmds(SSD1351 *ii, const struct ssdCmd *cmd, int len){
 
         if( cmd->narg == 0 ) continue;
 
+        // device requires wiggling C/D in the middle of the command
         m[0].mode = SPIMO_WRITE;
         m[0].dlen = cmd->narg;
         m[0].data = (char*)cmd->arg;
@@ -309,8 +201,6 @@ _ssd1351_cmds(SSD1351 *ii, const struct ssdCmd *cmd, int len){
     }
 
 }
-#endif
-
 
 // flush display buffer to device
 void
