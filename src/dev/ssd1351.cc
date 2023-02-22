@@ -317,7 +317,6 @@ void
 SSD1351::flush(void){
     spi_msg m;
 
-    return ; // XXX
     _ssd1351_cmds(this, ssd1351_origin,  ELEMENTSIN(ssd1351_origin));
     _ssd1351_cmds(this, ssd1351_display, ELEMENTSIN(ssd1351_display));
 
