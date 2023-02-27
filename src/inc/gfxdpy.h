@@ -125,6 +125,8 @@ public:
     void circle_filled(int,int,int,int, int w=0, int s=0xF);
     void bitblit(const u_char *, int, int, int, int, int);
 
+private:
+    void set_blank_pixel(int, int, int);
 };
 
 const Font *find_font(const char *name);

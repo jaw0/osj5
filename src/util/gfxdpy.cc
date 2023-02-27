@@ -373,6 +373,19 @@ get_charld(const Font *f, int ch, int x) {
     }
 }
 
+void
+GFXdpy::set_blank_pixel(int x, int y, int h) {
+    int pix = 0;
+    if( text_attr & ATTR_ULINE  && y == h-1) pix = 1;
+    if( text_attr & ATTR_STRIKE && y == h/2) pix = 1;
+
+    if( (residue == 0) || pix ){
+        if( text_attr & ATTR_REVERSE ) pix = ! pix;
+        pix = pix ? color_fg : color_bg;
+        set_pixel(x, y, pix );
+    }
+}
+
 // new compressed format
 int
 GFXdpy::render_glyph2(int ch){
@@ -400,7 +413,7 @@ GFXdpy::render_glyph2(int ch){
     for(x=0; x<l0; x++){
         for(y=0; y<h; y++){
             if( residue == 0 )
-                set_pixel(x + cx, y + cy, color_bg );
+                set_blank_pixel(x + cx, y + cy, h );
         }
         if( residue > 0 ) residue --;
     }
@@ -437,7 +450,7 @@ GFXdpy::render_glyph2(int ch){
 
     for(x=0; x<r0; x++){
         for(y=0; y<h; y++){
-            set_pixel(x0 + x + cx, y + cy, color_bg );
+            set_blank_pixel(x0 + x + cx, y + cy, h );
         }
     }
 
