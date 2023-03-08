@@ -32,8 +32,10 @@
 #define CDC_RXD_EP  0x01
 #define CDC_TXD_EP  0x81
 #define CDC_NTF_EP  0x82
+#define CDC_COMM_IFACE 0
+#define CDC_DATA_IFACE 1
 
-#define CDC_NTF_SZ  8
+#define CDC_NTF_SZ  CDC_FSSIZE
 
 #define RX_QUEUE_SIZE	CDC_HSSIZE
 
@@ -49,6 +51,10 @@
 
 #ifndef VCP_TXBUF_SIZE
 # define VCP_TXBUF_SIZE CDC_FSSIZE
+#endif
+
+#ifndef VCP_NTBUF_SIZE
+# define VCP_NTBUF_SIZE CDC_FSSIZE
 #endif
 
 
@@ -184,6 +190,7 @@ static const usb_device_qualifier_t device_qualifier = {
 
 struct VCP;
 void vcp_tx_complete(struct VCP *, int);
+void vcp_ntf_complete(struct VCP *, int);
 void vcp_recv_chars(struct VCP*, int, int);
 void vcp_reset(struct VCP *);
 void vcp_configure(struct VCP *);
@@ -198,7 +205,7 @@ USB_DESCR(cdc_prod_desc,  USB_PROD_DESC);
 static const usbd_config_t cdc_usbd_config = {
     .cb_reset       = vcp_reset,
     .cb_configure   = vcp_configure,
-    .cb_tx_complete = { [CDC_TXD_EP & 0x7f] = vcp_tx_complete },
+    .cb_tx_complete = { [CDC_TXD_EP & 0x7f] = vcp_tx_complete, [CDC_NTF_EP & 0x7f] = vcp_ntf_complete },
     .cb_recv_setup  = vcp_recv_setup,
     .cb_recv = { [CDC_RXD_EP & 0x7f] = vcp_recv_chars },
 
@@ -248,8 +255,10 @@ static struct VCP {
     struct queue rxq, txq;
     char rxbuf[ VCP_RXBUF_SIZE ];
     char txbuf[ VCP_TXBUF_SIZE ];
+    char ntbuf[ VCP_NTBUF_SIZE ];
+    char nt2buf[ VCP_NTBUF_SIZE ];
 
-    uint8_t rblen, tblen;
+    uint8_t rblen, tblen, ntlen, nt2len;
     uint8_t ready;
     uint8_t is_hs;
 
@@ -358,6 +367,7 @@ vcp_recv_setup(struct VCP *p, const char *buf, int len){
         p->ready = req->wValue & 2;
         usbd_reply(p->usbd, 0, "", 0, 0);
         maybe_tx(p);
+        vcp_send_ntf_initial(p);
         return 1;
     case UCDC_SET_LINE_CODING:
         trace_crumb2("vcp", "set/lcod", len, req->wLength);
@@ -380,6 +390,110 @@ vcp_recv_setup(struct VCP *p, const char *buf, int len){
     return 0;
 }
 
+
+void
+vcp_send_notify(struct VCP *p, int code, int value, int len, const char *data, int noblock){
+    usb_cdc_notification_t *b = 0;
+    char bufn = 0;
+    int plx;
+
+    while(1){
+        plx = spldisk();
+
+        if( p->ntlen && !p->nt2len ){
+            // buf1 is full, buf2 available -> use buf2
+            bufn = 2;
+            b = (usb_cdc_notification_t*)p->nt2buf;
+            p->nt2len = sizeof(usb_cdc_notification_t) + len;
+            break;
+        }
+
+        if( !p->ntlen && !p->nt2len ){
+            // both bufs available -> use buf1
+            bufn = 1;
+            b = (usb_cdc_notification_t*)p->ntbuf;
+            p->ntlen = sizeof(usb_cdc_notification_t) + len;
+            break;
+        }
+
+        if( noblock ){
+            splx(plx);
+            return;
+        }
+
+        // wait for both to be available
+        tsleep( &p->ntbuf, -1, "usb/n", 10000 );
+
+        b = (usb_cdc_notification_t*)p->ntbuf;
+    }
+
+    trace_crumb2("vcp", "ntfq", bufn, value);
+
+    bzero(b, sizeof(p->ntbuf));
+    b->bmRequestType = UCDC_NOTIFICATION;
+    b->bNotification = code;
+    b->wValue        = value;
+    b->wIndex        = CDC_COMM_IFACE;
+    b->wLength       = len;
+    bcopy(data, b->data, len);
+
+    splx(plx);
+
+    vcp_send_next_notify(p);
+}
+
+void
+vcp_send_next_notify(struct VCP *p){
+
+    trace_crumb2("vcp", "ntf>?", p->ready, p->usbd->curr_state);
+
+    if( !p->ready ) return;
+    if( !usbd_isactive(p->usbd) ) return;
+    if( usbd_isbusy(p->usbd, CDC_NTF_EP) ) return;
+
+    int plx = spldisk();
+
+    if( p->ntlen ){
+        int zp = p->is_hs ? 1 : !(p->ntlen & (CDC_NTF_SZ - 1));
+        trace_crumb3("vcp", "ntf>", 1, p->ntlen, zp);
+        usbd_write(p->usbd, CDC_NTF_EP, p->ntbuf, p->ntlen, zp );
+    }else if( p->nt2len ){
+        int zp = p->is_hs ? 1 : !(p->nt2len & (CDC_NTF_SZ - 1));
+        trace_crumb3("vcp", "ntf>", 2, p->nt2len, zp);
+        usbd_write(p->usbd, CDC_NTF_EP, p->nt2buf, p->nt2len, zp );
+    }else{
+        trace_crumb2("vcp", "ntf>?0", p->ntlen, p->nt2len);
+    }
+
+    splx(plx);
+}
+
+void
+vcp_ntf_complete(struct VCP *p, int ep){
+
+    trace_crumb2("vcp", "ntfc", p->ntlen, p->nt2len);
+
+    if( p->ntlen ){
+        p->ntlen = 0;
+        if( p->nt2len ){
+            vcp_send_next_notify(p);
+            return;
+        }
+    }else{
+        p->nt2len = 0;
+    }
+    wakeup( &p->ntbuf );
+}
+
+void
+vcp_send_ntf_initial(struct VCP *p){
+    // network connect
+    vcp_send_notify(p, UCDC_N_NETWORK_CONNECTION, p->ready ? 1 : 0, 0, 0, 1);
+
+    // speed change : <downlink(to host)speed, uplink(from host)speed>
+    uint32_t speeds[2] = { p->line_state.dwDTERate, p->line_state.dwDTERate };
+    vcp_send_notify(p, UCDC_N_CONNECTION_SPEED_CHANGE, 0, 8, speeds, 1);
+}
 
 static int
 vcp_status(FILE*f){
@@ -424,6 +538,7 @@ vcp_tx_complete(struct VCP *p, int ep){
     maybe_tx(p);
     maybe_dequeue(p);
     wakeup( &p->txq );
+
     //trace_crumb1("vcp", "/tx/c", ep);
 }
 
@@ -530,9 +645,13 @@ maybe_dequeue(struct VCP* p){
     }
 
     p->rblen = 0;
-    p->ready = 1;
 
     usb_recv_ack( p->usbd, CDC_RXD_EP );
+
+    if( !p->ready ){
+        vcp_send_ntf_initial(p);
+        p->ready = 1;
+    }
 }
 
 static int
@@ -596,3 +715,20 @@ DEFUN(vcpreset, "")
 }
 
 #endif
+
+DEFUN(ntftest, "")
+{
+    struct VCP *v = vcom + 0;
+
+    // network connect
+    vcp_send_notify(v, UCDC_N_NETWORK_CONNECTION, 1, 0, 0, 0);
+
+    // speed change : <downlink(to host)speed, uplink(from host)speed>
+    uint32_t speeds[2] = { v->line_state.dwDTERate, v->line_state.dwDTERate };
+    vcp_send_notify(v, UCDC_N_CONNECTION_SPEED_CHANGE, 0, 8, speeds, 0);
+
+
+    // bits: <overrun,parity,framing,inging,break,TXcarrier,RXcarrier>
+    // UCDC_N_SERIAL_STATE             0x20    ACM/optional
+
+}
