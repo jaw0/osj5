@@ -369,7 +369,7 @@ usbd_send_more(usbd_t *u, int ep){
         if( l < 0 ){
             // error
             trace_crumb2("usbd", "ERROR", ep, l);
-            kprintf("usbd send err %d\n", l);
+            kprintf("usbd send (ep %d len %d) err %d\n", epa, u->epd[epa].wlen, l);
             u->epd[epa].wpending = 0;
             return;
         }

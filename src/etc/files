@@ -42,6 +42,7 @@ usbd:           usb/usbd.c
 vcp:            usb/vcp.c
 msc:            usb/msc.c
 vcpmsc:         usb/vcpmsc.c
+midi:           usb/midi.c
 
 
 
