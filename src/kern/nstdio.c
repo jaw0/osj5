@@ -27,7 +27,6 @@ int finit(FILE *f){
     f->flags    = 0;
     f->prevout  = 0;
     f->dupped   = 0;
-    f->flags   |= F_ICRNL | F_ONLRET;
     f->codepage = CODEPAGE_BINARY;
 
     f->d = 0;
@@ -178,7 +177,7 @@ int fwrite(FILE *f, const char *b, int n){
 
     if(!f || !f->fs)
         PANIC(bad_f);
-    if(f->fs->write)
+    if(f->fs->write && (f->flags == 0))
         return (f->fs->write)(f,b,n);
 
     /* else iterate putc */

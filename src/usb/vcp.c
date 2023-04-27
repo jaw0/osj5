@@ -100,7 +100,7 @@ static const struct cdc_config cdc_config ALIGN2 = {
         .bConfigurationValue = 1,
         .iConfiguration      = 0,
         .bmAttributes        = 0x80,
-        .bMaxPower           = 50,
+        .bMaxPower           = 250,	// * 2mA
     },
     .comm                    = {
         .bLength             = sizeof(usb_interface_descriptor_t),
@@ -277,7 +277,9 @@ vcp_init(struct Device_Conf *dev){
     finit( & v->file );
     v->file.fs = &vcp_port_fs;
     v->file.codepage = CODEPAGE_UTF8;
+    v->file.flags   |= F_ICRNL | F_ONLRET;
     v->file.d  = (void*)v;
+
     queue_init( &v->rxq, RX_QUEUE_SIZE );
     queue_init( &v->txq, TX_QUEUE_SIZE );
 

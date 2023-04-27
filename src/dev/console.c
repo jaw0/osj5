@@ -83,6 +83,7 @@ console_init(struct Device_Conf *dev){
     }
 
     console_port  = f;
+    f->flags |= F_ICRNL | F_ONLRET;
     kconsole_port = dup(f);
 
     kconsole_port->flags |= F_NONBLOCK;

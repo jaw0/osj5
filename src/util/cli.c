@@ -722,7 +722,6 @@ DEFUN(cat, "cat files")
 {
     int i;
     FILE *f;
-    char buf[32];
 
     if( argc < 2 ){
         /* stdin -> stdout */
@@ -734,9 +733,8 @@ DEFUN(cat, "cat files")
     while(++argv, --argc){
         f = fopen( *argv, "r" );
         if( f ){
-            while( (i=fread(f, buf, sizeof(buf))) > 0 ){
-                fwrite(STDOUT, buf, i);
-            }
+        while( (i=fgetc(f))!=-1 && i!=4 )
+            putchar(i);
             fclose(f);
         }else{
             fprintf(STDERR, "could not open file \"%s\"\n", *argv);
