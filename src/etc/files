@@ -25,6 +25,7 @@ ssd1331:        dev/ssd1331.cc util/gfxdpy.cc
 ssd1322:        dev/ssd1322.cc util/gfxdpy.cc
 ssd1351:        dev/ssd1351.cc util/gfxdpy.cc
 st7565:         dev/st7565.cc  util/gfxdpy.cc
+sh1122:         dev/sh1122.cc  util/gfxdpy.cc
 epaper:         dev/epaper.cc  util/gfxdpy.cc
 sdcard:         dev/sdcard.c
 
