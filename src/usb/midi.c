@@ -171,6 +171,22 @@ midi_read(){
     return m;
 }
 
+// non-blocking
+midi_t
+midi_maybe_read(){
+    struct MIDI *p = &midiinfo;
+    midi_t m = 0;
+
+    int plx = spldisk();
+    if( p->rxq.len ){
+        m = qpop( &p->rxq );
+        maybe_dequeue(p);
+    }
+
+    splx(plx);
+    return m;
+}
+
 void
 midi_recv_chars(struct MIDI *p, int ep, int len){
     trace_crumb2("mid", "rcv", ep, len);
