@@ -57,7 +57,6 @@
 # define VCP_NTBUF_SIZE CDC_FSSIZE
 #endif
 
-
 #define ALIGN2 __attribute__ ((aligned (2)))
 
 static const usb_device_descriptor_t cdc_dev_desc ALIGN2  = {
@@ -100,7 +99,7 @@ static const struct cdc_config cdc_config ALIGN2 = {
         .bConfigurationValue = 1,
         .iConfiguration      = 0,
         .bmAttributes        = 0x80,
-        .bMaxPower           = 250,	// * 2mA
+        .bMaxPower           = USB_MAX_POWER_MA / 2,	// * 2mA
     },
     .comm                    = {
         .bLength             = sizeof(usb_interface_descriptor_t),
@@ -716,7 +715,6 @@ DEFUN(vcpreset, "")
     return 0;
 }
 
-#endif
 
 DEFUN(ntftest, "")
 {
@@ -734,3 +732,4 @@ DEFUN(ntftest, "")
     // UCDC_N_SERIAL_STATE             0x20    ACM/optional
 
 }
+#endif

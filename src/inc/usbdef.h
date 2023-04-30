@@ -33,6 +33,9 @@
 # define USB_PROD_DESC "gadget"
 #endif
 
+#ifndef USB_MAX_POWER_MA
+# define USB_MAX_POWER_MA 500
+#endif
 
 #define USB_DESCR(name, text) \
 static const usb_wdata_descriptor_t name ALIGN2 = { 2 + 2*sizeof(text), USB_DTYPE_STRING, CONCAT(u, text) }
