@@ -312,12 +312,69 @@ sub mkglyph2 {
         }
     }
 
-    my @res = unpack('C*', $vec);
+    # bytes | run-length encode?
+    # my @res = unpack('C*', $vec);
+    my @res = rle( $vec );
+
     debug("mkg2 $n : $l0/$r0 $bx/$by [@data] $nbytes [@res]");
     # check2( $ncol, $by, @res );
 
     print "\t{ .l0 = $l0, .r0 = $r0, .ncol = $ncol, .xadj = 0, .pos = $pos }, // $n [$nbytes]\n";
     return @res
+}
+
+# run length encoded
+sub rle {
+    my $vec = shift;
+
+    my $bits = length($vec) * 8;
+    my @run;
+    my $cb = 0;
+    my $nb = 0;
+
+    for my $i (0 .. $bits-1){
+        my $b = vec($vec, $i, 1);
+        if( $b == $cb ){
+            $nb ++;
+        }else{
+            push @run, $nb;
+            $cb = $b;
+            $nb = 1;
+        }
+    }
+
+    push @run, $nb;
+
+    debug("runs: @run" );
+
+    my @res;
+    # <#0:5bits><#1:3bits>
+
+    while( @run ){
+        my $zeros = shift @run;
+        my $ones  = shift @run;
+
+        my $onesx = 0;
+
+        while( $zeros > 0x1F ){
+            push @res, 0x1F << 3;
+            $zeros -= 0x1F;
+        }
+        if( $ones > 7 ){
+            $onesx = $ones - 7;
+            $ones = 7;
+        }
+
+        push @res, ($zeros << 3) | $ones;
+
+        while( $onesx ){
+            $ones = ($onesx > 7) ? 7 : $onesx;
+            $onesx -= $ones;
+            push @res, $ones;
+        }
+    }
+
+    return @res;
 }
 
 sub check2 {

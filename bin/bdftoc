@@ -7,6 +7,7 @@
 # Function: convert bdf font to C.
 #   see also src/util/gfxdpy.c, src/inc.font.h
 
+use POSIX;
 use Getopt::Std;
 use strict;
 
@@ -37,6 +38,10 @@ my $pixsize;
 my $proportional;
 my $metrics = "0";
 my %font;
+
+my @histo0 = (0) x 10;
+my @histo1 = (0) x 10;
+my %histoX;
 
 print "\n// file: $file\n";
 
@@ -136,7 +141,6 @@ debug( "FBBX=>\t$fbw, $fbh, $fbx, $fby : $fbH : $spacing" );
 
 # die "$fontname: font too tall!\n" if $ybytes > 4;
 
-
 ################################################################
 
 print <<EOH;
@@ -165,12 +169,13 @@ if( $opt{t} && ($fbh > 8) ){
     for my $n ($START .. $LAST){
         my @d = mkglyph2( $n, $pos );
         $pos += @d;
-        $data .= "\t" . join(' ', map{ "$_," } @d) . "\t// $n\n";
+        $data .= "\t" . join(' ', map{ sprintf("0x%x,", $_) } @d) . "\t// $n\n";
     }
     print "    },\n";
     print "    .data       = {\n$data\n    }\n";
 
 
+    debug("data size: $pos" );
 }else{
     print "    .metrics    = $metrics,\n    .data       = {\n";
 
@@ -182,6 +187,13 @@ if( $opt{t} && ($fbh > 8) ){
 
 
 print "};\n";
+
+debug("hist0 @histo0");
+debug("hist1 @histo1");
+for my $k (keys %histoX) {
+    debug("  histo $k : $histoX{$k}" );
+}
+
 exit;
 
 ################################################################
@@ -243,12 +255,76 @@ sub mkglyph2 {
         }
     }
 
-    my @res = unpack('C*', $vec);
+    # bytes | run-length encode?
+    # my @res = unpack('C*', $vec);
+    my @res = rle( $vec );
+
     debug("mkg2 $n : $l0/$r0 $bx/$by [@data] $nbytes [@res]");
     # check2( $ncol, $by, @res );
 
     print "\t{ .l0 = $l0, .r0 = $r0, .ncol = $ncol, .xadj = $xadj, .pos = $pos }, // $n [$nbytes]\n";
     return @res
+}
+
+
+# run length encoded
+sub rle {
+    my $vec = shift;
+
+    my $bits = length($vec) * 8;
+    my @run;
+    my $cb = 0;
+    my $nb = 0;
+
+    for my $i (0 .. $bits-1){
+        my $b = vec($vec, $i, 1);
+        if( $b == $cb ){
+            $nb ++;
+        }else{
+            push @run, $nb;
+            $cb = $b;
+            $nb = 1;
+        }
+    }
+
+    push @run, $nb;
+
+    debug("runs: @run" );
+
+    my @res;
+    # <#0:5bits><#1:3bits>
+
+    while( @run ){
+        my $zeros = shift @run;
+        my $ones  = shift @run;
+
+        my $bf0 = bitsfor($zeros);
+        my $bf1 = bitsfor($ones);
+        $histo0[ $bf0 ] ++;
+        $histo1[ $bf1 ] ++;
+        $histoX{ "<$bf0 $bf1>" } ++;
+
+        my $onesx = 0;
+
+        while( $zeros > 0x1F ){
+            push @res, 0x1F << 3;
+            $zeros -= 0x1F;
+        }
+        if( $ones > 7 ){
+            $onesx = $ones - 7;
+            $ones = 7;
+        }
+
+        push @res, ($zeros << 3) | $ones;
+
+        while( $onesx ){
+            $ones = ($onesx > 7) ? 7 : $onesx;
+            $onesx -= $ones;
+            push @res, $ones;
+        }
+    }
+
+    return @res;
 }
 
 sub check1 {
@@ -418,10 +494,11 @@ sub analyze {
 
     debug( "fbbx:\t$fbw, $fbh, $fbx, $fby" );
     debug( "dx:\t$dx; $maxdx" );
+    debug( "pixsize $pixsize" );
     debug( "bb:\tx: $minx .. $maxx, y: $miny .. $maxy" );
 
-    $fbH = $fbh;
     $fbh = $maxy - $miny;
+    $fbH = $fbh;
     $fbH = $pixsize if $pixsize >= $fbh;
     debug("fbh: $fbh; max $maxy - min $miny");
 
@@ -508,6 +585,11 @@ sub font_name {
     }
 
     return $fontname, $fontname;
+}
+
+sub bitsfor {
+    my $n = shift;
+    ceil(log($n+1) / log(2));
 }
 
 ################################################################

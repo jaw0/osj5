@@ -418,30 +418,49 @@ GFXdpy::render_glyph2(int ch){
         if( residue > 0 ) residue --;
     }
 
-    for(x=0; x<ncol; x++){
-        char x0 = x * text_scale + l0;
-        for(xx=x0; xx<x0+text_scale; xx++){
-            for(y=0; y<font->height; y++){
-                short bno = x * font->height + y;
-                char p  = (cd[ bno >> 3 ] & (1 << (bno & 7))) ? 1 : 0;
-                char y0 = y * text_scale;
+    // run length encoded data
+    x = 0;
+    y = 0;
+    short pos=0, done=0, size=ncol * font->height;
 
-                for(yy=y0; yy<y0+text_scale; yy++){
-                    int pix = p;
-                    if( text_attr & ATTR_ULINE  && yy == h-1) pix = 1;
-                    if( text_attr & ATTR_STRIKE && yy == h/2) pix = 1;
+    for(pos=0; done<size; pos++){
+        uint8_t run   = cd[ pos ];
+        uint8_t zeros = run >> 3;
+        uint8_t ones  = run & 7;
+        char m, n;
 
-                    // do not re-erase overlapping proportionally spaced glyphs
-                    if( (residue == 0) || pix ){
-                        if( text_attr & ATTR_REVERSE ) pix = ! pix;
-                        pix = pix ? color_fg : color_bg;
+        for(m=0; m<2; m++){
+            char l = m ? ones : zeros;
+            for(n=0; n<l; n++){
+                char x0 = x * text_scale + l0;
+                for(xx=x0; xx<x0+text_scale; xx++){
+                    char y0 = y * text_scale;
+                    for(yy=y0; yy<y0+text_scale; yy++){
 
-                        set_pixel(xx + cx, yy + cy, pix );
+                        int pix = m;
+                        if( text_attr & ATTR_ULINE  && yy == h-1) pix = 1;
+                        if( text_attr & ATTR_STRIKE && yy == h/2) pix = 1;
+
+                        // do not re-erase overlapping proportionally spaced glyphs
+                        if( (residue == 0) || pix ){
+                            if( text_attr & ATTR_REVERSE ) pix = ! pix;
+                            pix = pix ? color_fg : color_bg;
+
+                            set_pixel(xx + cx, yy + cy, pix );
+                        }
+
                     }
                 }
-            }
 
-            if( residue > 0 ) residue --;
+
+                done ++;
+                y ++;
+                if( y >= font->height ){
+                    y = 0;
+                    x ++;
+                }
+
+            }
         }
     }
 
