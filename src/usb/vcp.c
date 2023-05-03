@@ -624,6 +624,8 @@ static void
 maybe_dequeue(struct VCP* p){
     int i,j;
 
+    trace_crumb1("vcp", "dequeue", p->rblen);
+
     if( !p->rblen ) return;
     if( p->rblen > RX_QUEUE_SIZE - p->rxq.len ) return;
 
@@ -686,6 +688,11 @@ vcp_recv_chars(struct VCP *p, int ep, int len){
     p->rblen = l;
 
     maybe_dequeue(p);
+
+    // recvd zlp
+    if( !len )
+        usb_recv_ack( p->usbd, CDC_RXD_EP );
+
     maybe_tx(p);
     wakeup( &p->rxq );
 

@@ -370,6 +370,7 @@ usb_recv_ack(usbd_t *u, int ep){
     uint16_t *epr = usbepr[ep & 7];
 
     EP_RX_VALID(*epr);
+    trace_crumb1("usbfs", "recv/ack", ep);
 }
 
 int
@@ -453,7 +454,7 @@ USB_IRQ_HANDLER(void){
     int isr = USB->ISTR;
     usbfs_t *u = usb + 0;
 
-    trace_crumb1("usbfs",  "irq!", isr);
+    // trace_crumb1("usbfs",  "irq!", isr);
 
     if( isr & USB_ISTR_RESET ){
         usb_reset_handler(u);

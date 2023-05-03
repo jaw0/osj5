@@ -344,7 +344,7 @@ usbd_cb_recv(usbd_t *u, int ep, int len){
         return;
     }
 
-    // trace_crumb2("usbd", "recv/data", ep, len);
+    trace_crumb2("usbd", "recv/data", ep, len);
 
     if( u->cf && u->cf->cb_recv[ep] )
         u->cf->cb_recv[ep](u->cbarg, ep, len);
