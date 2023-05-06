@@ -64,6 +64,7 @@ public:
     short  cx,cy;		// current cursor position
 
 private:
+    const Font *quickfont[10];  // for \e[11-19m
     short  sx,sy;		// saved position
     char   residue;		// for proportional font rendering
 
@@ -108,6 +109,7 @@ public:
     void _set_pos(int, int);
     void set_pos(int, int);
     void bound_pos(void);
+    bool set_font_quick(int);
     bool set_font(int);
     bool set_font(int, int);
     bool set_font(const Font*);

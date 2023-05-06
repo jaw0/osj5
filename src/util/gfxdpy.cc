@@ -98,6 +98,11 @@ GFXdpy::reset(void){
     text_fg  = 7;
     text_bg  = 0;
     set_colors();
+
+    char i;
+    for(i=0; i<10; i++){
+        quickfont[i] = fonts[i];
+    }
 }
 
 void
@@ -107,6 +112,16 @@ GFXdpy::bound_pos(void){
     if( cx > width - 1 ) cx = width  - 1;
     if( cy > height - 1) cy = height - 1;
 }
+
+bool
+GFXdpy::set_font_quick(int f){
+    if( f < 10 ){
+        font = quickfont[ f ];
+        return 1;
+    }
+    return 0;
+}
+
 
 bool
 GFXdpy::set_font(int f){
@@ -662,10 +677,14 @@ GFXdpy::putchar(int ch){
             if( x3_argn )
                 text_height = x3_arg[1];
             break;
+        case 10:
+            // set current font as default font
+            quickfont[ x3_arg[0] - 10 ] = font;
+            break;
 
         default:
 #ifdef GFXDPY_CSIH_HANDLER
-            extern GFXDPY_CSIH_HANDLER(GFXdpy*, int, const short*, const char*);
+            extern int GFXDPY_CSIH_HANDLER(GFXdpy*, int, const short*, const char*);
             GFXDPY_CSIH_HANDLER(this, x3_argn, x3_arg, xx_text);
 #endif
             break;
@@ -766,7 +785,11 @@ GFXdpy::putchar(int ch){
             else if( x3_argn > 1 )
                 set_font( x3_arg[1] );
             else
-                set_font( x3_arg[0] - 10 );
+                set_font_quick( x3_arg[0] - 10 );
+
+            if( (xx_text[0] || (x3_argn > 1)) && (x3_arg[0] > 10) )
+                quickfont[ x3_arg[0] - 10 ] = font;
+
             break;
         }
         break;
@@ -1473,10 +1496,9 @@ gfxdpy_ioctl(FILE* f, int cmd, void* a){
     switch( cmd & 0xFF ){
     case 'g':		/* get */
         return (int) ii;
-        break;
     case 's':
         ii->set_sleep( a ? 1 : 0 );
-        break;
+        return 0;
     case 'b':
         return (int) ii->get_buffer();
     case 'f':
