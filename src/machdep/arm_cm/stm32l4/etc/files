@@ -21,3 +21,4 @@ spi:    machdep/arm_cm/stm32/src/spi.c
 usbd:   machdep/arm_cm/stm32/src/usb_fs.c
 usbd:   util/trace.c
 
+usbdotg:   usb/usbd.c machdep/arm_cm/stm32/src/usb_otg.c util/trace.c

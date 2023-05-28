@@ -330,6 +330,7 @@ sub process_file {
             my $type = '';
             my $args = '';
             my $unit;
+            my $driver;
 
             my ($dev, $n) = $name =~ /(\S*\D+)(\d*)$/;
 
@@ -341,16 +342,18 @@ sub process_file {
             ($init) = /init\s*([^\s]*)/   if /init/;
             ($type) = /type\s*([^\s]*)/   if /type/;
             ($unit) = /unit\s*([^\s]*)/   if /unit/;
+            ($driver) = /driver\s*([^\s]*)/   if /driver/;
             ($args) = /args\s+([0-9a-fx, ]+)/i if /args/;
 
             $type ||= $dev;
+            $driver ||= $type;
             $unit = $n unless defined $unit;
 
             print CONFH "#define USE_\U$type\E\n" unless $devs{$type};
 
             $devs{ $type } = $unit if $unit > $devs{$type};
             $devs{ $type } ++;
-            feature( $type, 'device' );
+            feature( $driver, 'device' );
 
             $init = $init || "${type}_init";
 

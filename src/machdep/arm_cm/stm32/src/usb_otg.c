@@ -16,7 +16,9 @@
 #include <gpio.h>
 #include <usbdef.h>
 #include <usbotg_impl.h>
-#include <usbotg.h>
+#ifndef PLATFORM_STM32L4
+#  include <usbotg.h>
+#endif
 #include <usbd.h>
 #include <userint.h>
 
@@ -83,6 +85,8 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
         _usb_otg_fs_init();
         name = "otgfs/fsphy";
         break;
+
+#ifdef USB_OTG_HS_PERIPH_BASE
     case 1: // HS
         usbdev[i].otg = USB_OTG_HS_PERIPH_BASE;
         usbdev[i].bufsize = USB_HS_FIFOSIZE;
@@ -91,7 +95,7 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
         name = "otghs/fsphy";
 
         // is there an internal HS PHY? (F7x3)
-#ifdef USBPHYC_BASE
+# ifdef USBPHYC_BASE
         // XXX F732 has the phyc  but no phy (ulpi only)
         // (is a 732 a 733 that failed QA?)
 
@@ -106,8 +110,9 @@ usb_init(struct Device_Conf *dev, usbd_t *usbd){
                 phy = 0; // HS on HS phy
             }
         }
-#endif
+# endif
         break;
+#endif
     }
 
     USB_OTG_t *otg = usbdev[i].otg;
@@ -796,7 +801,7 @@ USB_HS_IRQ_HANDLER(void){
 DEFUN(usbtest, "usb test")
 {
 
-    printf("usb: %x pma: %x\n", USB_OTG_FS_PERIPH_BASE, USB_OTG_FS->fifo);
+    // printf("usb: %x pma: %x\n", USB_OTG_FS_PERIPH_BASE, USB_OTG_FS->fifo);
 
     usb_send(usbdev[0].usbd, 0x8081, "XYZ=", 3);
     return 0;
@@ -907,6 +912,7 @@ DEFUN(epinfo, "test")
     return 0;
 }
 
+#ifdef USB_OTG_HS_PERIPH_BASE
 DEFUN(hstest, "test")
 {
     int x;
@@ -950,6 +956,7 @@ DEFUN(hstest, "test")
 
     return 0;
 }
+#endif
 
 #endif
 

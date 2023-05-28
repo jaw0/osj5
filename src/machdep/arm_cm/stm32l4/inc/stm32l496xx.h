@@ -1208,6 +1208,7 @@ typedef struct
   uint32_t Reserved[2];
 } USB_OTG_HostChannelTypeDef;
 
+
 /**
   * @}
   */
@@ -1361,6 +1362,7 @@ typedef struct
 
 #define USBOTG_BASE           (AHB2PERIPH_BASE + 0x08000000U)
 
+
 #define ADC1_BASE             (AHB2PERIPH_BASE + 0x08040000U)
 #define ADC2_BASE             (AHB2PERIPH_BASE + 0x08040100U)
 #define ADC3_BASE             (AHB2PERIPH_BASE + 0x08040200U)
@@ -1395,10 +1397,34 @@ typedef struct
 #define USB_OTG_FIFO_BASE                    ((uint32_t)0x00001000U)
 #define USB_OTG_FIFO_SIZE                    ((uint32_t)0x00001000U)
 
+#define USB_OTG_FS          ((USB_OTG_t *) USB_OTG_FS_PERIPH_BASE)
 
 #define PACKAGE_BASE          ((uint32_t)0x1FFF7500U)        /*!< Package data register base address     */
 #define UID_BASE              ((uint32_t)0x1FFF7590U)        /*!< Unique device ID register base address */
 #define FLASHSIZE_BASE        ((uint32_t)0x1FFF75E0U)        /*!< Flash size data register base address  */
+
+
+typedef struct {
+    USB_OTG_GlobalTypeDef      g;
+    char Reserved1[ USB_OTG_HOST_BASE - sizeof(USB_OTG_GlobalTypeDef) ];
+    USB_OTG_HostTypeDef        h;
+    char Reserved2[ USB_OTG_HOST_CHANNEL_BASE - USB_OTG_HOST_BASE - sizeof(USB_OTG_HostTypeDef) ];
+    USB_OTG_HostChannelTypeDef hc;
+    char Reserved3[ USB_OTG_DEVICE_BASE - USB_OTG_HOST_CHANNEL_BASE - sizeof(USB_OTG_HostChannelTypeDef) ];
+    USB_OTG_DeviceTypeDef      d;
+    char Reserved4[ USB_OTG_IN_ENDPOINT_BASE - USB_OTG_DEVICE_BASE - sizeof(USB_OTG_DeviceTypeDef) ];
+    USB_OTG_INEndpointTypeDef  epi[16];
+    USB_OTG_OUTEndpointTypeDef epo[16];
+
+    __IO uint32_t PCGCCTL;
+    char Reserved5[764];
+
+    __IO uint32_t fifo[];
+
+} USB_OTG_t;
+
+
+
 /**
   * @}
   */
