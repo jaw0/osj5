@@ -803,7 +803,7 @@ GFXdpy::putchar(int ch){
         // esc[123p		- set volume
         // esc[`eg#eg#ab;p 	- play
 
-        if( xx_argn ) volume = x3_arg[0];
+        if( x3_argn ) volume = x3_arg[0];
         if( xx_text[0] ) play( volume, xx_text );
         break;
 

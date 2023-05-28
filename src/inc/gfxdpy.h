@@ -134,7 +134,7 @@ private:
 const Font *find_font(const char *name);
 
 #ifdef GFXDPY_BEEPS
-extern "C" beep(int, int, int), play(int, const char*);
+extern "C" void beep(int, int, int), play(int, const char*);
 #endif
 
 #endif /* __gfxdpy_h__ */
