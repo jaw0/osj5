@@ -22,9 +22,17 @@
 #  define SDIO_IRQn SDMMC1_IRQn
 #endif
 
+#ifndef SDIO_DMASTR
+#  define SDIO_DMASTR 3
+#endif
+
+#if SDIO_DMASTR == 3
+#  define DMASTR  DMA2_Stream3
+#elif SDIO_DMASTR == 6
+#  define DMASTR  DMA2_Stream6
+#endif
 
 #define DMA	DMA2
-#define DMASTR	DMA2_Stream3
 #define DMACHAN	4
 
 #define MAXTRY 		5
@@ -52,6 +60,8 @@
 #define DMASCR_TEIE	4
 #define DMASCR_TCIE	16
 #define DMASCR_EN	1
+
+#define spldma()	splraise(IPL_XHIGH)
 
 int sdio_ioctl(FILE*, int, void*);
 int sdio_bread(FILE*, char*, int, offset_t);
@@ -360,7 +370,13 @@ sdio_stop(void){
 
 static void
 dma_clr_irq(void){
+    int plx = spldma();
+#if SDIO_DMASTR == 3
     DMA->LIFCR |= 0x3D << 22;
+#else
+    DMA->HIFCR |= 0x3D << 16;
+#endif
+    splx(plx);
 }
 
 static void
@@ -394,7 +410,9 @@ dma_start(u_long flags, char *dst, int len){
 
 static void
 dma_stop(char *dst, int len){
+
     dcache_invalidate(dst, len);
+
     DMASTR->CR &= ~(DMASCR_EN | DMASCR_TEIE | DMASCR_TCIE);
     dma_clr_irq();
 }
@@ -416,7 +434,12 @@ dma_wait_complete(void){
 
     aunsleep();
     SDIO->MASK &= ~SR_DATAEND;
+
+#if SDIO_DMASTR == 3
     return DMA->LISR & ((1<<25) | (1<<22));
+#else
+    return DMA->HISR & ((1<<19) | (1<<16));
+#endif
 }
 
 int
