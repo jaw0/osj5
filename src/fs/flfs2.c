@@ -33,8 +33,8 @@
 #endif
 
 
-#define fsmsg(f, args...)		//fprintf(STDERR, f , ## args )
-#define debug(f, args...)		//fprintf(STDERR, f , ## args )
+#define fsmsg(f, args...)		// fprintf(STDERR, f , ## args )
+#define debug(f, args...)		// fprintf(STDERR, f , ## args )
 
 typedef char bool;
 
@@ -1494,12 +1494,16 @@ flfs2_dir(MountEntry *me, int how){
 
     sync_lock( &flfs->lock, "flfs.L" );
 
+    debug("flfs bksz %x\n", flfs->block_size);
+
     for(offset=0; offset<flfs->total_size; offset += flfs->block_size){
 
         fs2_t t = get_index_type(flfs, offset);
 
         if( (t != FCT_BLANK) && (t != FCT_EMPTY_INDEX) )
             totalloc += flfs->block_size;
+
+        debug("offset %x, type %x\n", offset, t);
 
         if( t != FCT_DIR ) continue;
 
@@ -1508,17 +1512,19 @@ flfs2_dir(MountEntry *me, int how){
         }
 
         if(how & LSHOW_EXT){
-            printf("dir %x\n", (int)offset);
+            printf("dir %x type %x flag %x\n", (int)offset, dir->type, dir->flag);
+            debug("[dir %64,.4H]", dir);
         }
 
         for(i=0; i<flfs->ndirent; i++){
             struct FSDirEnt *d = dir->dir + i;
 
-            if( DIRENT_IS_DELETED(*d) ) continue;
+            if( DIRENT_IS_EMPTY(*d) ) continue;
             if( DIRENT_IS_DELETED(*d) && !(how & LSHOW_EXT) ) continue;
 
             if(how & LSHOW_EXT){
                 printf("%2d ", i);
+                debug("[ent %64,.4H] ", d);
                 if( DIRENT_IS_DELETED(*d) )
                     printf("X");
                 else if( d->attr & FFA_HIDDEN ){
