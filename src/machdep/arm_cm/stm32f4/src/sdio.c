@@ -91,6 +91,7 @@ struct SDIOinfo {
     const char		*name;
     u_char		sdcid[16];
     u_char		sdcsd[16];	// a meshigas of unaligned jibber-jabber
+    char		info[32];
     int			sectors;
     int			rca;
     u_char		ishc;
@@ -106,7 +107,6 @@ int
 sdio_init(struct Device_Conf *dev){
     int unit = dev->unit;
     struct SDIOinfo *ii = sdcinfo + unit;
-    char info[32];
     int i;
 
     finit( & ii->file );
@@ -134,50 +134,16 @@ sdio_init(struct Device_Conf *dev){
 
     nvic_enable( SDIO_IRQn, IPL_DISK );
 
-    // RSN - card detect
-
     int r = initialize_card(ii);
 
-    if( !r ) return 0;	/* no card installed */
+    // if( !r ) return 0;	/* no card installed */
 
     //hexdump(ii->sdcid, 16);
     //hexdump(ii->sdcsd, 16);
 
 
-    info[0] = ii->sdcid[1];
-    info[1] = ii->sdcid[2];
-    info[2] = '/';
-    for(i=0;i<5;i++)
-        info[3+i] = ii->sdcid[3+i];
-    info[8] = 0;
-
-    const char *sdtype;
-    int nsect;
-    if( (ii->sdcsd[0] & 0xC0) == 0 ){
-        // standard SD version 1.0
-        int rblen = ii->sdcsd[5] & 0xF;
-        int csize = (ii->sdcsd[8]>>6) + (ii->sdcsd[7]<<2) + ((ii->sdcsd[6] & 3)<<10);
-        int cmult = (ii->sdcsd[10]>>7) + ((ii->sdcsd[9] & 3)<<1);
-        nsect = (csize + 1) * (1<<(cmult + 2)) * (1<<(rblen - 9));
-        sdtype = "SD/1.0";
-        ii->ishc = 0;
-    }else{
-        // SDHC version 2.0
-        nsect = (ii->sdcsd[9] + (ii->sdcsd[8]<<8) + ((ii->sdcsd[7]&0x3F)<<16) + 1) * 1024;
-        sdtype = "SD/HC";
-        ii->ishc = 1;
-    }
-
-    ii->sectors = nsect;
-
-    bootmsg("%s at sdio%d %s sdcard %s %d sect, %d MB\n",
-            dev->name, unit,
-            sdtype, info,
-            nsect, nsect>>11
-        );
 
     // do we need partitions?
-
 #if 0
     dkpart_learn( dev, "sd", unit, & ii->file, nsect );
 #else
@@ -185,11 +151,11 @@ sdio_init(struct Device_Conf *dev){
 
     // set flags=1 to not automount
     if( ! dev->flags ){
-        snprintf(info, sizeof(info), "%s:", ii->name);
-        fmount( & ii->file, info, "fatfs" );
+        snprintf(ii->info, sizeof(ii->info), "%s:", ii->name);
+        fmount( & ii->file, ii->info, "fatfs" );
 
         bootmsg( "sdcard %s mounted on %s type %s\n",
-                 ii->name, info, "fatfs" );
+                 ii->name, ii->info, "fatfs" );
     }
 #endif
 
@@ -353,6 +319,39 @@ initialize_card(struct SDIOinfo *ii){
         // 48MHz / 2 => 24MHz
         SDIO->CLKCR &= ~0xFF;
     }
+
+
+    ii->info[0] = ii->sdcid[1];
+    ii->info[1] = ii->sdcid[2];
+    ii->info[2] = '/';
+    for(i=0;i<5;i++)
+        ii->info[3+i] = ii->sdcid[3+i];
+    ii->info[8] = 0;
+
+    const char *sdtype;
+    int nsect;
+    if( (ii->sdcsd[0] & 0xC0) == 0 ){
+        // standard SD version 1.0
+        int rblen = ii->sdcsd[5] & 0xF;
+        int csize = (ii->sdcsd[8]>>6) + (ii->sdcsd[7]<<2) + ((ii->sdcsd[6] & 3)<<10);
+        int cmult = (ii->sdcsd[10]>>7) + ((ii->sdcsd[9] & 3)<<1);
+        nsect = (csize + 1) * (1<<(cmult + 2)) * (1<<(rblen - 9));
+        sdtype = "SD/1.0";
+        ii->ishc = 0;
+    }else{
+        // SDHC version 2.0
+        nsect = (ii->sdcsd[9] + (ii->sdcsd[8]<<8) + ((ii->sdcsd[7]&0x3F)<<16) + 1) * 1024;
+        sdtype = "SD/HC";
+        ii->ishc = 1;
+    }
+
+    ii->sectors = nsect;
+
+    bootmsg("%s at sdio %s sdcard %s %d sect, %d MB\n",
+            ii->name,
+            sdtype, ii->info,
+            nsect, nsect>>11
+        );
 
     return 1;
 
