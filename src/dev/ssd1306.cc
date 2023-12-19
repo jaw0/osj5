@@ -321,7 +321,7 @@ _ssd1306_logo(SSD1306 *ii){
         _ssd1306_puts(ii, ident);
         _ssd1306_puts(ii, "\r\n\e[0m");
     }else{
-        _ssd1306_puts(ii, "\e[16m\e[2sOS/J5\r\n\e[0s" );
+        _ssd1306_puts(ii, "\e[16m\e[2;2hOS/J5\r\n\e[2;1h" );
         _ssd1306_puts(ii, ident);
         _ssd1306_puts(ii, "\r\nstarting...\r\n\e[0m");
     }
