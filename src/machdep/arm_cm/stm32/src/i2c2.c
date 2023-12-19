@@ -21,12 +21,12 @@
 #include <stm32.h>
 #include <i2c_impl.h>
 
-// #define I2C_VERBOSE
-
-#ifdef I2C_VERBOSE
-#  define CRUMBS        "i2c"
+#define I2C_TRACE
+#ifdef I2C_TRACE
+# define TRACE
 #endif
-#include <crumbs.h>
+#include <trace.h>
+
 
 #define CFFLAGS_ALTPINS	3	// 2 bits of flags - alt set of pins
 
@@ -119,6 +119,8 @@ i2c_init(struct Device_Conf *dev){
     i2cinfo[i].state = I2C_STATE_IDLE;
     nvic_enable( i2cinfo[i].irq,     IPL_I2C );
     nvic_enable( i2cinfo[i].irq + 1, IPL_I2C );
+
+    trace_init();
 
     bootmsg("%s at io 0x%x irq %d speed %dkHz\n", dev->name, i2cinfo[i].addr, i2cinfo[i].irq, speed/1000);
     return 0;
@@ -245,8 +247,8 @@ i2c_start(struct I2CInfo *ii){
         cr1 |= CR1_TXIE;
     }
 
-    DROP_CRUMB("start", cr1, cr2);
-    dev->CR1 |= cr1;
+    trace_crumb2("i2c", "start", cr1, cr2);
+    dev->CR1 = cr1;
     dev->CR2 = cr2;
 
 }
@@ -256,7 +258,7 @@ static void
 i2c_done(struct I2CInfo *ii){
     I2C_TypeDef *dev   = ii->addr;
 
-    DROP_CRUMB("i2c/done", 0, 0);
+    trace_crumb1("i2c", "i2c/done", dev->ISR);
     dev->CR1 &= ~0xFF;
 }
 
@@ -264,7 +266,7 @@ static void
 i2c_msg_next(struct I2CInfo *ii){
 
     ii->num_msg --;
-    DROP_CRUMB("msg/nxt", ii->num_msg, 0);
+    trace_crumb1("i2c", "msg/nxt", ii->num_msg);
 
     if( ii->num_msg == 0 ){
         ii->state = I2C_STATE_XFER_DONE;
@@ -282,7 +284,7 @@ i2c_ev_irq(struct I2CInfo *ii){
 
     // rx, tx, tc, tcr
 
-    DROP_CRUMB("evirq", sr, 0);
+    trace_crumb1("i2c", "evirq", sr);
 
     if( sr & SR_TCR ){
         // reload
@@ -295,12 +297,12 @@ i2c_ev_irq(struct I2CInfo *ii){
             cr2 |= len << 16;
         }
 
-        DROP_CRUMB("irq/rld", len, cr2);
+        trace_crumb2("i2c", "irq/rld", len, cr2);
         dev->CR2 = cr2;
     }
 
     if( sr & SR_NACK ){
-        DROP_CRUMB("irq/nack", 0, 0);
+        trace_crumb0("i2c", "irq/nack");
         ii->errorflags = dev->ISR;
         ii->state = I2C_STATE_ERROR;
         i2c_done(ii);
@@ -311,18 +313,18 @@ i2c_ev_irq(struct I2CInfo *ii){
     if( sr & SR_TXIS ){
         // send
         int c = _msg_next( ii->msg );
-        DROP_CRUMB("irq/tx", c, 0);
+        trace_crumb1("i2c", "irq/tx", c);
         dev->TXDR = c;
     }
     if( sr & SR_RXNE ){
         // read
         int c = dev->RXDR;
-        DROP_CRUMB("irq/rx", c, 0);
+        trace_crumb1("i2c", "irq/rx", c);
         _msg_add( ii->msg, c );
     }
     if( sr & SR_STOP ){
         // done
-        DROP_CRUMB("irq/done", 0, 0);
+        trace_crumb0("i2c", "irq/done");
         i2c_done(ii);
         i2c_msg_next(ii);
     }
@@ -332,7 +334,7 @@ static void
 i2c_er_irq(struct I2CInfo *ii){
     I2C_TypeDef *dev = ii->addr;
 
-    DROP_CRUMB("erirq", dev->ISR, 0);
+    trace_crumb1("i2c", "erirq", dev->ISR);
     ii->errorflags = dev->ISR;
     ii->state = I2C_STATE_ERROR;
     i2c_done(ii);
@@ -349,24 +351,15 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
     I2C_TypeDef *dev   = ii->addr;
     int i = 0;
 
-    RESET_CRUMBS();
-    DROP_CRUMB("i2c/xfer", unit, nmsg);
+    trace_crumb4("i2c", "xfer", unit, nmsg, ii->state, nmsg);
 
     /* wait for device */
-#ifdef I2C_VERBOSE
-    kprintf("i2c xfer waiting, dev %x, state %d\n", dev, ii->state);
-#endif
-
     sync_lock( & ii->lock, "i2c.L" );
 
     int plx = spldisk();
     ii->msg       = msgs;
     ii->num_msg   = nmsg;
     ii->state     = I2C_STATE_BUSY;
-
-#ifdef I2C_VERBOSE
-    kprintf("i2c xfer starting, %d msgs\n", nmsg);
-#endif
 
     i2c_start(ii);
     splx(plx);
@@ -380,10 +373,10 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
         await( -1, timeo ? expires - get_time() : 0 );
         if( ii->state != I2C_STATE_BUSY ) break;
 
-        DROP_CRUMB("wake", dev->ISR, ii->state);
+        trace_crumb2("i2c", "wake", dev->ISR, ii->state);
 
         if( expires && get_time() >= expires ){
-            DROP_CRUMB("timeout", 0,0);
+            trace_crumb1("i2c", "timeout", dev->ISR);
             i2c_done(ii);
             break;
         }
@@ -394,7 +387,6 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
 
 #ifdef I2C_VERBOSE
     kprintf("i2c xfer done %d\n\n", ii->state);
-    DUMP_CRUMBS();
     kprintf("cr1 %x, cr2 %x, sr %x\n", dev->CR1, dev->CR2, dev->ISR);
 #endif
 
@@ -409,7 +401,7 @@ i2c_xfer(int unit, int nmsg, i2c_msg *msgs, int timeo){
     ii->state = I2C_STATE_IDLE;
     sync_unlock( & ii->lock );
 
-    return I2C_XFER_OK;
+    return r;
 }
 
 int
