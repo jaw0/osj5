@@ -21,7 +21,6 @@
 #include <stm32.h>
 #include <i2c_impl.h>
 
-#define I2C_TRACE
 #ifdef I2C_TRACE
 # define TRACE
 #endif
