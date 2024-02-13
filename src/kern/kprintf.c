@@ -52,6 +52,9 @@ extern void blinky(void);
 #ifndef KBUF_MAX
 #  define KBUF_MAX	2048	/* no more than this much if the console is up */
 #endif
+#ifndef KBUF_MIN
+#  define KBUF_MIN	64
+#endif
 
 static void
 red_on(){
@@ -108,7 +111,7 @@ kprintffnc_buf(char c){
 
     if( kbufsz < kbuflen + 2 ){
         char *buf;
-        int sz = (kbufsz ? kbufsz : 64) * 2;
+        int sz = (kbufsz ? kbufsz : KBUF_MIN) * 2;
 
         buf = alloc( sz );
         if( kbufsz ){
