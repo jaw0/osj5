@@ -16,9 +16,7 @@
 #include <gpio.h>
 #include <usbdef.h>
 #include <usbotg_impl.h>
-#ifndef PLATFORM_STM32L4
-#  include <usbotg.h>
-#endif
+#include <usbotg.h>
 #include <usbd.h>
 #include <userint.h>
 

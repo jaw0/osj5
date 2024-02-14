@@ -5,7 +5,7 @@ OS/J5 - small real-time operating system
 current ports:
     i386
     ARM cortex-M
-        stm32F0, stm32F1, stm32F4, stm32L1 (etc.)
+        stm32F0, stm32F1, stm32F4, stm32F7, stm32L1, stm32L4 (etc.)
         atmel sam S70, E70, V71, (etc.)
 
 current device support i386:

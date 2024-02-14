@@ -42,6 +42,12 @@ _spi_dev_init(int unit, struct SPIInfo *ii){
         ii->dmachan   = 1;
         RCC->APB2ENR |= 1<<12;	// spi
         RCC->AHB1ENR |= 1<<0;	// DMA1
+#ifdef PLATFORM_STM32L4PLUS
+        RCC->AHB1ENR |= 1<<4;	// DMA MUX
+        ii->dmachan   = 11;
+        ii->rxmux     = DMAMUX1_Channel1; // channel is 1 based -> mux is 0 based; STM wtf?
+        ii->txmux     = DMAMUX1_Channel2;
+#endif
         gpio_init( GPIO_A5, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         gpio_init( GPIO_A6, GPIO_AF(5) | GPIO_PULL_UP );
         gpio_init( GPIO_A7, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
@@ -63,6 +69,10 @@ _spi_dev_init(int unit, struct SPIInfo *ii){
         ii->dmachan   = 1;
         RCC->APB1ENR1 |= 1<<14;	// spi
         RCC->AHB1ENR |= 1<<0;	// DMA1
+#ifdef PLATFORM_STM32L4_PLUS
+        RCC->AHB1ENR |= 1<<4;	// DMA MUX
+        ii->dmachan   = 13;
+#endif
         gpio_init( GPIO_B13, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         gpio_init( GPIO_B14, GPIO_AF(5) | GPIO_PULL_UP );
         gpio_init( GPIO_B15, GPIO_AF(5) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
@@ -84,6 +94,10 @@ _spi_dev_init(int unit, struct SPIInfo *ii){
         ii->dmachan   = 3;
         RCC->APB1ENR1 |= 1<<15;	// spi
         RCC->AHB1ENR |= 1<<0;	// DMA1
+#ifdef PLATFORM_STM32L4_PLUS
+        RCC->AHB1ENR |= 1<<4;	// DMA MUX
+        ii->dmachan   = 15;
+#endif
         gpio_init( GPIO_B3, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );
         gpio_init( GPIO_B4, GPIO_AF(6) | GPIO_PULL_UP );
         gpio_init( GPIO_B5, GPIO_AF(6) | GPIO_PUSH_PULL | GPIO_SPEED_50MHZ );

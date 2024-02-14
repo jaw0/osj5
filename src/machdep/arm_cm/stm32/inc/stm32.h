@@ -30,7 +30,13 @@
 #endif
 
 #ifdef PLATFORM_STM32L4
-# include <stm32l4xx.h>
+# if defined(STM32L4Q)
+#   include <stm32l4q.h>
+# elif defined(STM32L4S)
+#   include <stm32l4s.h>
+# else
+#   include <stm32l4xx.h>
+# endif
 #endif
 
 #define PLATFORM_STM32

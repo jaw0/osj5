@@ -14,7 +14,7 @@
 #  endif
 #endif
 
-#ifdef STM32L4_PLUS
+#if defined(STM32L4PLUS) || defined(PLATFORM_STM32L4PLUS)
 #  define SYSMAX	120000000
 #  define AHBMAX   	120000000	/* depends on voltage, and VOS bits */
 #  define APB2MAX  	120000000	/* depends on voltage, and VOS bits */

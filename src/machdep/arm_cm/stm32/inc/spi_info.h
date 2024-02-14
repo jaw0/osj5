@@ -20,6 +20,9 @@ struct SPIInfo {
     const char		*name;
     SPI_TypeDef 	*addr;
     DMAC_T 		*rxdma, *txdma;
+#ifdef DMAMUX1_Channel0
+    DMAMUX_Channel_TypeDef *rxmux, *txmux;
+#endif
 
     DMA_TypeDef		*dma;
     u_char		dmachan;

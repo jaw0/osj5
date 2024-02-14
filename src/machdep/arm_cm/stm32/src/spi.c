@@ -241,8 +241,12 @@ _spi_drain_rx(SPI_TypeDef *dev){
 /****************************************************************/
 
 #ifdef DMA_TYPE_1
+# if defined(STM32L4PLUS)
+static inline void _dma_csel(struct SPIInfo *ii) {
 
-# if defined(PLATFORM_STM32L4)
+}
+
+# elif defined(PLATFORM_STM32L4)
 // L4 has an extra step - set the channel select
 static inline void _dma_csel(struct SPIInfo *ii) {
     char b;
@@ -265,7 +269,7 @@ static inline void _dma_csel(struct SPIInfo *ii) {
 }
 # else
 static inline void _dma_csel(struct SPIInfo *ii) {}
-#endif
+# endif
 
 static inline void
 _disable_irq_dma(struct SPIInfo *ii){
