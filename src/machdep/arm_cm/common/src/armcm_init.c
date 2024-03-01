@@ -41,23 +41,35 @@ armcm_init(void){
 
 void
 tick_init(int freq, int ext){
+    int counter;
 
     // systick @ PROC_TIME usec
-    int counter = (freq / 1000000) * PROC_TIME - 1;
-    tick_base = freq / 1000000;
+    if( freq >= 2000000 ){
+        counter = (freq / 1000000) * PROC_TIME - 1;
+    }else{
+        counter = (freq * PROC_TIME) / 1000000  - 1;
+    }
+    tick_base = (freq << 3) / 1000000;
     SysTick->LOAD = counter;
     SysTick->CTRL = ext ? 3 : 7;
 
     nvic_setprio(SysTick_IRQn, IPL_CLOCK);
-    //bootmsg("systick f %d, L %d\n", freq, counter);
+    // bootmsg("systick f %d, L %d\n", freq, counter);
 }
 
 utime_t
 get_hrtime(void){
     utime_t t;
+    int tk = 0;
 
-    int plx = splhigh();
-    int tk  = PROC_TIME - SysTick->VAL / tick_base;
+    int plx  = splhigh();
+    int load = SysTick->LOAD;
+
+    if( tick_base ){
+        tk  = PROC_TIME - (SysTick->VAL / tick_base) >> 3;
+    }else if( load ){
+        tk = PROC_TIME - (SysTick->VAL * PROC_TIME) / load;
+    }
     t = get_time() + tk;
     // is systick irq pending? adjust
     if( (SCB->ICSR & (1<<26)) && (tk < (PROC_TIME>>1)) ) t += PROC_TIME;
