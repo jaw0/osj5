@@ -1,0 +1,25 @@
+
+kern:   machdep/arm_cm/stm32u5/src/vectors.S
+kern:   machdep/arm_cm/stm32/src/stm32_init.c
+kern:   machdep/arm_cm/stm32u5/src/stm32u5_init.c
+kern:   machdep/arm_cm/stm32u5/src/stm32u5_asm.S
+
+gpio:   machdep/arm_cm/stm32f4/src/gpio.c
+pwm:    machdep/arm_cm/stm32/src/pwm.c
+serial: machdep/arm_cm/stm32/src/serial.c
+rtc:    machdep/arm_cm/stm32/src/rtc.c
+rng:    machdep/arm_cm/stm32u5/src/rng.c
+
+adc:    machdep/arm_cm/stm32l4/src/adc.c
+
+i2c:    machdep/arm_cm/stm32/src/i2c2.c
+spi:    machdep/arm_cm/stm32/src/spi.c
+
+stflash:        machdep/arm_cm/stm32/src/stflash.c
+stflash:        machdep/arm_cm/stm32l4/src/stflashimpl.c
+
+
+# nb. 3 different usb hardwares: host+dev/fs, otg/fs, otg/hs
+
+usbd: usb/usbd.c machdep/arm_cm/stm32/src/usb_otg.c util/trace.c
+
