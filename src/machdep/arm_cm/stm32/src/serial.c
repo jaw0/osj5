@@ -70,7 +70,7 @@ FILE *serial0_port = 0;
 struct serialDevConf {
     USART_TypeDef * addr;
     int irq;
-} dev_conf[] = {
+} const dev_conf[] = {
     { USART1, USART1_IRQn },
     { USART2, USART2_IRQn },
 #if defined(USART3)

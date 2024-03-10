@@ -166,6 +166,23 @@
 #define GPIO_I14        0x8e
 #define GPIO_I15        0x8f
 
+#define GPIO_J0         0x90
+#define GPIO_J1         0x91
+#define GPIO_J2         0x92
+#define GPIO_J3         0x93
+#define GPIO_J4         0x94
+#define GPIO_J5         0x95
+#define GPIO_J6         0x96
+#define GPIO_J7         0x97
+#define GPIO_J8         0x98
+#define GPIO_J9         0x99
+#define GPIO_J10        0x9a
+#define GPIO_J11        0x9b
+#define GPIO_J12        0x9c
+#define GPIO_J13        0x9d
+#define GPIO_J14        0x9e
+#define GPIO_J15        0x9f
+
 
 //  (4:af) (1:x) (2:pull up/down) (2:ospeed) (1:push-pull,open-drain) (2:mode)
 #define GPIO_INPUT		0
@@ -205,6 +222,9 @@ _gpio_addr(int pin){
 #endif
 #ifdef GPIOI
     case 8:	return GPIOI;
+#endif
+#ifdef GPIOJ
+    case 9:	return GPIOJ;
 #endif
     default:
         // kprintf("invalid gpio pin %X\n", pin);

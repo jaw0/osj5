@@ -130,9 +130,17 @@ typedef struct
 } USB_OTG_HostChannelTypeDef;
 
 
+#ifdef USB_OTG_HS_BASE
+# define USB_OTG_HS_PERIPH_BASE               USB_OTG_HS_BASE
+#else
+# define USB_OTG_HS_PERIPH_BASE               0x40040000U
+#endif
 
-#define USB_OTG_HS_PERIPH_BASE               0x40040000U
-#define USB_OTG_FS_PERIPH_BASE               0x50000000U
+#ifdef USB_OTG_FS_BASE
+# define USB_OTG_FS_PERIPH_BASE               USB_OTG_FS_BASE
+#else
+# define USB_OTG_FS_PERIPH_BASE               0x50000000U
+#endif
 
 #define USB_OTG_GLOBAL_BASE                  ((uint32_t)0x00000000U)
 #define USB_OTG_DEVICE_BASE                  ((uint32_t)0x00000800U)

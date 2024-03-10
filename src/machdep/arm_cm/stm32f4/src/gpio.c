@@ -33,6 +33,8 @@ gpio_init(int pin, int mode){
     RCC->AHBENR |= 1 << (io + 17);
 #elif defined(PLATFORM_STM32L4) || defined(PLATFORM_STM32L4PLUS)
     RCC->AHB2ENR |= 1 << io;
+#elif defined(PLATFORM_STM32U5)
+    RCC->AHB2ENR1 |= 1 << io;
 
 #elif defined(PLATFORM_STM32L1)
 

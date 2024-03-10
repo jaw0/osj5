@@ -25,7 +25,7 @@
 #define PLLVCOMIN       128000000
 #define PLLVCOMAX       544000000
 #define EPODTARGET	  8000000     	/* must be 4-16 MHz */
-#define HSPLLTARGET	 16000000	/* 16, 20, 24, 32 */
+#define HSPLLTARGET	 32000000	/* 16, 20, 24, 32 */
 
 extern int sys_clock_freq(), ahb_clock_freq(), apb1_clock_freq(), apb2_clock_freq();
 #define APHCLOCK	ahb_clock_freq()

@@ -28,6 +28,16 @@
 #define ISR_WUTF	(1<<10)
 #define ISR_SHPF	(1<<3)
 
+#ifdef PLATFORM_STM32U5
+#  define ISR ICSR
+#endif
+
+#ifndef RTC_GET_WUTF
+# define RTC_GET_WUTF()	(RTC->ISR & ISR_WUTF)
+#endif
+#ifndef RTC_CLR_WUTF
+# define RTC_CLR_WUTF()	(RTC->ISR &= ~4)
+#endif
 
 static int rtc_isr_boot;
 static int rtc_pre_s   = 0;
@@ -63,7 +73,8 @@ init_disable(void){
 void
 rtc_init(void){
 
-    rtc_isr_boot = RTC->ISR;		// save it, so we can check it later
+    // save it, so we can check it later
+    rtc_isr_boot = RTC_GET_WUTF();
 
     rtc_pre_s = 0;
     rtc_pre_a = 128;
@@ -173,7 +184,7 @@ set_rtc_wakeup(int secs){
     // wkup - max ~36 hours (2^17 secs)
 
     rtc_unlock();
-    RTC->ISR &= ~ISR_WUTF;	// clear WUTF
+    RTC_CLR_WUTF();
     RTC->CR  &= ~CR_WUTE;	// disable WUT
 
     if( secs ){
@@ -200,8 +211,7 @@ set_rtc_wakeup(int secs){
 // was the system woken up by a wakeup event?
 int
 was_rtc_wakeup(void){
-
-    return (rtc_isr_boot & ISR_WUTF) ? 1 : 0;
+    return (rtc_isr_boot) ? 1 : 0;
 }
 
 //################################################################

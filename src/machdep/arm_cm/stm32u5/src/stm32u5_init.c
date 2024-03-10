@@ -12,13 +12,6 @@
 #include <clock.h>
 #include <gpio.h>
 
-// XXX testing
-#define USE_ADC
-#define USE_SDIO
-#define STM32_MCO_ENABLE
-#define USE_USBD
-//#define SYSCLOCK 12000000
-
 
 #define R_FLASHKB	((unsigned short *)(0x0BFA07A0))
 #define R_UNIQUE	((unsigned long*)(0x0BFA0700))
@@ -69,7 +62,18 @@ busy_wait(int n){
 
 static void inline
 pwr_enable(){
-    RCC->AHB3ENR |= 1<<2;		// pwr enable
+    RCC->AHB3ENR |= RCC_AHB3ENR_PWREN;
+    busy_wait(20);
+
+#ifdef USE_USBD
+    RCC->APB3ENR |= RCC_APB3ENR_SYSCFGEN;
+#endif
+#ifdef USE_ADC
+    PWR->SVMCR |= PWR_SVMCR_ASV; 	// enable vdda power
+#endif
+    busy_wait(20);
+
+    // PWR_SVMCR_IO2SV is needed for GPIO_G when applicable
 }
 
 static inline void
@@ -93,27 +97,26 @@ static inline void
 also_hs60p(){
 #if defined(USE_USBD)
 
-    RCC->APB3ENR |= 1<<1;	// syscfg
-    RCC->CCIPR2  |= 1<<30;	// HS_PHY clock = PLL1p
+    RCC->CCIPR2  |= 3<<30;	// HS_PHY clock = PLL1p/2
 
-    switch( HSPLLTARGET ){
+    switch( HSPLLTARGET >> 1 ){
         // I know, weird, right?
-    case 16000000:
+    case 16 * MHZ:
         SYSCFG->OTGHSPHYCR = 3 << 2;
         break;
-    case 19200000:
+    case 19200 * KHZ:
         SYSCFG->OTGHSPHYCR = 8 << 2;
         break;
-    case 20000000:
+    case 20 * MHZ:
         SYSCFG->OTGHSPHYCR = 9 << 2;
         break;
-    case 24000000:
+    case 24 * MHZ:
         SYSCFG->OTGHSPHYCR = 10 << 2;
         break;
-    case 26000000:
+    case 26 * MHZ:
         SYSCFG->OTGHSPHYCR = 14 << 2;
         break;
-    case 32000000:
+    case 32 * MHZ:
         SYSCFG->OTGHSPHYCR = 11 << 2;
         break;
     }
@@ -269,14 +272,9 @@ clock_init(void){
 #  define PLLRGE	((PLLFVIN >= 8000000) ? 3 : 0)
 #  define PLLP		(PLLFVCO / HSPLLTARGET)
 
-#if 0 // XXX
-    bootmsg("pll cf M %d, N %d, P %d, fvin %d, vco %d, fo %d\n", PLLM, PLLN, PLLP, PLLFVIN, PLLFVCO, PLLFOUT);
-    bootmsg("pll src %d\n", PLLSRC);
-    set_clocksrc(2);
-    //return;
-#endif
 
-    RCC->PLL1DIVR = (PLLN - 1) | ((PLLR - 1) << 24)
+    RCC->PLL1DIVR = (PLLN - 1)
+        | ((PLLR - 1) << 24)
 #  ifdef USE_USBD
         | ((PLLP - 1) << 9)
 #  endif

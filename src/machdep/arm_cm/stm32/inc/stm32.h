@@ -39,6 +39,10 @@
 # endif
 #endif
 
+#ifdef PLATFORM_STM32U5
+# include <stm32u5xx.h>
+#endif
+
 #define PLATFORM_STM32
 
 
