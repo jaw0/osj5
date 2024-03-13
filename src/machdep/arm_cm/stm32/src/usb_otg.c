@@ -747,7 +747,7 @@ usb_reset_handler(usbotg_t *u){
     u->otg->g.GRSTCTL |= USB_OTG_GRSTCTL_RXFFLSH; // flush rx
 
     u->bufnext = u->rx_fifo_sz + CONTROL_SIZE;
-    trace_crumb2("usbotg", "reseth", u, u->usbd);
+    trace_crumb2("usbotg", "reset", u, u->usbd);
     usb_config_ep0(u->usbd);
     usbd_cb_reset(u->usbd);
 
@@ -773,7 +773,7 @@ static void
 otg_irq_handler(usbotg_t *u){
     int isr = u->otg->g.GINTSTS;
 
-    // trace_crumb2("usbotg",  "irq!", isr, isr & u->otg->g.GINTMSK);
+    //trace_crumb2("usbotg",  "irq!", isr, isr & u->otg->g.GINTMSK);
     //kprintf("irq %x\n", isr);
 
     if( isr & USB_OTG_GINTSTS_USBRST ){
@@ -795,7 +795,6 @@ otg_irq_handler(usbotg_t *u){
         usb_tx_handler(u);
     }
     if( isr & USB_OTG_GINTSTS_RXFLVL ){
-        trace_crumb2("usbotg",  "irq!rx", isr, isr & u->otg->g.GINTMSK);
         usb_rx_handler(u);
     }
     if( isr & USB_OTG_GINTSTS_IISOIXFR ){

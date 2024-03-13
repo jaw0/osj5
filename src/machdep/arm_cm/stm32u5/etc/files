@@ -11,12 +11,13 @@ rtc:    machdep/arm_cm/stm32/src/rtc.c
 rng:    machdep/arm_cm/stm32u5/src/rng.c
 
 adc:    machdep/arm_cm/stm32l4/src/adc.c
+sdio:   machdep/arm_cm/stm32u5/src/sdio.c
 
 i2c:    machdep/arm_cm/stm32/src/i2c2.c
 spi:    machdep/arm_cm/stm32/src/spi.c
 
 stflash:        machdep/arm_cm/stm32/src/stflash.c
-stflash:        machdep/arm_cm/stm32l4/src/stflashimpl.c
+stflash:        machdep/arm_cm/stm32u5/src/stflashimpl.c
 
 
 # nb. 3 different usb hardwares: host+dev/fs, otg/fs, otg/hs

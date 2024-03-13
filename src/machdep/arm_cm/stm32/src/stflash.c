@@ -20,10 +20,21 @@
 #include <fs.h>
 #include <misc.h>
 #include <stflash.h>
+#include <userint.h>
 
 #include <stm32.h>
 
-#define SMALLBLOCK	2048
+#ifdef PLATFORM_STM32U5
+#  define CR	NSCR
+#  define SR	NSSR
+#  define KEYR	NSKEYR
+#endif
+
+#ifdef PLATFORM_STM32U5
+#  define WRITE_BYTES	16	// 128 bits + ecc
+#elif defined(PLATFORM_STM32L4)
+#  define WRITE_BYTES	8	// 64 bits + ecc
+#endif
 
 extern struct Flash_Conf flash_device[];
 extern FILE *flfs_open(MountEntry *, const char *, const char *);
@@ -239,35 +250,38 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
     if( offset >= d->totalsize )
         return 0;
 
-    //kprintf("stf write %d @ %x => %x + %x\n", len, b, d->addr, offset);
+    kprintf("stf write %d @ %x => %x + %x\n", len, b, d->addr, offset);
     //hexdump(b, len);
     ststart(d);
+    FLASH->SR = 0xFFFFFFFF;	// clear errors
 
-#ifdef PLATFORM_STM32L4
-    if( len & 7 ){
-        // not a multiple of 64bits, read-modify-write
-        unsigned long buf[2];
-        unsigned long *dst = (unsigned long*)(d->addr + (offset & ~7));
+#ifdef WRITE_BYTES
+    // wide writes + ecc
+    if( len & (WRITE_BYTES - 1) ){
+        // not a multiple of N-bits, read-modify-write
+        unsigned long buf[4];
+        unsigned long *dst = (unsigned long*)(d->addr + (offset & ~(WRITE_BYTES - 1)));
 
-        // kprintf("rmw: len %d, dst %x+%x\n", len, dst, offset&7);
+        kprintf("rmw: len %d, dst %x+%x\n", len, dst, offset & (WRITE_BYTES - 1));
 
         // read
-        memcpy((char*)buf, (char*)dst, 8);
+        memcpy((char*)buf, (char*)dst, WRITE_BYTES);
         // modify
-        for(i=0; i<len&7; i++){
-            ((char*)buf)[i + (offset & 7)] = b[i];
+        for(i=0; i<len&(WRITE_BYTES - 1); i++){
+            ((char*)buf)[i + (offset & (WRITE_BYTES - 1))] = b[i];
         }
         // hexdump(buf, 8);
         // write
         FLASH->CR |= 1;	// enable program
 
-        for(i=0; i<2; i++){
+        for(i=0; i<(WRITE_BYTES>>2); i++){
             wait_not_busy();
             dst[i] = buf[i];
 
             if( FLASH->SR & 0xF2 ) kprintf("err: len %d %x; @ %x, cr %x\n", len, FLASH->SR, dst + i, FLASH->CR);
             //if( dst[i] != buf[i] ) kprintf("err @%x: %x != %x\n", dst + i, dst[i], buf[i]);
         }
+
 #else
     if( len & 3 ){
         // not a multiple of 32bits, go byte-by-byte
@@ -288,6 +302,8 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
         FLASH->CR |= (2<<8) | 1;	// 32 bits, enable program
 
         int wlen = len / 4;
+        kprintf("wr: len %d, dst %x\n", len, dst);
+
         for(i=0; i<wlen; i++){
 #  ifdef PLATFORM_STM32L4
             // has ECC, can only overwrite with all 0s
@@ -303,7 +319,7 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
 
             wait_not_busy();
             dst[i] = src[i];
-            if( FLASH->SR & 0xF2 ) kprintf("err: len %d, %x; @ %x, cr %x [src %x dst %x] \n", len, FLASH->SR, dst + i, FLASH->CR, src[i], dst[i]);
+            if( FLASH->SR & 0xF2 ) kprintf("err: len %d, %x; @ %x, cr %x [src %x dst %x] \n", len, FLASH->SR, dst + i, FLASH->CR, src+i, dst+i);
             //if( dst[i] != src[i] ) kprintf("err @%x: %x != %x\n", dst + i, dst[i], src[i]);
         }
     }
@@ -346,14 +362,26 @@ erase(struct Flash_Disk *fdk, int a){
     int blk  = a / fdk->blocksize;
     int sect = fdk->blockno + blk;
 
-    //kprintf("stm32 flash erase a %x b %x (sect %x)\n", a, blk, sect);
+#ifdef PLATFORM_STM32U5
+    int nb = fdk->info->nblocks;
+    int bank = (sect >= (nb >> 1)) ? 1 : 0;
+    kprintf(">> fl a %x, off %x, nb %d, sect %d, bk %d\n", a, fdk->blockno, nb, sect, bank);
+    if( bank ){
+        sect -= (nb >> 1);
+        sect |= (1 << 11);
+    }
+#endif
+
+    kprintf("stm32 flash erase a %x b %x (sect %x)\n", a, blk, sect);
 
     ststart(fdk);
+    FLASH->SR = 0xFFFFFFFF;	// clear errors
     wait_not_busy();
     FLASH->CR |= (sect<<3) | 2;	// sector erase
     FLASH->CR |= 1<<16;		// start
     wait_not_busy();
     FLASH->CR &= ~( (sect<<3) | 2 | (1<<16) );
+    kprintf(">> SR %x\n", FLASH->SR);
     stfinish(fdk);
 
     return 0;
@@ -364,3 +392,38 @@ stflash_noop(FILE *f){
     return 1;
 }
 
+/****************************************************************/
+
+#ifdef KTESTING
+
+DEFUN(stflash_wr, "test write")
+{
+    if( argc < 3 )
+        return -1;
+
+    int off = atoi_base(16, argv[1]);
+    int len = atoi_base(16, argv[2]);
+
+    printf("addr: %x\n", fldsk[0].addr + off);
+    stflash_bwrite(&fldsk[0].file, &off, len, off);
+
+    return 0;
+}
+
+DEFUN(stflash_er, "test erase")
+{
+    if( argc < 2 )
+        return -1;
+
+    int off = atoi_base(16, argv[1]);
+
+    printf("addr: %x\n", fldsk[0].addr + off);
+    erase( fldsk, off );
+
+    return 0;
+}
+
+
+
+
+#endif
