@@ -305,17 +305,34 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
         kprintf("wr: len %d, dst %x\n", len, dst);
 
         for(i=0; i<wlen; i++){
-#  ifdef PLATFORM_STM32L4
+#ifdef WRITE_BYTES
+#  if WRITE_BYTES == 8
             // has ECC, can only overwrite with all 0s
             if( !(i&1) && (src[i]==0xFFFFFFFF) && (src[i+1]==0xFFFFFFFF) ){
                 i ++;
                 continue;
             }
+            // write same data? skip
             if( !(i&1) && (src[i] == dst[i]) && (src[i+1] == dst[i+1]) ){
                 i ++;
                 continue;
             }
 #  endif
+#  if WRITE_BYTES == 16
+            // write all ones? skip ahead
+            if( !(i&3) && (src[i]==0xFFFFFFFF) && (src[i+1]==0xFFFFFFFF)
+                && (src[i+2]==0xFFFFFFFF) && (src[i+3]==0xFFFFFFFF) ){
+                i += 3;
+                continue;
+            }
+            // write same data? skip
+            if( !(i&3) && (src[i] == dst[i]) && (src[i+1] == dst[i+1])
+                && (src[i+2] == dst[i+2]) && (src[i+3] == dst[i+3]) ){
+                i += 3;
+                continue;
+            }
+#  endif
+#endif
 
             wait_not_busy();
             dst[i] = src[i];

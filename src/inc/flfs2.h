@@ -18,19 +18,26 @@
 
 */
 
-#ifndef FLFS_64BIT
-typedef u_long fs2_t;
-# define ALLONES 	0xFFFFFFFF
-# ifndef FLFS_NAMELEN
-#  define FLFS_NAMELEN	36
-# endif
-
+#if defined(FLFS_128BIT)
+#  define FLFS_64BIT
+#  define PAD(x) fs2_t x
 #else
+#  define PAD(x)
+#endif
 
+
+#if defined(FLFS_64BIT)
 typedef u_int64_t fs2_t;
 # define ALLONES 	0xFFFFFFFFFFFFFFFF
 # ifndef FLFS_NAMELEN
 #  define FLFS_NAMELEN	32
+# endif
+
+#else
+typedef u_long fs2_t;
+# define ALLONES 	0xFFFFFFFF
+# ifndef FLFS_NAMELEN
+#  define FLFS_NAMELEN	36
 # endif
 #endif
 
@@ -50,8 +57,11 @@ struct FSChunk {
 #define FCT_ERROR	0xFE
 #define FCT_BLANK1	0xFF	/* fct_blank in one byte */
 
-    fs2_t next;		/* offset of next chunk in this file */
-    fs2_t intent;	/* for crash recovery */
+    PAD(type_copy);
+    fs2_t cknext;		/* offset of next chunk in this file */
+    PAD(cknext_copy);
+    fs2_t intent;		/* for crash recovery */
+    PAD(_pad1);
 };
 
 struct FSIndex {
@@ -71,12 +81,16 @@ struct FSDirEnt {
 #define FDA_DELETED	0		/* slot in no longer valid */
     u_long  start;			/* start offset */
     u_long  filelen;
+    PAD(_pad1);
     char    name[FLFS_NAMELEN]; /* null terminated */
-} __attribute__((packed)); /* nb. namelen is sized so that sizeof(struct) % 8 == 0 */
+} __attribute__((packed)); /* nb. namelen is sized so that sizeof(struct) % FLASH_WRITE_SIZE == 0 */
 
 struct FSDir {
     fs2_t type;
+    PAD(type_copy);
     fs2_t flag;
+    PAD(flag_copy);
+
 #define FDT_ACTIVE	ALLONES		/* slots are available */
 #define FDT_FULL	1		/* all slots are in use */
 #define FDT_DELETED	0		/* all slots are deleted */

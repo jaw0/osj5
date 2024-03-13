@@ -33,13 +33,19 @@
 #endif
 
 
-#define fsmsg(f, args...)		// fprintf(STDERR, f , ## args )
-#define debug(f, args...)		// fprintf(STDERR, f , ## args )
+#define fsmsg(f, args...)		 fprintf(STDERR, f , ## args )
+#define debug(f, args...)		 //fprintf(STDERR, f , ## args )
 
 typedef char bool;
 
-#define USE_INDEX
-#define USE_INTENT
+#if !defined(FLFS_128BIT)
+#  define USE_INDEX
+#  define USE_INTENT
+#endif
+
+#ifndef FLFS_BLOCKSIZE
+#  define FLFS_BLOCKSIZE FBLOCKSIZE
+#endif
 
 
 struct FLFS {
@@ -141,8 +147,6 @@ const struct io_fs flfs2_iofs = {
     flfs2_stat
 };
 
-
-
 int
 flfs2_init(MountEntry *me){
     int nidx = 0;
@@ -162,7 +166,7 @@ flfs2_init(MountEntry *me){
     flfs->total_size = s.size;
     flfs->write_size = o[0] ? o[0] : 1;
     flfs->erase_size = o[1];
-    flfs->block_size = FBLOCKSIZE;
+    flfs->block_size = FLFS_BLOCKSIZE;
     flfs->flags      = s.flags;
     flfs->dirpos     = DIRPOS_UNKNOWN;
 
@@ -275,6 +279,7 @@ diskerase(struct FLFS *flfs, offset_t off, offset_t len){
         }
     }else{
         for(i=0; i<len; i += flfs->erase_size ){
+            trace_crumb1("flfs2", "+erase", i);
             fioctl(flfs->me->fdev, IOC_ERASE, (void*)(off + i) );
         }
     }
@@ -429,7 +434,7 @@ flush_index(struct FLFS *flfs){
     if( flfs->idxoff == -1 ) return 0;
     if( diskwrite(flfs, flfs->idxoff, flfs->idxbuf, flfs->block_size) <= 0 ) return -1;
     flfs->idxdirty = 0;
-    debug("flush idx %x\n", (int)flfs->idxoff);
+    trace_crumb1("flfs2", "flush_idx", flfs->idxoff);
 #endif
     return 0;
 }
@@ -444,7 +449,7 @@ read_index(struct FLFS *flfs, offset_t off){
 
     flfs->idxoff = -1;
 
-    // debug("read idx %x\n", (int)off);
+    trace_crumb1("flfs2", "readidx", off);
     if( diskread(flfs, off, flfs->idxbuf, flfs->block_size) <= 0 ) return -1;
     flfs->idxoff = off;
 
@@ -464,7 +469,7 @@ update_index(struct FLFS *flfs, offset_t off, fs2_t type){
     flfs->idxbuf->cktype[0] = FCT_INDEX;
     flfs->idxdirty = 1;
 
-    debug("idx off %x -> pos %x [%x] -> t %d [%16, 4H]\n", (int)off, (int)flfs->idxoff, pos, (int)type, flfs->idxbuf);
+    trace_crumb5("flfs2", "updidx", off, flfs->idxoff, pos, type, flfs->idxbuf);
 
     if( type = FCT_DELETED ){
         int i;
@@ -539,7 +544,7 @@ revert_relocate_file(struct FLFSBuf *fb, offset_t newstart){
 
         if( diskread(fb->flfs, newstart, fb->buffer, fb->flfs->block_size) <= 0 ) return;
         fb->offset = newstart;
-        newstart = fc->next;
+        newstart = fc->cknext;
         release_block(fb);
     }
 }
@@ -554,7 +559,7 @@ file_in_cleaning_region(struct FLFS *flfs, offset_t off){
         if( (off & ~(flfs->cleaning_size - 1)) == flfs->cleaningregion )
             return 1;
 
-        if( diskread(flfs, off + offsetof(struct FSChunk, next), &noff, sizeof(noff)) <= 0) return -1;
+        if( diskread(flfs, off + offsetof(struct FSChunk, cknext), &noff, sizeof(noff)) <= 0) return -1;
         if( noff == ALLONES ) return 0;
         off = noff;
     }
@@ -572,6 +577,7 @@ relocate_file(struct FLFSBuf *fb, int de){
     fs2_t intent = fb->offset + de;
 
 
+    trace_crumb1("flfs2", "reloc", dent.name);
     debug("reloc file %s\n", dent.name);
 
     if( dent.start != ALLONES ){
@@ -590,7 +596,7 @@ relocate_file(struct FLFSBuf *fb, int de){
             return 0;
         }
 
-        oldnext = fc->next;
+        oldnext = fc->cknext;
         if( oldnext != ALLONES ){
             newnext = find_available(fb->flfs);
             if( newnext == -1 ){
@@ -598,7 +604,7 @@ relocate_file(struct FLFSBuf *fb, int de){
                 revert_relocate_file(fb, newstart);
                 return 0;
             }
-            fc->next = newnext;
+            fc->cknext = newnext;
         }
 
         // intent
@@ -651,6 +657,7 @@ relocate_dir(struct FLFSBuf *fb){
     offset_t newoff;
     int i,j;
 
+    trace_crumb1("flfs2", "relocdir", fb->offset);
     debug("reloc dir %x", (int)fb->offset);
 
     // prune deleted entries
@@ -975,10 +982,15 @@ static int
 release_block(struct FLFSBuf *fb){
     struct FSChunk *fc = (struct FSChunk*)fb->buffer;
 
+    int wsize = sizeof(fc->type);
     fc->type = FCT_DELETED;
+#ifdef FLFS_128BIT
+    fc->type_copy = FCT_DELETED;
+    wsize += sizeof(fc->type);
+#endif
 
-    if( fb->flfs->write_size <= sizeof(fc->type) ){
-        diskwrite(fb->flfs, fb->offset + offsetof(struct FSChunk, type), &(fc->type), sizeof(fc->type));
+    if( fb->flfs->write_size <= wsize ){
+        diskwrite(fb->flfs, fb->offset + offsetof(struct FSChunk, type), &(fc->type), wsize);
     }else{
         diskwrite(fb->flfs, fb->offset, fc, fb->flfs->block_size);
     }
@@ -1194,7 +1206,7 @@ write_flush_and_grow(struct FileData *fd){
     // flush buffer
     struct FSChunk *fc = (struct FSChunk*)fd->buffer;
     fc->type = (fd->filestart == fd->cnkstart) ? FCT_FIRST : FCT_DATA;
-    fc->next = more;
+    fc->cknext = more;
 
     if( diskwrite(flfs, fd->cnkstart, fd->buffer, fd->bufsize) <= 0) return -1;
 
@@ -1301,9 +1313,11 @@ static int
 read_next_chunk(struct FileData *fd){
 
     debug("read next %x\n", (int)fd->cnknext);
-    if( fd->cnknext == 0 || fd->cnknext == ALLONES )
+
+    if( fd->cnknext == ALLONES )
         return -1;
 
+    debug("read @ %x, len %d\n", fd->cnknext, fd->bufsize);
     if( diskread(fd->flfs, fd->cnknext, fd->buffer, fd->bufsize) <= 0 ) return -1;
 
     struct FSChunk* fc = (struct FSChunk*)fd->buffer;
@@ -1314,7 +1328,7 @@ read_next_chunk(struct FileData *fd){
     }
 
     fd->cnkstart = fd->cnknext;
-    fd->cnknext  = fc->next;
+    fd->cnknext  = fc->cknext;
     fd->bufpos   = sizeof(struct FSChunk);
 
     return 0;
@@ -1345,6 +1359,7 @@ flfs2_read(FILE* f, char* buf, int len){
             int l = fd->buflen - fd->bufpos;
             if( l > len ) l = len;
 
+            debug("copy len=%d\n", l);
             memcpy(buf, fd->buffer + fd->bufpos, l);
             fd->bufpos  += l;
             fd->filepos += l;
@@ -1608,6 +1623,10 @@ check_dir_all_deleted(struct FLFS *flfs, offset_t off, struct FSDir *d){
 
     d->flag = FDT_DELETED;
     d->type = FCT_DELETED;
+#ifdef FLFS_128BIT
+    d->flag_copy = FDT_DELETED;
+    d->type_copy = FCT_DELETED;
+#endif
     update_index(flfs, off, FCT_DELETED);
 }
 
@@ -1615,7 +1634,8 @@ static void
 delete_dir_entry(struct FLFS *flfs, offset_t off, struct FSDir *d, struct FSDirEnt *de){
 
     debug("rm dirent %x; buf %x de %x\n", (int)off, d, de);
-    de->attr = FDA_DELETED;
+    de->attr  = FDA_DELETED;
+    de->ctime = FDA_DELETED; // for 128bit flash alignment
     check_dir_all_deleted(flfs, off, d);
 
     diskwrite(flfs, off, d, flfs->block_size);
@@ -1641,7 +1661,7 @@ deletefile_from(struct FLFSBuf *fb, struct FSDirEnt *de){
             return -1;
         }
 
-        next = fc->next;
+        next = fc->cknext;
         fb->offset = offset;
         release_block(fb);
         offset = next;
@@ -1920,6 +1940,15 @@ flfs2_ops(int what, MountEntry *me, ...){
 
 #ifdef KTESTING
 
+DEFUN(flfs2sizes, "show struct sizes")
+{
+    printf("fschunk   %d\n", sizeof(struct FSChunk));
+    printf("fsdirent  %d\n", sizeof(struct FSDirEnt));
+    printf("fsdir     %d\n", sizeof(struct FSDir));
+
+    return 0;
+}
+
 DEFUN(dumpflfs2, "dump flfs2")
 {
     if( argc < 2 ) return 0;
@@ -1982,17 +2011,18 @@ DEFUN(dumpflfs2, "dump flfs2")
             default:          printf("/actv"); break;
             }
 
-            printf("    id=%x; %x\n", dir->uid, dir->intent);
+            printf("    id=%Qx; %Qx\n", (uint64_t)dir->uid, (uint64_t)dir->intent);
 
             for(i=0; i<flfs->ndirent; i++){
                 struct FSDirEnt *d = dir->dir + i;
                 if( DIRENT_IS_EMPTY(*d) ){
                     continue;
                 }
+
                 if( DIRENT_IS_DELETED(*d) )
-                    printf("    %2d %8x ---- %s\n", i, d->start, d->name);
+                    printf("    x %2d %8x ---- %s\n", i, d->start, d->name);
                 else
-                    printf("    %2d %8x %04x %s\n", i, d->start, d->attr & FLFS_ATTR_MASK, d->name);
+                    printf("    + %2d %8x %04x %s\n", i, d->start, (int)(d->attr & FLFS_ATTR_MASK), d->name);
             }
         }
 
