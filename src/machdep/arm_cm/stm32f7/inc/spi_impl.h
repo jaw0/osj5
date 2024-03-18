@@ -21,11 +21,11 @@
 
 
 static inline void
-_spi_dev_init(int unit, struct SPIInfo *ii){
+_spi_dev_init(struct Device_Conf *dev, struct SPIInfo *ii){
     SPI_TypeDef *addr;
     int dmairqrx, dmairqtx;
 
-    switch(unit){
+    switch(dev->unit){
     case 0:
         // on ahb2, dma2 chan2+3
         // CLK = A5, MISO = A6, MOSI = A7
@@ -109,7 +109,7 @@ _spi_dev_init(int unit, struct SPIInfo *ii){
         break;
  
     default:
-        bootmsg("invalid spi%d\n", unit);
+        bootmsg("invalid spi%d\n", dev->unit);
         PANIC("invalid spi");
     }
 

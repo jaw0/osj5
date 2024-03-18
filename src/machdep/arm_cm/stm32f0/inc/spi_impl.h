@@ -18,11 +18,11 @@
 
 
 static inline void
-_spi_dev_init(int unit, struct SPIInfo *ii){
+_spi_dev_init(struct Device_Conf *dev, struct SPIInfo *ii){
     SPI_TypeDef *addr;
     int dmairqrx, dmairqtx;
 
-    switch(unit){
+    switch(dev->unit){
 
 
 

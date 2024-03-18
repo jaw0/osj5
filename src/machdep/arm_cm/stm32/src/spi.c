@@ -85,7 +85,7 @@ spi_init(struct Device_Conf *dev){
 
     bzero(ii, sizeof(struct SPIInfo));
 
-    _spi_dev_init(unit, ii);
+    _spi_dev_init(dev, ii);
     addr = ii->addr;
 
     addr->CR1 |= CR1_SSM | CR1_MSTR;
