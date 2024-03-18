@@ -177,6 +177,23 @@ sdio_clr_icr(void){
     SDIO->ICR = 0x1FE00FFF;
 }
 
+static void
+sdio_wait_done(void){
+
+    uint32_t sr, pr=0;
+    int count = 2000000;
+    while( count-- > 0 ){
+        sr = SDIO->STA;
+
+        if( (sr & (SDMMC_STA_CPSMACT | SDMMC_STA_DPSMACT)) == 0) break;
+    }
+
+    if( (sr & (SDMMC_STA_CPSMACT | SDMMC_STA_DPSMACT))){
+        trace_crumb1("sdio", "XXX", SDIO->STA);
+    }
+
+}
+
 static int
 sdio_cmd_none(u_long cmd, u_long arg){
     int timeout = 0xFFFF;
@@ -197,13 +214,14 @@ sdio_cmd_none(u_long cmd, u_long arg){
 
 static int
 __attribute__ ((optimize("-O0")))
-_sdio_cmd(u_long cmd){
+_sdio_cmd(u_long cmd, u_long arg){
 
+    sdio_wait_done();
     sdio_clr_icr();
 
     trace_crumb2("sdio", "cmd", cmd, SDIO->STA);
-    cmd |= (SDIO->CMD & ~0x1FFFF ) | CMD_CPSMEN;
-    cmd |= (1<<11) | (1<<7); // QQQ waitpend, stop
+    cmd |= /* (SDIO->CMD & ~0x1FFFF ) |*/ CMD_CPSMEN;
+    SDIO->ARG = arg;
     SDIO->CMD = cmd;
 
     uint32_t sr, pr=0;
@@ -218,7 +236,7 @@ _sdio_cmd(u_long cmd){
             trace_crumb2("sdio", "cmd+", sr, count);
         }
         pr = sr;
-    } while (((sr & (SDMMC_STA_CCRCFAIL | SDMMC_STA_CMDREND // | SDMMC_STA_CTIMEOUT
+    } while (((sr & (SDMMC_STA_CCRCFAIL | SDMMC_STA_CMDREND | SDMMC_STA_CTIMEOUT
                      /*| SDMMC_STA_BUSYD0END*/ )) == 0) && ((sr & SDMMC_STA_CPSMACT) != 0));
 
     trace_crumb4("sdio", "/cmd", cmd, SDIO->STA, count, SDIO->RESP1);
@@ -230,16 +248,14 @@ _sdio_cmd(u_long cmd){
 static int
 sdio_cmd_short(u_long cmd, u_long arg){
 
-    SDIO->ARG = arg;
-    int r = _sdio_cmd( cmd | CMD_WAIT_SHORT );
+    int r = _sdio_cmd( cmd | CMD_WAIT_SHORT, arg );
     return r;
 }
 
 static int
 sdio_cmd_r1(u_long cmd, u_long arg){
 
-    SDIO->ARG = arg;
-    int r = _sdio_cmd( cmd | CMD_WAIT_SHORT );
+    int r = _sdio_cmd( cmd | CMD_WAIT_SHORT, arg );
 
     if( SDIO->RESP1 & 0xFFFFE008 ) return -1;
     return r;
@@ -248,8 +264,7 @@ sdio_cmd_r1(u_long cmd, u_long arg){
 static int
 sdio_cmd_r3(u_long cmd, u_long arg){
 
-    SDIO->ARG = arg;
-    int r = _sdio_cmd( cmd | CMD_WAIT_SHORT );
+    int r = _sdio_cmd( cmd | CMD_WAIT_SHORT, arg );
     // cmd does not return a CRC. ignore CRC error
     return r & SR_CTIMEOUT;
 }
@@ -257,8 +272,7 @@ sdio_cmd_r3(u_long cmd, u_long arg){
 static int
 sdio_cmd_long(u_long cmd, u_long arg, u_long *dst){
 
-    SDIO->ARG = arg;
-    int r = _sdio_cmd( cmd | CMD_WAIT_LONG );
+    int r = _sdio_cmd( cmd | CMD_WAIT_LONG, arg );
 
     dst[0] = __REV(SDIO->RESP1);
     dst[1] = __REV(SDIO->RESP2);
@@ -330,7 +344,10 @@ initialize_card(struct SDIOinfo *ii){
 
     trace_crumb1("sdio", "SWITCH", SDIO->STA);
 
-#if 0
+#if 1
+    sdio_wait_done();
+    sdio_clr_icr();
+
     // XXX ? U5 is broken ?
     //   gpioD[0..3] = ok
     //   nope, even at slow speed
@@ -341,8 +358,9 @@ initialize_card(struct SDIOinfo *ii){
     r = sdio_cmd_short( 6, 2 );
     IDBGRESP(6);
 
+    sdio_wait_done();
     // if( !r )
-        SDIO->CLKCR |= 1 << 14;	// 4 bit bus
+    SDIO->CLKCR |= 1 << 14;	// 4 bit bus
 
     trace_crumb2("sdio", "CLKR", SDIO->CLKCR, r);
 
@@ -355,6 +373,9 @@ initialize_card(struct SDIOinfo *ii){
 #endif
 
 #if 1
+    SDIO->CLKCR &= ~0x3FF;
+    SDIO->CLKCR |= 3;
+#else
     // increase speed
     SDIO->CLKCR &= ~0x3FF;
     if( isv2 && ishc ){
@@ -504,7 +525,7 @@ sdio_bread(FILE*f, char*d, int len, offset_t pos){
     struct SDIOinfo *ii = f->d;
     int tries, ret=-1, r;
 
-    trace_crumb3("sdio", "READ", pos, len, SDIO->STA);
+    trace_crumb3("sdio", "READ", (int)pos, len, SDIO->STA);
 
 #ifdef DMAALIGN
     if( (int)d & 0x1F ) kprintf("sdio buf align %x %d\n", d, len);
@@ -515,12 +536,11 @@ sdio_bread(FILE*f, char*d, int len, offset_t pos){
     sync_lock(& ii->lock, "sdcard");
 
     for(tries=0; tries<MAXTRY; tries++){
-
+#if 1
         SDIO->DCTRL   = 0;
         SDIO->DTIMER  = RTIMEOUT << 3; // XXX
         SDIO->DLEN    = len;
         SDIO->DCTRL  |= 0
-            | (1 << 13) // rst fifo
             | (9<<4)	// 512B block
             | (3<<2)	// xfer until STOP
             | (1<<1)	// read
@@ -531,11 +551,40 @@ sdio_bread(FILE*f, char*d, int len, offset_t pos){
         SDIO->IDMACTRL  = 1;
         got_dataend     = 0;
 
+        trace_crumb5("sdio", "read", tries, SDIO->STA, SDIO->CLKCR, SDIO->DCTRL, SDIO->CMD);
+
+        if( len == 512 ){
+            r = sdio_cmd_r1( 17 | CMD_TRANS, (u_long)pos );
+            IDBGRESP(17);
+        }else{
+            r = sdio_cmd_r1( 18 | CMD_TRANS, (u_long)pos );
+            IDBGRESP(18);
+        }
+#else
+
         trace_crumb2("sdio", "read", tries, SDIO->STA);
 
-        r = sdio_cmd_r1( 18 | CMD_TRANS, pos );
+        r = sdio_cmd_r1( 18, pos );
         IDBGRESP(18);
 
+        sdio_wait_done();
+
+        SDIO->ICR       = 0xFFFFFFFF;
+        SDIO->IDMABASER = d;
+        SDIO->IDMACTRL  = 1;
+        got_dataend     = 0;
+
+        SDIO->DCTRL   = 0;
+        SDIO->DTIMER  = RTIMEOUT << 3; // XXX
+        SDIO->DLEN    = len;
+        SDIO->DCTRL  |= 0
+            | (9<<4)	// 512B block
+            | (3<<2)	// xfer until STOP
+            | (1<<1)	// read
+            | 1
+            ;
+
+#endif
         // kprintf("sdio cmd %d r %x sr %x res %x\n", SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1);
 
 

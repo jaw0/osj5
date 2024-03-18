@@ -23,12 +23,21 @@
 #define CR_ADVREGEN	(1<<28)
 #define SR_ARDY		1
 
+#ifdef ADC123_COMMON
+#  define COMMON ADC123_COMMON
+#else
+#  define COMMON ADC12_COMMON
+#endif
+
+
 static inline ADC_TypeDef *
 _adc_addr(int adc){
     switch(adc >> 5){
     case 0:	return (ADC_TypeDef*)ADC1;
     case 1:	return (ADC_TypeDef*)ADC2;
+#ifdef ADC3
     case 2:	return (ADC_TypeDef*)ADC3;
+#endif
     default:
         PANIC("invalid ADC");
     }
@@ -57,7 +66,11 @@ adc_init(int chan, int samp){
     ADC_TypeDef *dev = _adc_addr(chan);
     int cn = chan & 0x1F;
 
+#ifdef PLATFORM_STM32U5
+    RCC->AHB2ENR1 |= 1<<10;
+#else // L4
     RCC->AHB2ENR |= 1<<13;
+#endif
 
     switch(chan>>5){
     case 0:
@@ -80,13 +93,13 @@ adc_init(int chan, int samp){
 
         // use default clock (from RCC)
         // enable vref, temp
-        ADC123_COMMON->CCR = (0<<16) | (0<<18) | (3 <<22);
+        COMMON->CCR = (0<<16) | (0<<18) | (3 <<22);
 
         dev->ISR = 0;
 
         ADC1->CR |= 1<<31; // calibrate
         while( ADC1->CR & (1<<31) ){}
-        
+
         dev->CR |= CR_ADON;	/* enable */
         while( (dev->ISR & SR_ARDY) == 0 ){} // wait for it
     }

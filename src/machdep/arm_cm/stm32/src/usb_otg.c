@@ -3,7 +3,11 @@
   Author: Jeff Weisberg <jaw @ tcp4me.com>
   Created: 2018-Apr-15 22:29 (EDT)
   Function: usb otg full-speed + high-speed
+*/
 
+/*
+  tested on:
+	stm32 F4, L4, F7, U5
 */
 
 #include <conf.h>

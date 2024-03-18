@@ -19,6 +19,8 @@ spi:    machdep/arm_cm/stm32/src/spi.c
 stflash:        machdep/arm_cm/stm32/src/stflash.c
 stflash:        machdep/arm_cm/stm32u5/src/stflashimpl.c
 
+hash:   machdep/arm_cm/stm32f4/src/hash.c
+aes:    machdep/arm_cm/stm32f7/src/aes.c
 
 # nb. 3 different usb hardwares: host+dev/fs, otg/fs, otg/hs
 

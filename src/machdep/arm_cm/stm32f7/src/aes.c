@@ -10,12 +10,14 @@
 #include <proc.h>
 #include <stm32.h>
 #include <crypto.h>
-#include <dma.h>
+//#include <dma.h>
 #include <alloc.h>
 #include <userint.h>
 
 // NB - some devices have the "crypto" device, some have the "aes" device (not compatible)
 // NB - DMA does not work as documented
+
+// #define USE_AES_DMA
 
 #define SR_BUSY	(1<<4)
 #define SR_OFNE	(1<<2)
@@ -38,8 +40,13 @@ static u_long* crypto_outbuf;
 
 int
 aes_init(void){
+
+#ifdef PLATFORM_STM32U5
+    RCC->AHB2ENR1 |= 1<<16;
+#else
+    // F7
     RCC->AHB2ENR |= 1<<4;
-    // RCC->AHB1ENR |= 1<<22;	// DMA2
+#endif
     return 0;
 }
 
@@ -56,10 +63,31 @@ _reset_crypto(void){
 
 static void
 _wait_ccf(){
-    while( !(AES->SR & SR_CCF) ){}
+    while( !(AES->SR & SR_CCF) ){
+        __asm("nop");
+    }
+
+#ifdef PLATFORM_STM32U5
+    AES->ICR |= 1;
+#else
+    // F7
     AES->CR |= CR_CCF;
+#endif
 }
 
+static void
+_wait_nbusy(){
+    while( AES->SR & SR_BUSY ){
+        __asm("nop");
+    }
+}
+
+static void
+_wait_keyvalid(){
+    while( !(AES->SR & (1<<7)) ){
+        __asm("nop");
+    }
+}
 
 // 128 bit or 256 bit only
 static void
@@ -86,10 +114,12 @@ _set_key(const u_char *key, int keylen){
     AES->KEYR1 = __REV( *k ++ );
     AES->KEYR0 = __REV( *k ++ );
 
+    _wait_keyvalid();
+
 }
 
 static inline void
-_prepare_key(){
+_prepare_key(int alg){
 
     AES->CR |= 1 << 3; // key prepare mode
     AES->CR |= 1; // enable
@@ -117,6 +147,7 @@ _start_crypto(int alg){
     crypto_blksz = 16;
 }
 
+#ifdef USE_AES_DMA
 static inline void
 _xwait_for_indma(void){
     if( DMASTRI->CR & 1 )
@@ -191,6 +222,7 @@ _xstop_in_dma(void){
     printf("/dma in ndtr %d\n", DMASTRI->NDTR);
     DMASTRI->CR   &= ~1;
 }
+#endif
 
 void
 crypto_encrypt_start(int alg, const u_char *key, int keylen, const u_char *iv, int ivlen, u_char *out, int outlen){
@@ -207,10 +239,11 @@ void
 crypto_decrypt_start(int alg, const u_char *key, int keylen, const u_char *iv, int ivlen, u_char *out, int outlen){
 
     _reset_crypto();
+    AES->CR |= (1 << 3);
     _set_key(key, keylen);
 
     if( alg == CRYPTO_ALG_AES_ECB || alg == CRYPTO_ALG_AES_CBC ){
-        _prepare_key();
+        _prepare_key(alg);
     }
 
     AES->CR &= ~1;
@@ -221,13 +254,9 @@ crypto_decrypt_start(int alg, const u_char *key, int keylen, const u_char *iv, i
     crypto_outbuf = out;
     crypto_outlen = outlen;
     _start_crypto(alg);
+
 }
 
-
-static inline void
-_xwait_for_infifo(void){
-    while( !(CRYP->SR & SR_IFNF) ){}
-}
 
 static void
 _crypto_output(){
@@ -293,6 +322,7 @@ crypto_add(const u_long *in, int inlen){
             *buf++ = *src++;
         }
     }
+
     //printf("+ insz %d\n", crypto_insz);
 }
 
@@ -386,6 +416,7 @@ crypto_gcm_encrypt(u_char *out, int outlen){
 
     AES->CR &= ~ (3<<13);
     AES->CR |= 2 << 13; // CCMPH = payload phase (2)
+    _wait_nbusy();
 
 }
 
@@ -403,6 +434,7 @@ crypto_gcm_decrypt(u_char *out, int outlen){
     AES->CR &= ~ (3<<13);
     AES->CR |= 2 << 13; // CCMPH = payload phase (2)
     AES->CR |= 2 << 3;  // decrypt
+    _wait_nbusy();
 
 }
 
@@ -416,6 +448,7 @@ crypto_gcm_final(u_char *out, int outlen){
         _crypto_flush_input(1);
     }
     _crypto_maybe_output();
+    _wait_nbusy();
 
     // printf("final aadsz %d, insz %d; CR %x, SR %x\n", crypto_aadsz, crypto_insz, AES->CR, AES->SR);
 
@@ -488,6 +521,7 @@ DEFUN(aestest, 0)
     return 0;
 }
 
+#ifdef USE_AES_DMA
 DEFUN(aestest2, 0)
 {
 
@@ -577,7 +611,7 @@ DEFUN(aestest2, 0)
     
     return 0;
 }
-
+#endif
 
 
 // 62usec
@@ -615,7 +649,7 @@ DEFUN(cryptotest, "crypto test")
     crypto_decrypt_start( CRYPTO_ALG_AES_CBC, azero256, 32, azero128, 16, buf, sizeof(buf));
     crypto_add(test1, 32 );
     crypto_final( );
-    printf("%32,.4H\n", buf);
+    printf("%x: %32,.4H\n", buf, buf);
 
 
     return 0;

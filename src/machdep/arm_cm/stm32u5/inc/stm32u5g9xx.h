@@ -383,7 +383,9 @@ typedef struct
   __IO uint32_t IMR;              /*!< HASH interrupt enable register, Address offset: 0x20        */
   __IO uint32_t SR;               /*!< HASH status register,           Address offset: 0x24        */
        uint32_t RESERVED[52];     /*!< Reserved, 0x28-0xF4                                         */
-  __IO uint32_t CSR[54];          /*!< HASH context swap registers,    Address offset: 0x0F8-0x1CC */
+  __IO uint32_t CSR[64];          /*!< HASH context swap registers,    Address offset: 0x0F8-0x1CC */
+  uint32_t  RESERVED2[70];  /*!< Reserved, 0x1F8-0x30F                                      */
+  __IO uint32_t HR2[8];     /*!< HASH digest registers,         Address offset: 0x310-0x32F */
 } HASH_TypeDef;
 
 /**

@@ -21,17 +21,40 @@ static int hmac_key_len;
 // NB - SHA224, SHA256 are not available on all chips with the hash peripheral
 //      check data sheets for details.
 
+#ifdef PLATFORM_STM32U5
+#  define ALGO(n) (n << 17)
+#else
+// F4
+#  define ALGO(n) (((n&1) << 7) | ((n&2)<<17))
+#endif
+
 int
 hash_init(void){
 
+#ifdef PLATFORM_STM32U5
+    RCC->AHB2ENR1 |= 1<<17;
+#else
+    // F4
     RCC->AHB2ENR |= 1<<5;
+#endif
     return 0;
 }
+
+
+static inline void
+_hash_wait_ready(void){
+    // wait until done
+    while( HASH->SR & 8 ){
+        __asm("nop");
+    }
+}
+
 
 void
 hash_md5_start(void){
 
-    HASH->CR     = 1<<7;
+    _hash_wait_ready();
+    HASH->CR     = ALGO(1);
     HASH->CR    |= (2<<4);	// byte mode
     HASH->CR    |= 1<<2;	// init
     HASH->STR &= ~0x11F;
@@ -42,7 +65,8 @@ hash_md5_start(void){
 void
 hash_sha1_start(void){
 
-    HASH->CR     = 0;
+    _hash_wait_ready();
+    HASH->CR     = ALGO(0);
     HASH->CR    |= (2<<4);	// byte mode
     HASH->CR    |= 1<<2;	// init
     HASH->STR &= ~0x11F;
@@ -52,7 +76,8 @@ hash_sha1_start(void){
 void
 hash_sha224_start(void){
 
-    HASH->CR     = 1<<18;
+    _hash_wait_ready();
+    HASH->CR     = ALGO(2);
     HASH->CR    |= (2<<4);	// byte mode
     HASH->CR    |= 1<<2;	// init
     HASH->STR &= ~0x11F;
@@ -62,17 +87,12 @@ hash_sha224_start(void){
 void
 hash_sha256_start(void){
 
-    HASH->CR     = (1<<7) | (1<<18);
+    _hash_wait_ready();
+    HASH->CR     = ALGO(3);
     HASH->CR    |= (2<<4);	// byte mode
     HASH->CR    |= 1<<2;	// init
     HASH->STR &= ~0x11F;
     hash_outlen  = 32;
-}
-
-static inline void
-_hash_wait_ready(void){
-    // wait until done
-    while( HASH->SR & 8 ){}
 }
 
 static void
@@ -81,13 +101,16 @@ _hmac_add_key(void){
     int *k     = (int*)hmac_key;
 
     HASH->STR &= ~0x11F;
+
     while(klen >= 4){
+        _hash_wait_ready();
         HASH->DIN = *k;
         k ++;
         klen -= 4;
     }
     if( klen ){
         HASH->STR |= klen * 8;
+        _hash_wait_ready();
         HASH->DIN  = *k;
     }
 
@@ -104,7 +127,9 @@ _hmac_start(void){
 
 void
 hmac_md5_start(const u_char *key, int keylen){
-    HASH->CR      = (1<<7) | (1<<6);
+
+    _hash_wait_ready();
+    HASH->CR      = (1<<6) | ALGO(1);
     if( keylen > 64 ) HASH->CR |= 1<<16;	// long key
     HASH->CR     |= (2<<4);	// byte mode
     HASH->CR     |= 1<<2;	// init
@@ -116,7 +141,9 @@ hmac_md5_start(const u_char *key, int keylen){
 
 void
 hmac_sha1_start(const u_char *key, int keylen){
-    HASH->CR      = (1<<6);
+
+    _hash_wait_ready();
+    HASH->CR      = (1<<6) | ALGO(0);
     if( keylen > 64 ) HASH->CR |= 1<<16;	// long key
     HASH->CR     |= (2<<4);	// byte mode
     HASH->CR     |= 1<<2;	// init
@@ -128,7 +155,9 @@ hmac_sha1_start(const u_char *key, int keylen){
 
 void
 hmac_sha224_start(const u_char *key, int keylen){
-    HASH->CR      = (1<<6) | (1<<18);
+
+    _hash_wait_ready();
+    HASH->CR      = (1<<6) | ALGO(2);
     if( keylen > 64 ) HASH->CR |= 1<<16;	// long key
     HASH->CR     |= (2<<4);	// byte mode
     HASH->CR     |= 1<<2;	// init
@@ -140,7 +169,9 @@ hmac_sha224_start(const u_char *key, int keylen){
 
 void
 hmac_sha256_start(const u_char *key, int keylen){
-    HASH->CR      = (1<<6) | (1<<18) | (1<<7);
+
+    _hash_wait_ready();
+    HASH->CR      = (1<<6) | ALGO(3);
     if( keylen > 64 ) HASH->CR |= 1<<16;	// long key
     HASH->CR     |= (2<<4);	// byte mode
     HASH->CR     |= 1<<2;	// init
@@ -168,13 +199,16 @@ hash_add(const u_char *in, int inlen){
         hash_bufsz += add;
 
         if( hash_bufsz >= 4 ){
+            _hash_wait_ready();
             HASH->DIN  = hash_inbuf;
             hash_bufsz = 0;
             hash_inbuf = 0;
         }
     }
 
+
     while(inlen >= 4){
+        _hash_wait_ready();
         HASH->DIN = *(int*)in;
         in += 4;
         inlen -= 4;
@@ -198,6 +232,7 @@ _hash_add_final(void){
 
     // add remaining partial
     if( hash_bufsz ){
+        _hash_wait_ready();
         HASH->DIN  = hash_inbuf;
         HASH->STR |= hash_bufsz * 8;
     }
@@ -219,13 +254,19 @@ _hash_copy_out(u_char *out, int outlen){
     // in a second set of output registers.
     // the values in hr[0..4] are duplicated in both sets
 
-    if( outlen <= 5 ){
-        for(i=0; i<outlen; i++)
-            dst[i] = __REV(HASH->HR[i]);
-    }else{
-        for(i=0; i<outlen; i++)
-            dst[i] = __REV(HASH->HR2[i]);
+    for(i=0; i<outlen && i<5; i++){
+        dst[i] = __REV(HASH->HR[i]);
     }
+
+#ifdef HASH_DIGEST
+    for( ; i<outlen; i++){
+        dst[i] = __REV(HASH_DIGEST->HR[i]);
+    }
+#else
+    for( ; i<outlen; i++){
+        dst[i] = __REV(HASH->HR2[i]);
+    }
+#endif
 }
 
 void
@@ -249,16 +290,19 @@ hmac_finish(u_char *out, int outlen){
 DEFUN(hashtiming, "test hash timing")
 {
     char buf[32];
+    int i;
 
     yield();
     utime_t t0 = get_hrtime();
 
-    hash_md5_start();
-    hash_add( &buf, 512 );
-    hash_finish(buf, sizeof(buf));
+    for(i=0; i<10; i++){
+        hash_md5_start();
+        hash_add( &buf, 512 );
+        hash_finish(buf, sizeof(buf));
+    }
 
     utime_t t1 = get_hrtime();
-    printf("hash %d usec\n", (int)(t1-t0));
+    printf("hash %d usec [10x md5(512)]\n", (int)(t1-t0));
 
     return 0;
 }
