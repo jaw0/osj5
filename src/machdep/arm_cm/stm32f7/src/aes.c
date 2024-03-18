@@ -114,8 +114,9 @@ _set_key(const u_char *key, int keylen){
     AES->KEYR1 = __REV( *k ++ );
     AES->KEYR0 = __REV( *k ++ );
 
+#ifdef PLATFORM_STM32U5
     _wait_keyvalid();
-
+#endif
 }
 
 static inline void
@@ -456,10 +457,18 @@ crypto_gcm_final(u_char *out, int outlen){
     AES->CR &= ~(3<<3);  // dir = encrypt
 
     // write lengths (bits)
+#ifdef PLATFORM_STM32U5
+    AES->DINR = 0;
+    AES->DINR = crypto_aadsz << 3;
+    AES->DINR = 0;
+    AES->DINR = crypto_insz << 3;
+#else
+    // F7 - ignores the swap setting?
     AES->DINR = 0;
     AES->DINR = __REV( crypto_aadsz << 3 );
     AES->DINR = 0;
     AES->DINR = __REV( crypto_insz << 3 );
+#endif
 
     // wait for it
     _wait_ccf();
@@ -718,9 +727,79 @@ DEFUN(gmactest, "crypto test")
     crypto_add(zero128, 16);
     crypto_gcm_final(mac, 16);
 
+    // expect:
     // 21C2.EB20.CD22.14DB.DF34.C9B8.2ECB.7ED2
     printf("%16,.4H\n", mac);
 
+    return 0;
+}
+
+DEFUN(gmactest2, "test")
+{
+
+    AES->CR = 0;	// reset
+    AES->CR |= 3 << 5; 	// CHMOD = GCM Mode
+    AES->CR |= 2 << 1;  // byte mode
+
+    // set key + iv to all 0s
+    AES->KEYR3 = 0;
+    AES->KEYR2 = 0;
+    AES->KEYR1 = 0;
+    AES->KEYR0 = 0;
+
+    AES->IVR3 = 0;
+    AES->IVR2 = 0;
+    AES->IVR1 = 0;
+    AES->IVR0 = 2; // init counter to 2 (per RM0456 Table 466)
+
+    AES->CR |= 1;	// enable
+    _wait_ccf();
+
+
+    // AAD phase
+    AES->CR |= 1 << 13; // CCMPH = header phase (1)
+    AES->CR |= 1;	// enable
+
+    // add AAD data
+    AES->DINR = 0;
+    AES->DINR = 0;
+    AES->DINR = 0;
+    AES->DINR = 0;
+
+
+    _wait_ccf();
+
+
+    // crypto_gcm_final(mac, 16);
+    // skip payload phase
+    // AES->CR &= ~ (3<<13);
+    // AES->CR |= 2 << 13; // CCMPH = payload phase (2)
+    // _wait_nbusy();
+
+
+    AES->CR |= 3 << 13;  // CCMPH = final phase (3)
+    AES->CR &= ~(3<<3);  // dir = encrypt
+
+    // write lengths (bits)
+    AES->DINR = 0;
+    AES->DINR = 128; // ok=128; __REV( 128 );
+    AES->DINR = 0;
+    AES->DINR = 0;
+
+    // wait for it
+    _wait_ccf();
+
+    // read mac from DOUT x4
+    uint32_t dst[4];
+    dst[0] = AES->DOUTR;
+    dst[1] = AES->DOUTR;
+    dst[2] = AES->DOUTR;
+    dst[3] = AES->DOUTR;
+
+    AES->CR &= ~1;	// disable
+
+
+    printf("%16,.4H\n", dst);
     return 0;
 }
 
