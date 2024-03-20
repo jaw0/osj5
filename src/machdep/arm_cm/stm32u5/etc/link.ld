@@ -60,7 +60,7 @@ SECTIONS
 {
     .boot_header :
     {
-		. = ALIGN(4);
+		. = ALIGN(16);
         KEEP(*(.boot_header))
     } >FLASH
 

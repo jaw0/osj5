@@ -25,9 +25,12 @@
 #include <stm32.h>
 
 #ifdef PLATFORM_STM32U5
-#  define CR	NSCR
-#  define SR	NSSR
+#  define FLCR	NSCR
+#  define FLSR	NSSR
 #  define KEYR	NSKEYR
+#else
+#  define FLCR	CR
+#  define FLSR	SR
 #endif
 
 #ifdef PLATFORM_STM32U5
@@ -214,16 +217,17 @@ stflash_bread(FILE *f, char *buf, int len, offset_t offset){
 }
 
 static void
-ststart(struct Flash_Disk *d){
-    sync_lock( & d->lock, "flash" );
+ststart(void){
     FLASH->KEYR = 0x45670123;
     FLASH->KEYR = 0xCDEF89AB;
 }
 
 static void
-stfinish(struct Flash_Disk *d){
-    FLASH->CR |= 1<<31;
-    sync_unlock( & d->lock );
+stfinish(void){
+    FLASH->FLCR |= 1<<31;
+#ifdef PLATFORM_STM32U5
+    ICACHE->CR |= 2; // invalidate cache
+#endif
 }
 
 void
@@ -231,9 +235,9 @@ wait_not_busy(void){
     int i;
 
     while(1){
-        int b = FLASH->SR & (1<<16);
+        int b = FLASH->FLSR & (1<<16);
         if( !b ){
-            FLASH->SR = 0xF3;
+            FLASH->FLSR = 0xF3;
             for(i=0; i<1000; i++) __asm("nop");
             return;
         }
@@ -241,53 +245,45 @@ wait_not_busy(void){
 }
 
 int
-stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
-    struct Flash_Disk *d;
+stflash_program(const char *b, uint32_t addr, int len){
     int i;
 
-    d = f->d;
-
-    if( offset >= d->totalsize )
-        return 0;
-
-    kprintf("stf write %d @ %x => %x + %x\n", len, b, d->addr, offset);
-    //hexdump(b, len);
-    ststart(d);
-    FLASH->SR = 0xFFFFFFFF;	// clear errors
+    ststart();
+    FLASH->FLSR = 0xFFFFFFFF;	// clear errors
 
 #ifdef WRITE_BYTES
     // wide writes + ecc
     if( len & (WRITE_BYTES - 1) ){
         // not a multiple of N-bits, read-modify-write
         unsigned long buf[4];
-        unsigned long *dst = (unsigned long*)(d->addr + (offset & ~(WRITE_BYTES - 1)));
+        unsigned long *dst = (unsigned long*)(addr & ~(WRITE_BYTES - 1));
 
-        kprintf("rmw: len %d, dst %x+%x\n", len, dst, offset & (WRITE_BYTES - 1));
+        kprintf("rmw: len %d, dst %x+%x\n", len, dst, addr & (WRITE_BYTES - 1));
 
         // read
         memcpy((char*)buf, (char*)dst, WRITE_BYTES);
         // modify
         for(i=0; i<len&(WRITE_BYTES - 1); i++){
-            ((char*)buf)[i + (offset & (WRITE_BYTES - 1))] = b[i];
+            ((char*)buf)[i + (addr & (WRITE_BYTES - 1))] = b[i];
         }
         // hexdump(buf, 8);
         // write
-        FLASH->CR |= 1;	// enable program
+        FLASH->FLCR |= 1;	// enable program
 
         for(i=0; i<(WRITE_BYTES>>2); i++){
             wait_not_busy();
             dst[i] = buf[i];
 
-            if( FLASH->SR & 0xF2 ) kprintf("err: len %d %x; @ %x, cr %x\n", len, FLASH->SR, dst + i, FLASH->CR);
+            if( FLASH->FLSR & 0xF2 ) kprintf("err: len %d %x; @ %x, cr %x\n", len, FLASH->FLSR, dst + i, FLASH->FLCR);
             //if( dst[i] != buf[i] ) kprintf("err @%x: %x != %x\n", dst + i, dst[i], buf[i]);
         }
-
+    }
 #else
     if( len & 3 ){
         // not a multiple of 32bits, go byte-by-byte
         const unsigned char *src = (unsigned char*)b;
-        unsigned char *dst = (unsigned char*)(d->addr + offset);
-        FLASH->CR |= (0<<8) | 1;	// 8 bits, enable program
+        unsigned char *dst = (unsigned char*)addr;
+        FLASH->FLCR |= (0<<8) | 1;	// 8 bits, enable program
 
         for(i=0; i<len; i++){
             wait_not_busy();
@@ -295,11 +291,12 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
             //if( FLASH->SR & 0xF2 ) kprintf("err: %x; @ %x, cr %x\n", FLASH->SR, dst + i, FLASH->CR);
             //if( dst[i] != src[i] ) kprintf("err @%x: %x != %x\n", dst + i, dst[i], src[i]);
         }
+    }
 #endif
-    }else{
+    else{
         const unsigned long *src = (unsigned long*)b;
-        unsigned long *dst = (unsigned long*)(d->addr + offset);
-        FLASH->CR |= (2<<8) | 1;	// 32 bits, enable program
+        unsigned long *dst = (unsigned long*)addr;
+        FLASH->FLCR |= (2<<8) | 1;	// 32 bits, enable program
 
         int wlen = len / 4;
         kprintf("wr: len %d, dst %x\n", len, dst);
@@ -336,19 +333,42 @@ stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
 
             wait_not_busy();
             dst[i] = src[i];
-            if( FLASH->SR & 0xF2 ) kprintf("err: len %d, %x; @ %x, cr %x [src %x dst %x] \n", len, FLASH->SR, dst + i, FLASH->CR, src+i, dst+i);
+            if( FLASH->FLSR & 0xF2 ) kprintf("err: len %d, %x; @ %x, cr %x [src %x dst %x] \n", len, FLASH->FLSR, dst + i, FLASH->FLCR, src+i, dst+i);
             //if( dst[i] != src[i] ) kprintf("err @%x: %x != %x\n", dst + i, dst[i], src[i]);
         }
     }
 
     wait_not_busy();
-    FLASH->CR &= ~1;		// disable program
-    FLASH->CR &= ~(3<<8);	// clear size
-    stfinish(d);
+    FLASH->FLCR &= ~1;		// disable program
+    FLASH->FLCR &= ~(3<<8);	// clear size
+    stfinish();
 
     //hexdump(d->addr + offset, len);
     return len;
 }
+
+
+int
+stflash_bwrite(FILE *f, const char *b, int len, offset_t offset){
+    struct Flash_Disk *d;
+
+    d = f->d;
+
+    if( offset >= d->totalsize )
+        return 0;
+
+    unsigned char *dst = (unsigned char*)(d->addr + offset);
+
+    kprintf("stf write %d @ %x => %x + %x\n", len, b, d->addr, offset);
+
+    sync_lock( & d->lock, "flash" );
+    int r = stflash_program(b, dst, len);
+    sync_unlock( & d->lock );
+
+    return r;
+
+}
+
 
 int
 stflash_ioctl(FILE* f, int cmd, void* a){
@@ -374,35 +394,71 @@ stflash_ioctl(FILE* f, int cmd, void* a){
 
 
 static int
-erase(struct Flash_Disk *fdk, int a){
-
-    int blk  = a / fdk->blocksize;
-    int sect = fdk->blockno + blk;
+erase_sector(struct Flash_Info *fi, int sect){
 
 #ifdef PLATFORM_STM32U5
-    int nb = fdk->info->nblocks;
+    int nb = fi->nblocks;
     int bank = (sect >= (nb >> 1)) ? 1 : 0;
-    kprintf(">> fl a %x, off %x, nb %d, sect %d, bk %d\n", a, fdk->blockno, nb, sect, bank);
     if( bank ){
         sect -= (nb >> 1);
         sect |= (1 << 11);
     }
 #endif
 
-    kprintf("stm32 flash erase a %x b %x (sect %x)\n", a, blk, sect);
+    // kprintf("stm32 flash erase sect %x b %x (sect %x)\n", sect);
 
-    ststart(fdk);
-    FLASH->SR = 0xFFFFFFFF;	// clear errors
+    FLASH->FLSR = 0xFFFFFFFF;	// clear errors
     wait_not_busy();
-    FLASH->CR |= (sect<<3) | 2;	// sector erase
-    FLASH->CR |= 1<<16;		// start
+    FLASH->FLCR |= (sect<<3) | 2;	// sector erase
+    FLASH->FLCR |= 1<<16;		// start
     wait_not_busy();
-    FLASH->CR &= ~( (sect<<3) | 2 | (1<<16) );
-    kprintf(">> SR %x\n", FLASH->SR);
-    stfinish(fdk);
+    FLASH->FLCR &= ~( (sect<<3) | 2 | (1<<16) );
 
     return 0;
 }
+
+
+int
+stflash_erase_sectors(uint32_t start, uint32_t size){
+    const struct Flash_Info *fi = stflash_flashinfo();
+    int i, j;
+
+    ststart();
+
+    for(i=0; fi[i].addr; i++){
+        if( (start + size) <= fi[i].addr ) continue;
+        if( start >= (fi[i].addr + fi[i].nblocks * fi[i].erase_size) ) continue;
+
+        for(j=0; j<fi[i].nblocks; j++){
+            if( (start + size) <= (fi[i].addr + j * fi[i].erase_size) ) continue;
+            if( start >= (fi[i].addr + (j + 1) * fi[i].erase_size) )   continue;
+
+            int sect = fi[i].blockno + j;
+            erase_sector(fi, sect);
+        }
+    }
+
+    stfinish();
+}
+
+
+static int
+erase(struct Flash_Disk *fdk, int a){
+
+    int blk  = a / fdk->blocksize;
+    int sect = fdk->blockno + blk;
+
+    sync_lock( & fdk->lock, "flash" );
+    ststart();
+
+    int r = erase_sector(fdk->info, sect);
+
+    stfinish();
+    sync_unlock( & fdk->lock );
+
+    return r;
+}
+
 
 int
 stflash_noop(FILE *f){

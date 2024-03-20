@@ -318,6 +318,19 @@ init_ints(void){
 }
 
 void
+init_cache(){
+
+    ICACHE->CRR0 = (0x08000000 >> 21)
+        | (2 << 9) // 4 MB
+        | ((0x08000000 >> 21) << 16)
+        | (1 << 15) // REN
+        ;
+
+    ICACHE-> CR |= 1;
+
+}
+
+void
 init_hw(void){
 
     pwr_enable();
@@ -325,6 +338,7 @@ init_hw(void){
     clock_init();
     tick_init( freq_sys / 8, 1 );
     stm32_init();
+    init_cache();
 
 #ifdef KSTACK_SIZE
     extern void _switch_kstack(char*);
