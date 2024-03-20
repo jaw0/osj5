@@ -42,8 +42,8 @@ Linker subscript for STM32F10x definitions with 512K Flash and 64K RAM */
 
 MEMORY
 {
-  RAM (xrw) : ORIGIN = 0x20000000, LENGTH = 64K
-  FLASH (rx) : ORIGIN = 0x08000000, LENGTH = 1024K
+  RAM (xrw)  : ORIGIN = 0x20000000, LENGTH = 2048K
+  FLASH (rx) : ORIGIN = 0x08000000, LENGTH = 4096K
   FLASHB1 (rx) : ORIGIN = 0x00000000, LENGTH = 0
   EXTMEMB0 (rx) : ORIGIN = 0x00000000, LENGTH = 0
   EXTMEMB1 (rx) : ORIGIN = 0x00000000, LENGTH = 0
@@ -67,7 +67,7 @@ SECTIONS
     /* for Cortex devices, the beginning of the startup code is stored in the .isr_vector section, which goes to FLASH */
     .isr_vector :
     {
-		. = ALIGN(4);
+		. = ALIGN(1024);
         KEEP(*(.isr_vector))            /* Startup code */
 		. = ALIGN(4);
     } >FLASH
@@ -172,18 +172,21 @@ SECTIONS
     It is one task of the startup to copy the initial values from FLASH to RAM. */
     .data  : AT ( _sidata )
     {
-	    . = ALIGN(4);
+	. = ALIGN(4);
         /* This is used by the startup in order to initialize the .data secion */
         _sdata = . ;
 
-        KEEP(*(.jcr))
-		*(.got.plt) *(.got)
-		*(.shdata)
-		*(.data .data.* .gnu.linkonce.d.*)
+        /* code that needs to run from RAM: */
+        *(.ramfunc .ramfunc.*);
 
-	    . = ALIGN(4);
-	    /* This is used by the startup in order to initialize the .data secion */
-   	 	_edata = . ;
+        KEEP(*(.jcr))
+	*(.got.plt) *(.got)
+	*(.shdata)
+	*(.data .data.* .gnu.linkonce.d.*)
+
+	. = ALIGN(4);
+	/* This is used by the startup in order to initialize the .data secion */
+   	_edata = . ;
     } >RAM
 
 

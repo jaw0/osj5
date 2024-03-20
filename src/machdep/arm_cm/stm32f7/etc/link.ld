@@ -49,7 +49,6 @@ MEMORY
   EXTMEMB1 (rx) : ORIGIN = 0x00000000, LENGTH = 0
   EXTMEMB2 (rx) : ORIGIN = 0x00000000, LENGTH = 0
   EXTMEMB3 (rx) : ORIGIN = 0x00000000, LENGTH = 0
-
 }
 
 
@@ -61,7 +60,7 @@ SECTIONS
 {
     .boot_header :
     {
-		. = ALIGN(4);
+		. = ALIGN(16);
         KEEP(*(.boot_header))
     } >FLASH
 
