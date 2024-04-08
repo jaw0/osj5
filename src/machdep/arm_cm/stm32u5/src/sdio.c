@@ -344,13 +344,8 @@ initialize_card(struct SDIOinfo *ii){
 
     trace_crumb1("sdio", "SWITCH", SDIO->STA);
 
-#if 1
     sdio_wait_done();
     sdio_clr_icr();
-
-    // XXX ? U5 is broken ?
-    //   gpioD[0..3] = ok
-    //   nope, even at slow speed
 
     // 4 bit mode
     r = sdio_cmd_short( 55, ii->rca << 16 );
@@ -359,23 +354,10 @@ initialize_card(struct SDIOinfo *ii){
     IDBGRESP(6);
 
     sdio_wait_done();
-    // if( !r )
     SDIO->CLKCR |= 1 << 14;	// 4 bit bus
 
     trace_crumb2("sdio", "CLKR", SDIO->CLKCR, r);
 
-    // XXX
-    r = sdio_cmd_short( 55, ii->rca << 16 );
-    IDBGRESP(55);
-    r = sdio_cmd_short( 6, 2 );
-    IDBGRESP(6);
-
-#endif
-
-#if 1
-    SDIO->CLKCR &= ~0x3FF;
-    SDIO->CLKCR |= 3;
-#else
     // increase speed
     SDIO->CLKCR &= ~0x3FF;
     if( isv2 && ishc ){
@@ -385,8 +367,6 @@ initialize_card(struct SDIOinfo *ii){
         SDIO->CLKCR |= 1;
     }
     trace_crumb1("sdio", "CLKR", SDIO->CLKCR);
-
-#endif
 
     ii->info[0] = ii->sdcid[1];
     ii->info[1] = ii->sdcid[2];
@@ -432,8 +412,11 @@ sdio_clear(struct SDIOinfo *ii){
 
 static void
 sdio_stop(void){
+    SDIO->CMD &= ~SDMMC_CMD_CMDTRANS;
     int r = sdio_cmd_short( 12 | CMD_STOP, 0 );
     IDBGRESP(12);
+
+    SDIO->CMD &= ~SDMMC_CMD_CMDSTOP;
 }
 
 
@@ -536,9 +519,9 @@ sdio_bread(FILE*f, char*d, int len, offset_t pos){
     sync_lock(& ii->lock, "sdcard");
 
     for(tries=0; tries<MAXTRY; tries++){
-#if 1
+
         SDIO->DCTRL   = 0;
-        SDIO->DTIMER  = RTIMEOUT << 3; // XXX
+        SDIO->DTIMER  = RTIMEOUT;
         SDIO->DLEN    = len;
         SDIO->DCTRL  |= 0
             | (9<<4)	// 512B block
@@ -553,38 +536,15 @@ sdio_bread(FILE*f, char*d, int len, offset_t pos){
 
         trace_crumb5("sdio", "read", tries, SDIO->STA, SDIO->CLKCR, SDIO->DCTRL, SDIO->CMD);
 
-        if( len == 512 ){
+        // XXX - problem with CMD17 ?
+        if( 0 ){ // len == 512 ){
             r = sdio_cmd_r1( 17 | CMD_TRANS, (u_long)pos );
             IDBGRESP(17);
         }else{
             r = sdio_cmd_r1( 18 | CMD_TRANS, (u_long)pos );
             IDBGRESP(18);
         }
-#else
 
-        trace_crumb2("sdio", "read", tries, SDIO->STA);
-
-        r = sdio_cmd_r1( 18, pos );
-        IDBGRESP(18);
-
-        sdio_wait_done();
-
-        SDIO->ICR       = 0xFFFFFFFF;
-        SDIO->IDMABASER = d;
-        SDIO->IDMACTRL  = 1;
-        got_dataend     = 0;
-
-        SDIO->DCTRL   = 0;
-        SDIO->DTIMER  = RTIMEOUT << 3; // XXX
-        SDIO->DLEN    = len;
-        SDIO->DCTRL  |= 0
-            | (9<<4)	// 512B block
-            | (3<<2)	// xfer until STOP
-            | (1<<1)	// read
-            | 1
-            ;
-
-#endif
         // kprintf("sdio cmd %d r %x sr %x res %x\n", SDIO->RESPCMD, r, SDIO->STA, SDIO->RESP1);
 
 
@@ -603,8 +563,9 @@ sdio_bread(FILE*f, char*d, int len, offset_t pos){
 
         //kprintf("dma %x %x\n", DMASTR->NDTR, DMA->LISR >> 22);
         //kprintf("sr %x dl %x ct %x fc %x\n", SDIO->STA, SDIO->DLEN, SDIO->DCOUNT, SDIO->FIFOCNT);
+
         sdio_stop();
-        // dma_stop(d, len);
+
 
         if( !r ){
             // all done!
@@ -623,7 +584,7 @@ sdio_bread(FILE*f, char*d, int len, offset_t pos){
     sync_unlock(& ii->lock );
     // kprintf("sdrd => %d\n", ret);
     //if( ret > 0 ){
-        hexdump( d, 16 );
+    //    hexdump( d, 16 );
     //    hexdump( d+512-16, 16 );
     //}
     return ret;
@@ -682,7 +643,7 @@ sdio_bwrite(FILE*f, const char*d, int len, offset_t pos){
         }
 
         SDIO->DCTRL   = 0;
-        SDIO->DTIMER  = WTIMEOUT << 3; // XXX
+        SDIO->DTIMER  = WTIMEOUT;
         SDIO->DLEN    = len;
         SDIO->DCTRL  |= 0
             | (1 << 13) // rst fifo

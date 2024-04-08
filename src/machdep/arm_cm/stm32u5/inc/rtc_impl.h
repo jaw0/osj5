@@ -17,6 +17,7 @@ _rtc_init(int *pre_s, int *pre_a){
 
     RCC->AHB3ENR |= 1<<2;	// pwr enable
     RCC->APB3ENR |= 1<<21;	// rtc-apb enable
+    RCC->AHB1ENR |= 1<<28;	// bkpsram
     PWR->BDCR1 |= 1;		// enable bkp ram
     PWR->DBPR |= 1;		// DBP
 

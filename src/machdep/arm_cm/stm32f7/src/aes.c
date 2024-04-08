@@ -258,6 +258,11 @@ crypto_decrypt_start(int alg, const u_char *key, int keylen, const u_char *iv, i
 
 }
 
+void
+crypto_set_output(u_char *out, int outlen){
+    crypto_outbuf = out;
+    crypto_outlen = outlen;
+}
 
 static void
 _crypto_output(){
