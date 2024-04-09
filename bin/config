@@ -240,7 +240,8 @@ sub process_file {
         my $cmd = $f[0];
 
         if( $cmd eq "option" ){
-            print CONFH "#define $f[1] $f[2]\n";
+            shift @f;
+            print CONFH "#define @f\n";
         }
         elsif( $cmd eq 'makeopt' ){
             shift @f;
