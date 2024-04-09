@@ -39,6 +39,8 @@ cli:            util/cli.c
 debugger:       util/debugger.c
 play:           util/play.c
 beep:           util/beep.c
+lights:         util/lights.c
+sounds:         util/sounds.c
 
 usbd:           usb/usbd.c
 vcp:            usb/vcp.c
