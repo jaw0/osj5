@@ -21,11 +21,13 @@
 #include <usbcdc.h>
 #include <userint.h>
 
-#define MSC_SIZE    64
+#define MSC_FSSIZE    64
+#define MSC_HSSIZE   512
 #define MSC_RXD_EP  0x03
 #define MSC_TXD_EP  0x83
 
-#define CDC_SIZE    64
+#define CDC_FSSIZE    64
+#define CDC_HSSIZE   512
 #define CDC_RXD_EP  0x01
 #define CDC_TXD_EP  0x81
 #define CDC_NTF_EP  0x82
@@ -69,7 +71,7 @@ struct comp_config {
     usb_endpoint_descriptor_t   eptx;
 };
 
-static const struct comp_config comp_config ALIGN2 = {
+static const struct comp_config comp_fs_config ALIGN2 = {
 
     .config                  = {
         .bLength             = sizeof(usb_config_descriptor_t),
@@ -142,7 +144,7 @@ static const struct comp_config comp_config ALIGN2 = {
         .bDescriptorType     = USB_DTYPE_ENDPOINT,
         .bEndpointAddress    = CDC_RXD_EP,
         .bmAttributes        = UE_BULK,
-        .wMaxPacketSize      = CDC_SIZE,
+        .wMaxPacketSize      = CDC_FSSIZE,
         .bInterval           = 0,
     },
     .data_eptx               = {
@@ -150,7 +152,7 @@ static const struct comp_config comp_config ALIGN2 = {
         .bDescriptorType     = USB_DTYPE_ENDPOINT,
         .bEndpointAddress    = CDC_TXD_EP,
         .bmAttributes        = UE_BULK,
-        .wMaxPacketSize      = CDC_SIZE,
+        .wMaxPacketSize      = CDC_FSSIZE,
         .bInterval           = 0,
     },
 
@@ -170,7 +172,7 @@ static const struct comp_config comp_config ALIGN2 = {
         .bDescriptorType     = USB_DTYPE_ENDPOINT,
         .bEndpointAddress    = MSC_RXD_EP,
         .bmAttributes        = UE_BULK,
-        .wMaxPacketSize      = MSC_SIZE,
+        .wMaxPacketSize      = MSC_FSSIZE,
         .bInterval           = 0,
     },
     .eptx               = {
@@ -178,7 +180,121 @@ static const struct comp_config comp_config ALIGN2 = {
         .bDescriptorType     = USB_DTYPE_ENDPOINT,
         .bEndpointAddress    = MSC_TXD_EP,
         .bmAttributes        = UE_BULK,
-        .wMaxPacketSize      = MSC_SIZE,
+        .wMaxPacketSize      = MSC_FSSIZE,
+        .bInterval           = 0,
+    },
+};
+
+static const struct comp_config comp_hs_config ALIGN2 = {
+
+    .config                  = {
+        .bLength             = sizeof(usb_config_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_CONFIGURATION,
+        .wTotalLength        = sizeof(struct comp_config),
+        .bNumInterface       = 3,
+        .bConfigurationValue = 1,
+        .iConfiguration      = 0,
+        .bmAttributes        = 0x80,
+        .bMaxPower           = 50,
+    },
+    .comm                    = {
+        .bLength             = sizeof(usb_interface_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_INTERFACE,
+        .bInterfaceNumber    = 0,
+        .bAlternateSetting   = 0,
+        .bNumEndpoints       = 1,
+        .bInterfaceClass     = USB_CLASS_CDC,
+        .bInterfaceSubClass  = UDESCSUB_CDC_ACM,
+        .bInterfaceProtocol  = USB_CDC_PROTO_V25TER,
+        .iInterface          = USB_NO_DESCRIPTOR,
+    },
+    .cdc_hdr                 = {
+        .bLength             = sizeof(usb_cdc_header_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_CS_INTERFACE,
+        .bDescriptorSubtype  = UDESCSUB_CDC_HEADER,
+        .bcdCDC              = 0x0110,
+    },
+    .cdc_mgmt                = {
+        .bLength             = sizeof(usb_cdc_cm_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_CS_INTERFACE,
+        .bDescriptorSubtype  = UDESCSUB_CDC_CM,
+        .bmCapabilities      = 0,
+        .bDataInterface      = 1,
+    },
+    .cdc_acm                 = {
+        .bLength             = sizeof(usb_cdc_acm_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_CS_INTERFACE,
+        .bDescriptorSubtype  = UDESCSUB_CDC_ACM,
+        .bmCapabilities      = 6,
+    },
+    .cdc_union               = {
+        .bLength             = sizeof(usb_cdc_union_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_CS_INTERFACE,
+        .bDescriptorSubtype  = UDESCSUB_CDC_UNION,
+        .bMasterInterface    = 0,
+        .bSlaveInterface[0]  = 1,
+    },
+    .comm_ep                 = {
+        .bLength             = sizeof(usb_endpoint_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_ENDPOINT,
+        .bEndpointAddress    = CDC_NTF_EP,
+        .bmAttributes        = UE_INTERRUPT,
+        .wMaxPacketSize      = CDC_NTF_SZ,
+        .bInterval           = 0xFF,
+    },
+    .data                    = {
+        .bLength             = sizeof(usb_interface_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_INTERFACE,
+        .bInterfaceNumber    = 1,
+        .bAlternateSetting   = 0,
+        .bNumEndpoints       = 2,
+        .bInterfaceClass     = USB_CLASS_CDC_DATA,
+        .bInterfaceSubClass  = USB_SUBCLASS_NONE,
+        .bInterfaceProtocol  = USB_PROTO_NONE,
+        .iInterface          = USB_NO_DESCRIPTOR,
+    },
+    .data_eprx               = {
+        .bLength             = sizeof(usb_endpoint_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_ENDPOINT,
+        .bEndpointAddress    = CDC_RXD_EP,
+        .bmAttributes        = UE_BULK,
+        .wMaxPacketSize      = CDC_HSSIZE,
+        .bInterval           = 0,
+    },
+    .data_eptx               = {
+        .bLength             = sizeof(usb_endpoint_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_ENDPOINT,
+        .bEndpointAddress    = CDC_TXD_EP,
+        .bmAttributes        = UE_BULK,
+        .wMaxPacketSize      = CDC_HSSIZE,
+        .bInterval           = 0,
+    },
+
+    .iface                    = {
+        .bLength             = sizeof(usb_interface_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_INTERFACE,
+        .bInterfaceNumber    = 2,
+        .bAlternateSetting   = 0,
+        .bNumEndpoints       = 2,
+        .bInterfaceClass     = USB_CLASS_MSC,
+        .bInterfaceSubClass  = USB_SUBCLASS_SCSI,
+        .bInterfaceProtocol  = USB_PROTO_MASS_BBB,
+        .iInterface          = USB_NO_DESCRIPTOR,
+    },
+    .eprx               = {
+        .bLength             = sizeof(usb_endpoint_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_ENDPOINT,
+        .bEndpointAddress    = MSC_RXD_EP,
+        .bmAttributes        = UE_BULK,
+        .wMaxPacketSize      = MSC_HSSIZE,
+        .bInterval           = 0,
+    },
+    .eptx               = {
+        .bLength             = sizeof(usb_endpoint_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_ENDPOINT,
+        .bEndpointAddress    = MSC_TXD_EP,
+        .bmAttributes        = UE_BULK,
+        .wMaxPacketSize      = MSC_HSSIZE,
         .bInterval           = 0,
     },
 };
@@ -220,7 +336,12 @@ static const usbd_config_t comp_usbd_config = {
 
     .dmap = {
         { USB_SPEED_ANY,  (USB_DTYPE_DEVICE<<8),	0, &comp_dev_desc },
-        { USB_SPEED_ANY,  (USB_DTYPE_CONFIGURATION<<8),	sizeof(comp_config), &comp_config },
+
+        { USB_SPEED_HIGH, (USB_DTYPE_CONFIGURATION<<8),	sizeof(comp_hs_config), &comp_hs_config },
+        { USB_SPEED_ANY,  (USB_DTYPE_CONFIGURATION<<8),	sizeof(comp_fs_config), &comp_fs_config },
+        { USB_SPEED_HIGH, (USB_DTYPE_OTHERSPEED<<8),	sizeof(comp_fs_config), &comp_fs_config },
+        { USB_SPEED_ANY,  (USB_DTYPE_OTHERSPEED<<8),	sizeof(comp_hs_config), &comp_hs_config },
+
         { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 0,    0, &lang_desc },
         { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 1,	0, &comp_manuf_desc },
         { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 2,	0, &comp_prod_desc },
@@ -241,7 +362,7 @@ vcpmsc_init(struct Device_Conf *dev){
 
     bzero(v, sizeof(struct COMP));
 
-    usbd_t *u = usbd_get(0);
+    usbd_t *u = usbd_get(N_USBD - 1);
     v->usbd = u;
     v->vcp  = vcp_get(0);
     v->msc  = msc_get(0);

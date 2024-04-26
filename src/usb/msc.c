@@ -29,7 +29,8 @@
 # define MSC_BUFSIZE	16384			// must be a multiple of 512
 #endif
 
-#define MSC_SIZE    64
+#define MSC_FSSIZE    64
+#define MSC_HSSIZE   512
 #define MSC_RXD_EP  0x03
 #define MSC_TXD_EP  0x83
 
@@ -80,7 +81,7 @@ struct msc_config {
     usb_endpoint_descriptor_t   eptx;
 };
 
-static const struct msc_config msc_config ALIGN2 = {
+static const struct msc_config msc_fs_config ALIGN2 = {
 
     .config                  = {
         .bLength             = sizeof(usb_config_descriptor_t),
@@ -108,7 +109,7 @@ static const struct msc_config msc_config ALIGN2 = {
         .bDescriptorType     = USB_DTYPE_ENDPOINT,
         .bEndpointAddress    = MSC_RXD_EP,
         .bmAttributes        = UE_BULK,
-        .wMaxPacketSize      = MSC_SIZE,
+        .wMaxPacketSize      = MSC_FSSIZE,
         .bInterval           = 0,
     },
     .eptx               = {
@@ -116,7 +117,49 @@ static const struct msc_config msc_config ALIGN2 = {
         .bDescriptorType     = USB_DTYPE_ENDPOINT,
         .bEndpointAddress    = MSC_TXD_EP,
         .bmAttributes        = UE_BULK,
-        .wMaxPacketSize      = MSC_SIZE,
+        .wMaxPacketSize      = MSC_FSSIZE,
+        .bInterval           = 0,
+    },
+
+};
+
+static const struct msc_config msc_hs_config ALIGN2 = {
+
+    .config                  = {
+        .bLength             = sizeof(usb_config_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_CONFIGURATION,
+        .wTotalLength        = sizeof(struct msc_config),
+        .bNumInterface       = 1,
+        .bConfigurationValue = 1,
+        .iConfiguration      = 0,
+        .bmAttributes        = 0x80,
+        .bMaxPower           = 50,
+    },
+    .iface                    = {
+        .bLength             = sizeof(usb_interface_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_INTERFACE,
+        .bInterfaceNumber    = 0,
+        .bAlternateSetting   = 0,
+        .bNumEndpoints       = 2,
+        .bInterfaceClass     = USB_CLASS_MSC,
+        .bInterfaceSubClass  = USB_SUBCLASS_SCSI,
+        .bInterfaceProtocol  = USB_PROTO_MASS_BBB,
+        .iInterface          = USB_NO_DESCRIPTOR,
+    },
+    .eprx               = {
+        .bLength             = sizeof(usb_endpoint_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_ENDPOINT,
+        .bEndpointAddress    = MSC_RXD_EP,
+        .bmAttributes        = UE_BULK,
+        .wMaxPacketSize      = MSC_HSSIZE,
+        .bInterval           = 0,
+    },
+    .eptx               = {
+        .bLength             = sizeof(usb_endpoint_descriptor_t),
+        .bDescriptorType     = USB_DTYPE_ENDPOINT,
+        .bEndpointAddress    = MSC_TXD_EP,
+        .bmAttributes        = UE_BULK,
+        .wMaxPacketSize      = MSC_HSSIZE,
         .bInterval           = 0,
     },
 
@@ -165,7 +208,12 @@ static const usbd_config_t msc_usbd_config = {
 
     .dmap = {
         { USB_SPEED_ANY,  (USB_DTYPE_DEVICE<<8),	0, &msc_dev_desc },
-        { USB_SPEED_ANY,  (USB_DTYPE_CONFIGURATION<<8),	sizeof(msc_config), &msc_config },
+        { USB_SPEED_HIGH, (USB_DTYPE_CONFIGURATION<<8),	sizeof(msc_hs_config), &msc_hs_config },
+        { USB_SPEED_ANY,  (USB_DTYPE_CONFIGURATION<<8),	sizeof(msc_fs_config), &msc_fs_config },
+
+        { USB_SPEED_HIGH, (USB_DTYPE_OTHERSPEED<<8),	sizeof(msc_fs_config), &msc_fs_config },
+        { USB_SPEED_ANY,  (USB_DTYPE_OTHERSPEED<<8),	sizeof(msc_hs_config), &msc_hs_config },
+
         { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 0,    0, &lang_desc },
         { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 1,	0, &msc_manuf_desc },
         { USB_SPEED_ANY,  (USB_DTYPE_STRING<<8) | 2,	0, &msc_prod_desc },
@@ -181,6 +229,7 @@ static struct MSC {
     usb_msc_iocf_t  *conf;
     int8_t           state;
     int8_t           maxlun;
+    int8_t	     is_hs;
     volatile int     txcflag, rxcflag, rcvflag;
     int              datalen;
     umass_bbb_cbw_t  cbw;
@@ -197,11 +246,14 @@ msc_init(struct Device_Conf *dev){
 
     bzero(v, sizeof(struct MSC));
 
-    usbd_t *u = usbd_get(0);
+    usbd_t *u = usbd_get(N_USBD - 1);
     v->usbd = u;
     v->state = STATE_READY;
-    //usbd_configure( u, &cdc_usbd_config, vcom + i );
-    //usb_connect( u );
+
+#if !defined(USE_VCPMSC) && !defined(USE_USBCOMP)
+    usbd_configure( u, &msc_usbd_config, mscd + 0 );
+    usb_connect( u );
+#endif
 
     trace_init();
     bootmsg("%s msc/scsi on usb\n", dev->name);
@@ -320,9 +372,20 @@ msc_reset(struct MSC *p){
 
 void
 msc_configure(struct MSC *p){
-    trace_crumb0("msc", "conf");
-    usb_config_ep( p->usbd, MSC_RXD_EP, UE_BULK, MSC_SIZE );
-    usb_config_ep( p->usbd, MSC_TXD_EP, UE_BULK, MSC_SIZE );
+
+    if( usb_speed(p->usbd) == USB_SPEED_HIGH ){
+        trace_crumb1("msc", "conf", 1);
+        p->is_hs = 1;
+        usb_config_ep( p->usbd, MSC_RXD_EP, UE_BULK, MSC_HSSIZE );
+        usb_config_ep( p->usbd, MSC_TXD_EP, UE_BULK, MSC_HSSIZE );
+
+    }else{
+        trace_crumb1("msc", "conf", 0);
+        p->is_hs = 0;
+        usb_config_ep( p->usbd, MSC_RXD_EP, UE_BULK, MSC_FSSIZE );
+        usb_config_ep( p->usbd, MSC_TXD_EP, UE_BULK, MSC_FSSIZE );
+    }
+
     p->state = STATE_READY;
 }
 
@@ -853,7 +916,7 @@ msc_recv_data(struct MSC *p, int ep, int len){
         trace_crumb3("msc", "recv", len, p->datalen, p->bufpos);
         usb_recv_nack( p->usbd, ep ); // XXX
 
-        if( p->bufpos + MSC_SIZE > MSC_BUFSIZE ){
+        if( p->bufpos + len > MSC_BUFSIZE ){
             trace_crumb0("msc", "recv/ovf");
             kprintf("msc ovf %d %d %d, %x\n", ep, p->bufpos, p->datalen, usb_epinfo(p->usbd, ep));
 
@@ -925,7 +988,7 @@ static void active_blink(void){ set_msc_rgb(0xFFFF00); }
 
 void msc_test(void){
 
-    usbd_t *u = usbd_get(0);
+    usbd_t *u = usbd_get(N_USBD - 1);
 
     usbconf[0].ready = is_ready;
     usbconf[0].readonly = 0;
