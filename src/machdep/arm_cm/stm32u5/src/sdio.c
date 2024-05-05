@@ -127,9 +127,8 @@ sdio_init(struct Device_Conf *dev){
 
     // if( !r ) return 0;	/* no card installed */
 
-    hexdump(ii->sdcid, 16);
-    hexdump(ii->sdcsd, 16);
-
+    //hexdump(ii->sdcid, 16);
+    //hexdump(ii->sdcsd, 16);
 
 
     // do we need partitions?
@@ -354,18 +353,23 @@ initialize_card(struct SDIOinfo *ii){
     IDBGRESP(6);
 
     sdio_wait_done();
-    SDIO->CLKCR |= 1 << 14;	// 4 bit bus
 
-    trace_crumb2("sdio", "CLKR", SDIO->CLKCR, r);
+    uint32_t clkr = SDIO->CLKCR;
+    clkr |= 1 << 14;	// 4 bit bus
+
+    trace_crumb2("sdio", "CLKR", clkr, r);
 
     // increase speed
-    SDIO->CLKCR &= ~0x3FF;
+    clkr &= ~0x3FF;
     if( isv2 && ishc ){
-        SDIO->CLKCR |= 0;	// disable divider => 48MHz
+	// disable divider => 48MHz
+        clkr |= 0;
     }else{
         // 48MHz / 2 => 24MHz
-        SDIO->CLKCR |= 1;
+        clkr |= 1;
     }
+
+    SDIO->CLKCR = clkr;
     trace_crumb1("sdio", "CLKR", SDIO->CLKCR);
 
     ii->info[0] = ii->sdcid[1];
@@ -623,7 +627,7 @@ sdio_bwrite(FILE*f, const char*d, int len, offset_t pos){
 
     int tries, ret=-1, r;
 
-    trace_crumb3("sdio", "WRITE", pos, len, SDIO->STA);
+    trace_crumb3("sdio", "WRITE", (int)pos, len, SDIO->STA);
 
 
 #ifdef DMAALIGN
@@ -815,19 +819,19 @@ DEFUN(wrfile, "test file write timing")
 
     len = atoi(argv[2]);
 
-    int t0 = get_hrtime();
     f = fopen( argv[1], "w!" );
 
     if( f ){
+        int t0 = get_hrtime();
         // start of RAM
         while(len){
             int wl = (len > 65536) ? 65536 : len;
             fwrite(f, (char*)0x20000000, wl );
             len -= wl;
         }
+        int t1 = get_hrtime();
         fclose(f);
 
-        int t1 = get_hrtime();
         printf("time: %d\n", t1 - t0);
     }
     return 0;
@@ -835,55 +839,37 @@ DEFUN(wrfile, "test file write timing")
 
 DEFUN(rdfile, "test file read timing")
 {
-    int i, len;
+    int i, bsize=8192;
     FILE *f;
 
-    if( argc != 2 ){
+    if( argc < 2 ){
         f_error("rdfile name");
         return -1;
     }
 
-    len = atoi(argv[2]);
-    char *buf = alloc( 8192 );
+    if( argc > 2 )
+        bsize = atoi( argv[2] );
 
-    int t0 = get_hrtime();
+
+    char *buf = alloc( bsize );
+
     f = fopen( argv[1], "r" );
+
     if( f ){
+        int t0 = get_hrtime();
+
         while(1){
-            int rl = fread(f, buf, 8192);
-            if( rl != 8192 ) break;
+            int rl = fread(f, buf, bsize);
+            if( rl != bsize ) break;
         }
+        int t1 = get_hrtime();
         fclose(f);
 
-        int t1 = get_hrtime();
         printf("time: %d\n", t1 - t0);
     }
 
-    free(buf, 8192);
+    free(buf, bsize);
     return 0;
 }
 
-DEFUN(sdgpio, "")
-{
-
-    gpio_init( GPIO_C8,  GPIO_OUTPUT | GPIO_PUSH_PULL  | GPIO_SPEED_100MHZ | GPIO_PULL_UP );	// data
-    gpio_init( GPIO_C9,  GPIO_OUTPUT | GPIO_PUSH_PULL  | GPIO_SPEED_100MHZ | GPIO_PULL_UP );	// data
-    gpio_init( GPIO_C10, GPIO_OUTPUT | GPIO_PUSH_PULL  | GPIO_SPEED_100MHZ | GPIO_PULL_UP );	// data
-    gpio_init( GPIO_C11, GPIO_OUTPUT | GPIO_PUSH_PULL  | GPIO_SPEED_100MHZ | GPIO_PULL_UP );	// data
-
-    while(1){
-        gpio_set(GPIO_C8);  usleep(125000);
-        gpio_set(GPIO_C9);  usleep(125000);
-        gpio_set(GPIO_C10); usleep(125000);
-        gpio_set(GPIO_C11); usleep(125000);
-
-        gpio_clear(GPIO_C8);  usleep(125000);
-        gpio_clear(GPIO_C9);  usleep(125000);
-        gpio_clear(GPIO_C10); usleep(125000);
-        gpio_clear(GPIO_C11); usleep(125000);
-
-    }
-
-    return 0;
-}
 #endif
