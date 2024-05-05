@@ -14,7 +14,8 @@ adc:    machdep/arm_cm/stm32l4/src/adc.c
 sdio:   machdep/arm_cm/stm32u5/src/sdio.c
 
 i2c:    machdep/arm_cm/stm32/src/i2c2.c
-spi:    machdep/arm_cm/stm32/src/spi.c
+spi:    machdep/arm_cm/stm32/src/spi2.c
+dma:    machdep/arm_cm/stm32/src/gpdma.c
 
 stflash:        machdep/arm_cm/stm32/src/stflash.c
 stflash:        machdep/arm_cm/stm32u5/src/stflashimpl.c
