@@ -25,7 +25,7 @@ static void (*current_blink_proc)(void**) = 0;
 static inline void
 init_led_pwm(int gpio, int timer, int afunc){
     gpio_init( gpio,   GPIO_AF(afunc) | GPIO_PUSH_PULL | GPIO_SPEED_2MHZ );
-    pwm_init(  timer,  10000, 255 );
+    pwm_init(  timer,  10000, 254 );
     pwm_set(   timer,  0x7f);	// start with lights on
 }
 

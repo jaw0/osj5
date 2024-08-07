@@ -347,6 +347,8 @@ static struct VCP {
     void *pdev;
     usbd_t *usbd;
 
+    uint8_t rxep, txep, nxep;
+
     usb_cdc_line_state_t line_state;
     struct queue rxq, txq;
     char rxbuf[ VCP_RXBUF_SIZE ];
@@ -378,6 +380,10 @@ vcp_init(struct Device_Conf *dev){
 
     queue_init( &v->rxq, RX_QUEUE_SIZE );
     queue_init( &v->txq, TX_QUEUE_SIZE );
+
+    v->rxep = CDC_RXD_EP;
+    v->txep = CDC_TXD_EP;
+    v->nxep = CDC_NTF_EP;
 
     v->line_state = (usb_cdc_line_state_t){
         .dwDTERate          = 115200,
@@ -435,21 +441,28 @@ vcp_reset(struct VCP *p){
 }
 
 void
+vcp_configure_ep(struct VCP *p, int r, int t, int n){
+    p->rxep = r;
+    p->txep = t;
+    p->nxep = n;
+}
+
+void
 vcp_configure(struct VCP *p){
 
     if( usb_speed(p->usbd) == USB_SPEED_HIGH ){
         trace_crumb1("vcp", "conf", 1);
         p->is_hs = 1;
-        usb_config_ep( p->usbd, CDC_RXD_EP, UE_BULK, CDC_HSSIZE );
-        usb_config_ep( p->usbd, CDC_TXD_EP, UE_BULK, CDC_HSSIZE );
-        usb_config_ep( p->usbd, CDC_NTF_EP, UE_BULK, CDC_NTF_SZ );
+        usb_config_ep( p->usbd, p->rxep, UE_BULK, CDC_HSSIZE );
+        usb_config_ep( p->usbd, p->txep, UE_BULK, CDC_HSSIZE );
+        usb_config_ep( p->usbd, p->nxep, UE_BULK, CDC_NTF_SZ );
 
     }else{
         trace_crumb1("vcp", "conf", 0);
         p->is_hs = 0;
-        usb_config_ep( p->usbd, CDC_RXD_EP, UE_BULK, CDC_FSSIZE );
-        usb_config_ep( p->usbd, CDC_TXD_EP, UE_BULK, CDC_FSSIZE );
-        usb_config_ep( p->usbd, CDC_NTF_EP, UE_BULK, CDC_NTF_SZ );
+        usb_config_ep( p->usbd, p->rxep, UE_BULK, CDC_FSSIZE );
+        usb_config_ep( p->usbd, p->txep, UE_BULK, CDC_FSSIZE );
+        usb_config_ep( p->usbd, p->nxep, UE_BULK, CDC_NTF_SZ );
     }
 
     p->rblen = p->tblen = 0;
@@ -550,18 +563,18 @@ vcp_send_next_notify(struct VCP *p){
 
     if( !p->ready ) return;
     if( !usbd_isactive(p->usbd) ) return;
-    if( usbd_isbusy(p->usbd, CDC_NTF_EP) ) return;
+    if( usbd_isbusy(p->usbd, p->nxep) ) return;
 
     int plx = spldisk();
 
     if( p->ntlen ){
         int zp = p->is_hs ? 1 : !(p->ntlen & (CDC_NTF_SZ - 1));
         trace_crumb3("vcp", "ntf>", 1, p->ntlen, zp);
-        usbd_write(p->usbd, CDC_NTF_EP, p->ntbuf, p->ntlen, zp );
+        usbd_write(p->usbd, p->nxep, p->ntbuf, p->ntlen, zp );
     }else if( p->nt2len ){
         int zp = p->is_hs ? 1 : !(p->nt2len & (CDC_NTF_SZ - 1));
         trace_crumb3("vcp", "ntf>", 2, p->nt2len, zp);
-        usbd_write(p->usbd, CDC_NTF_EP, p->nt2buf, p->nt2len, zp );
+        usbd_write(p->usbd, p->nxep, p->nt2buf, p->nt2len, zp );
     }else{
         trace_crumb2("vcp", "ntf>?0", p->ntlen, p->nt2len);
     }
@@ -625,7 +638,7 @@ maybe_tx(struct VCP* p){
     int zp = p->is_hs ? 1 : !(i & (CDC_FSSIZE - 1));
     trace_crumb3("vcp", "tx", p->tblen, p->txq.len, zp);
 
-    usbd_write(p->usbd, CDC_TXD_EP, p->txbuf, i, zp );
+    usbd_write(p->usbd, p->txep, p->txbuf, i, zp );
     splx(plx);
 }
 
@@ -749,7 +762,7 @@ maybe_dequeue(struct VCP* p){
 
     p->rblen = 0;
 
-    usb_recv_ack( p->usbd, CDC_RXD_EP );
+    usb_recv_ack( p->usbd, p->rxep );
 
     if( !p->ready ){
         vcp_send_ntf_initial(p);
@@ -791,7 +804,7 @@ vcp_recv_chars(struct VCP *p, int ep, int len){
 
     // recvd zlp
     if( !len )
-        usb_recv_ack( p->usbd, CDC_RXD_EP );
+        usb_recv_ack( p->usbd, p->rxep );
 
     maybe_tx(p);
     wakeup( &p->rxq );
