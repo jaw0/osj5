@@ -455,7 +455,7 @@ _set_addr(usbd_t *u){
 void
 usbd_cb_send_complete(usbd_t *u, int ep){
 
-    trace_crumb2("usbd", "send/c", ep, u->epd[ep].wpending);
+    trace_crumb3("usbd", "send/c", ep, u->epd[ep].wpending, u->cf->cb_tx_complete[ep]);
 
     if( ! u->epd[ep].wpending ){
         u->epd[ep].wbusy = 0;
