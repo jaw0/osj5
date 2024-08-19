@@ -323,6 +323,7 @@ static const usbd_config_t cdc_usbd_config = {
 
 static int vcp_putchar(FILE*, char);
 static int vcp_write(FILE*, const char *, int);
+static int vcp_read(FILE*, char *, int);
 static int vcp_getchar(FILE*);
 static int vcp_noop(FILE*);
 static int vcp_status(FILE*);
@@ -333,7 +334,7 @@ const static struct io_fs vcp_port_fs = {
     0,
     0,
     vcp_status,
-    0,
+    vcp_read,
     vcp_write,
     0,
     0,
@@ -791,6 +792,28 @@ vcp_getchar(FILE *f){
 
     splx(plx);
     return ch;
+}
+
+static int
+vcp_read(FILE *f, char *buf, int len){
+    int n = 0;
+    struct VCP *p = (struct VCP*)f->d;
+    int plx;
+
+    if( !len ) return 0;
+
+    while(1){
+        plx = spldisk();
+        if( p->rxq.len ) break;
+
+        tsleep( &p->rxq, currproc->prio, "usb/r", 100000 );
+    }
+
+    n = qread( &p->rxq, buf, len);
+    maybe_dequeue(p);
+    splx(plx);
+    return n;
+
 }
 
 void
