@@ -36,7 +36,7 @@ init_led_bool(int gpio){
 }
 
 
-void
+int
 lights_init(void){
 
 #ifdef HWCF_GPIO_LED_1
@@ -64,6 +64,8 @@ lights_init(void){
 #endif
 
     current_blink_proc = lights_throb_slow;
+
+    return 0;
 }
 
 void
