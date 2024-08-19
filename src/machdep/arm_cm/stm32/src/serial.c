@@ -16,6 +16,7 @@
 #include <dev.h>
 #include <bootflags.h>
 #include <clock.h>
+#include <queue.h>
 #include <nvic.h>
 #include <gpio.h>
 #include <stm32.h>
@@ -23,6 +24,9 @@
 
 #define SR_TXE	0x80
 #define SR_RXNE 0x20
+
+#define CR1_TXEIE (1 << 7)
+#define CR1_RXNEIE  (1 << 5)
 
 #define CFFLAGS_ALTPINS	3	// 2 bits of flags - alt set of pins
 
@@ -35,7 +39,8 @@ int serial_getchar(FILE*);
 int serial_noop(FILE*);
 int serial_status(FILE*);
 void serial_setbaud(int, int);
-
+int serial_read(FILE*, char *, int);
+int serial_write(FILE*, const char *, int);
 
 const struct io_fs serial_port_fs = {
     serial_putchar,
@@ -43,8 +48,8 @@ const struct io_fs serial_port_fs = {
     0,
     0,
     serial_status,
-    0,
-    0,
+    serial_read,
+    serial_write,
     0,
     0,
     0,
@@ -53,8 +58,8 @@ const struct io_fs serial_port_fs = {
 
 struct Com {
     FILE file;
-    char queue[ SERIAL_QUEUE_SIZE ];
-    u_char head, tail, len;
+    struct queue rxq, txq;
+    char _rbuf[SERIAL_QUEUE_SIZE], _tbuf[SERIAL_QUEUE_SIZE];
 
     u_char status;
     int    baudclock;
@@ -106,10 +111,15 @@ serial_init(struct Device_Conf *dev){
 
     int altpins = dev->flags & CFFLAGS_ALTPINS;
 
+    struct Com *v = com + i;
+    bzero( v, sizeof(struct Com));
+
+    queue_init_buf( &v->rxq, v->_rbuf, SERIAL_QUEUE_SIZE );
+    queue_init_buf( &v->txq, v->_tbuf, SERIAL_QUEUE_SIZE );
+
     finit( & com[i].file );
     com[i].file.fs = &serial_port_fs;
     com[i].file.codepage = CODEPAGE_UTF8;
-    com[i].head = com[i].tail = com[i].len = 0;
     com[i].status  = 0;
     com[i].portno  = i;
     com[i].file.d  = (void*)&com[i];
@@ -169,6 +179,7 @@ serial_status(FILE*f){
     return 1;
 }
 
+
 /* output a char */
 int
 serial_putchar(FILE *f, char ch){
@@ -187,15 +198,24 @@ serial_putchar(FILE *f, char ch){
             if( SERIAL_STATUS(addr) & SR_TXE ) break;
         }
     }else{
+        plx = spltty();
         while(1){
-            plx = splproc();
-            asleep( addr, "com/o" );
-            if( SERIAL_STATUS(addr) & SR_TXE ) break;
-            addr->CR1 |= 0x80;	/* enable TXE irq */
+            spltty();
+            if( ! qfull(&p->txq) ) break;
+
+            asleep( &p->txq, "com/o" );
+            if( ! qfull(&p->txq) ) break;
+            addr->CR1 |= CR1_TXEIE;	/* enable TXE irq */
             await( -1, 100000 );
-            if( SERIAL_STATUS(addr) & SR_TXE ) break;
+            if( ! qfull(&p->txq) ) break;
         }
         aunsleep();
+        spltty();
+        qpush( &p->txq, ch );
+        addr->CR1 |= CR1_TXEIE;	/* enable TXE irq */
+        splx(plx);
+
+        return 1;
     }
 #else
     while(1){
@@ -224,7 +244,7 @@ serial_getchar(FILE *f){
 
     while( 1 ){
         plx = spltty();
-        if( p->len ) break;
+        if( p->rxq.len ) break;
 
         if( f->flags & F_NONBLOCK ){
             /* wait until something is available */
@@ -236,20 +256,81 @@ serial_getchar(FILE *f){
             return ch;
         }else{
 #ifdef USE_PROC
-            tsleep( &p->len, currproc->prio, "com/i", 0);
+            tsleep( &p->rxq, currproc->prio, "com/i", 0);
 #endif
         }
     }
 
 
-    ch = p->queue[ p->tail++ ];
-    p->tail %= SERIAL_QUEUE_SIZE;
-    p->len --;
+    ch = qpop( &p->rxq );
     /* RSN - flow control */
 
     splx(plx);
     return ch;
 
+}
+
+int
+serial_write(FILE *f, const char *buf, int len){
+    int n = 0;
+    struct Com *p = (struct Com*)f->d;
+    int plx;
+
+    while(len){
+        plx = spltty();
+
+        while( !qfull(&p->txq) ){
+            int i = qwrite(&p->txq, buf, len);
+
+            buf += i;
+            len -= i;
+            n   += i;
+
+            if( len == 0 ) break;
+        }
+
+        p->addr->CR1 |= CR1_TXEIE;	/* enable TXE irq */
+        splx(plx);
+
+        if( !len ) break;
+        if( ! qfull(&p->txq) ) continue;
+
+        if( f->flags & F_NONBLOCK )   break;	// drop
+
+#ifdef USE_PROC
+        // wait for buffer to empty
+        tsleep( &p->txq, -1, "com/w", 10000 );
+#endif
+    }
+
+    return n;
+}
+
+int
+serial_read(FILE *f, char *buf, int len){
+    int n = 0;
+    struct Com *p = (struct Com*)f->d;
+    int plx;
+
+    if( !len ) return 0;
+
+    while(1){
+        plx = spltty();
+
+        if( p->rxq.len != 0 ){
+            // return as much as we can
+            n = qread( &p->rxq, buf, len);
+            break;
+        }
+
+        if( f->flags & F_NONBLOCK )   break;
+#ifdef USE_PROC
+        tsleep( &p->rxq, -1, "com/r", 10000 );
+#endif
+    }
+
+    splx(plx);
+    return n;
 }
 
 /****************************************************************/
@@ -265,8 +346,14 @@ serial_irq(int unit){
     if( sr & SR_TXE ){
         /* transmitter empty */
         //blink(1);
-        addr->CR1 &= ~ 0xC0;	// disable TXE irq
-        wakeup( addr );
+
+        if( com[unit].txq.len != 0 ){
+            int ch = qpop( &com[unit].txq );
+            SERIAL_PUT(addr, ch);
+        }else{
+            addr->CR1 &= ~ CR1_TXEIE;	// disable TXE irq
+            wakeup( &com[unit].txq );
+        }
     }
 
     if( sr & SR_RXNE ){
@@ -283,11 +370,10 @@ serial_irq(int unit){
             }
         }
 
-        if( com[unit].len < SERIAL_QUEUE_SIZE ){
+        if( !qfull( &com[unit].rxq) ){
             /* queue it up */
-            com[unit].queue[ com[unit].head++ ] = ch;
-            com[unit].head %= SERIAL_QUEUE_SIZE;
-            com[unit].len ++;
+            qpush( &com[unit].rxq, ch );
+
             /* flow control */
 #if 0
             if( com[unit].len > SERIAL_QUEUE_HIWATER ){
@@ -295,7 +381,7 @@ serial_irq(int unit){
                 /* com[unit].status |= COMSTAT_THROTTLED; */
             }
 #endif
-            wakeup( &com[unit].len );
+            wakeup( &com[unit].rxq );
         }
     }
 }
