@@ -19,15 +19,30 @@ struct queue {
 };
 
 static void
-queue_init(struct queue *q, int size){
-    q->d = malloc(size * sizeof(QUEUE_TYPE));
-    if( !q->d ){
-        PANIC("cannot malloc queue");
-    }
+queue_init_buf(struct queue *q, QUEUE_TYPE *d, int size){
+    q->d = d;
     q->size = size;
     q->head = q->tail = q->len = 0;
 }
 
+static void
+queue_init(struct queue *q, int size){
+    QUEUE_TYPE *d = malloc(size * sizeof(QUEUE_TYPE));
+    if( !d ){
+        PANIC("cannot malloc queue");
+    }
+    queue_init_buf(q, d, size);
+}
+
+static int
+qfull(struct queue *q){
+    return ( q->len >= q->size );
+}
+
+static int
+qempty(struct queue *q){
+    return q->len == 0;
+}
 
 static int
 qpush(struct queue *q, int c){
@@ -114,5 +129,37 @@ qread(struct queue *q, QUEUE_TYPE *dst, int maxlen){
 
     return n;
 }
+
+static int
+qxfer(struct queue *src, struct queue *dst){
+    int r, n = 0;
+
+    if( qempty(src) ) return n;
+    if( qfull(dst)  ) return n;
+
+    // tail .. end
+    int s = src->size - src->tail;
+    if( s > src->len ) s = src->len;
+    r = qwrite(dst, src->d + src->tail, s);
+    src->tail += r;
+    if( src->tail == src->size ) src->tail = 0;
+    src->len -= r;
+    n += r;
+
+    if( qempty(src) ) return n;
+    if( qfull(dst)  ) return n;
+
+    // start .. head
+    s = src->size - src->tail;
+    if( s > src->len ) s = src->len;
+    r = qwrite(dst, src->d + src->tail, s);
+    src->tail += r;
+    if( src->tail == src->size ) src->tail = 0;
+    src->len -= r;
+    n += r;
+
+    return n;
+}
+
 
 #endif /* __osj5_queue_h__ */
