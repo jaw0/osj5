@@ -25,9 +25,7 @@
 #include "fatfs/ff.h"
 #include "fatfs/diskio.h"
 
-
 #define MAXDISK 1
-
 
 
 struct FatFS {
@@ -73,13 +71,13 @@ const struct io_fs fatfs_iofs = {
 static struct FatFS fsinfo[MAXDISK] ATTR_ALIGNED;
 static int nfs = 0;
 
-
 int
 fatfs_init(MountEntry *me){
     struct stat s;
 
     if( nfs >= MAXDISK ){
-        PANIC("too many FATFS");
+        kprintf("too many FATFS\n");
+        return -1;
     }
 
     struct FatFS *f = & fsinfo[nfs];
