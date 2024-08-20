@@ -230,6 +230,7 @@ static struct MSC {
     int8_t           state;
     int8_t           maxlun;
     int8_t	     is_hs;
+    uint8_t          rxep, txep;
     volatile int     txcflag, rxcflag, rcvflag;
     int              datalen;
     umass_bbb_cbw_t  cbw;
@@ -246,9 +247,11 @@ msc_init(struct Device_Conf *dev){
 
     bzero(v, sizeof(struct MSC));
 
-    usbd_t *u = usbd_get(N_USBD - 1);
+    usbd_t *u = usbd_get( dev->port );
     v->usbd = u;
     v->state = STATE_READY;
+    v->rxep = MSC_RXD_EP;
+    v->txep = MSC_TXD_EP;
 
 #if !defined(USE_VCPMSC) && !defined(USE_USBCOMP)
     usbd_configure( u, &msc_usbd_config, mscd + 0 );
@@ -371,19 +374,25 @@ msc_reset(struct MSC *p){
 }
 
 void
+msc_configure_ep(struct MSC *p, int r, int t){
+    p->rxep = r;
+    p->txep = t;
+}
+
+void
 msc_configure(struct MSC *p){
 
     if( usb_speed(p->usbd) == USB_SPEED_HIGH ){
         trace_crumb1("msc", "conf", 1);
         p->is_hs = 1;
-        usb_config_ep( p->usbd, MSC_RXD_EP, UE_BULK, MSC_HSSIZE );
-        usb_config_ep( p->usbd, MSC_TXD_EP, UE_BULK, MSC_HSSIZE );
+        usb_config_ep( p->usbd, p->rxep, UE_BULK, MSC_HSSIZE );
+        usb_config_ep( p->usbd, p->txep, UE_BULK, MSC_HSSIZE );
 
     }else{
         trace_crumb1("msc", "conf", 0);
         p->is_hs = 0;
-        usb_config_ep( p->usbd, MSC_RXD_EP, UE_BULK, MSC_FSSIZE );
-        usb_config_ep( p->usbd, MSC_TXD_EP, UE_BULK, MSC_FSSIZE );
+        usb_config_ep( p->usbd, p->rxep, UE_BULK, MSC_FSSIZE );
+        usb_config_ep( p->usbd, p->txep, UE_BULK, MSC_FSSIZE );
     }
 
     p->state = STATE_READY;
@@ -436,7 +445,7 @@ msc_flush_pipe(struct MSC *p){
             if( len > sizeof(p->xbuf) ) len = sizeof(p->xbuf);
 
             p->txcflag = 0;
-            usbd_write(p->usbd, MSC_TXD_EP, p->xbuf, len, 0);
+            usbd_write(p->usbd, p->txep, p->xbuf, len, 0);
             msc_txc_sleep( p, "usb/fl" );
             if( p->state != STATE_DATATX ) break;
 
@@ -448,13 +457,13 @@ msc_flush_pipe(struct MSC *p){
         p->state = STATE_DATARX;
         p->datalen = totlen;
         p->bufpos = 0;
-        usb_recv_ack( p->usbd, MSC_RXD_EP );
+        usb_recv_ack( p->usbd, p->rxep );
 
         while( p->datalen > 0 ){
             msc_sleep( &p->rxcflag, "usb/rxc", 10000 );
             if( p->state != STATE_DATARX ) break;
             p->bufpos = 0;
-            usb_recv_ack( p->usbd, MSC_RXD_EP );
+            usb_recv_ack( p->usbd, p->rxep );
         }
     }
 
@@ -471,7 +480,7 @@ msc_send_result(struct MSC *p, char *buf, int len){
     p->state = STATE_DATATX;
     p->txcflag = 0;
 
-    usbd_write(p->usbd, MSC_TXD_EP, buf, len, 0);
+    usbd_write(p->usbd, p->txep, buf, len, 0);
     msc_txc_sleep( p, "usb/sr" );
 
     p->cbw.dCBWDataTransferLength = 0;
@@ -492,7 +501,7 @@ msc_send_csw(struct MSC *p, int status){
     p->csw.bCSWStatus      = status;
 
     p->state = STATE_READY;
-    usbd_write(p->usbd, MSC_TXD_EP, &p->csw, sizeof(p->csw), 0);
+    usbd_write(p->usbd, p->txep, &p->csw, sizeof(p->csw), 0);
 }
 
 /****************************************************************/
@@ -662,7 +671,7 @@ msc_scsi_read10(struct MSC *p){
 
         p->txcflag = 0;
         trace_crumb2("msc", "write", len, p->txcflag);
-        usbd_write(p->usbd, MSC_TXD_EP, p->xbuf, len, 0);
+        usbd_write(p->usbd, p->txep, p->xbuf, len, 0);
 
         msc_txc_sleep( p, "usb/tx" );
         if( p->state != STATE_DATATX ) return 0;
@@ -713,7 +722,7 @@ msc_scsi_write10(struct MSC *p){
 
     trace_crumb3("msc", "write", (int)pos, totlen, cbdlen );
 
-    usb_recv_ack( p->usbd, MSC_RXD_EP );
+    usb_recv_ack( p->usbd, p->rxep );
 
     // kprintf("msc wr %x %d\n", (int)pos, totlen);
 
@@ -750,7 +759,7 @@ msc_scsi_write10(struct MSC *p){
         pos    += len;
         p->bufpos = 0;
 
-        usb_recv_ack( p->usbd, MSC_RXD_EP );
+        usb_recv_ack( p->usbd, p->rxep );
 
     }
 
@@ -776,7 +785,7 @@ msc_process_scsi(struct MSC *p){
     // delay ack on write cmds
     // so we don't start recving data before we're ready
     if( ! p->cbw.dCBWDataTransferLength || (p->cbw.bCBWFlags & CBWFLAGS_IN) ){
-        usb_recv_ack( p->usbd, MSC_RXD_EP );
+        usb_recv_ack( p->usbd, p->rxep );
     }
 
     switch(cmd){
@@ -834,7 +843,7 @@ msc_process_cbw(struct MSC *p, int len){
     if( len == 0 ){
         // MSC 6.7.3 - The host shall not send zero length packets
         // but I see them. ignore stray zlp
-        usb_recv_ack( p->usbd, MSC_RXD_EP );
+        usb_recv_ack( p->usbd, p->rxep );
         return;
     }
 
@@ -843,8 +852,8 @@ msc_process_cbw(struct MSC *p, int len){
         // MSC 6.6.1
         trace_crumb0("msc", "cbw/invalid");
         kprintf("cbw invalid\n");
-        usb_stall( p->usbd, MSC_RXD_EP );
-        usb_stall( p->usbd, MSC_TXD_EP );
+        usb_stall( p->usbd, p->rxep );
+        usb_stall( p->usbd, p->txep );
         return -1;
     }
     if( !cbw_is_meaningful(p, len) ){
@@ -920,8 +929,8 @@ msc_recv_data(struct MSC *p, int ep, int len){
             trace_crumb0("msc", "recv/ovf");
             kprintf("msc ovf %d %d %d, %x\n", ep, p->bufpos, p->datalen, usb_epinfo(p->usbd, ep));
 
-            usb_stall( p->usbd, MSC_RXD_EP );
-            usb_stall( p->usbd, MSC_TXD_EP );
+            usb_stall( p->usbd, p->rxep );
+            usb_stall( p->usbd, p->txep );
             //p->state = STATE_READY;
             return; // botched
         }
@@ -932,8 +941,8 @@ msc_recv_data(struct MSC *p, int ep, int len){
         if( l <= 0 ){
             trace_crumb1("msc", "recv/len?", l);
             //kprintf("msc len botch\n");
-            usb_stall( p->usbd, MSC_RXD_EP );
-            usb_stall( p->usbd, MSC_TXD_EP );
+            usb_stall( p->usbd, p->rxep );
+            usb_stall( p->usbd, p->txep );
             p->state = STATE_READY;
             return; // botched
         }
