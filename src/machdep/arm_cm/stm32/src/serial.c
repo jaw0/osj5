@@ -165,6 +165,22 @@ serial_setbaud(int port, int baud){
     com[port].addr->BRR = (com[port].baudclock + baud/2) / baud;
 }
 
+static int
+serial_set_conf(struct Com *p, int brk, struct io_line_state *cf){
+    int plx = spltty();
+
+    if( cf ){
+        int brr = (p->baudclock + cf->rate/2) / cf->rate;
+        _serial_set_config(p->addr, brr, cf->databits, cf->stopbits, cf->parity);
+    }
+    if( brk ){
+        _serial_send_brk(p->addr);
+    }
+
+    splx(plx);
+    return 0;
+}
+
 int
 serial_noop(FILE*f){
     return 1;
