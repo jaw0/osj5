@@ -48,6 +48,7 @@ typedef struct FILE {
 #define F_OSTRIP	0x800	/* strip high bit on output */
 #define F_ECHO		0x1000	/* echo input to output */
 #define F_ECHOCTL	0x2000	/* output ctl chars as ^X */
+#define F_IGNCTL	0x4000  /* ignore control chars */
 
 	char   ungotc;           /* for ungetc */
 	char   prevout;          /* previous output char - for stateful translations */
@@ -83,6 +84,22 @@ struct stat {
 #define SSF_SPECIAL	8	/* special device */
 #define SSF_BIGERASE	16	/* can only erase entire device */
 };
+
+struct io_line_state {
+    int  rate;
+    char stopbits;
+    char databits;
+    char parity;
+};
+
+struct io_connect {
+    void *warg, *marg;
+    int asksize;
+    int  (*write)(void*, const char*, int);
+    int  (*more)(void*, int avail);
+    int  (*conf)(void*, int brk, struct io_line_state*);
+};
+
 
 struct MountEntry;
 extern FILE *fopen(const char *, const char *);
@@ -128,6 +145,7 @@ extern void fprintf(FILE*, const char *, ...);
 extern int  snprintf(char *, int, const char*, ...);
 extern void kprintf(const char *, ...);
 extern void bootmsg(const char *, ...);
+extern int  fioconnect(FILE*, FILE*, struct io_connect*);
 
 #if defined(USE_PROC) && defined(USE_NSTDIO)
 #  define STDIN		currproc->stdin

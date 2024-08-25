@@ -8,6 +8,7 @@
 
 #include <conf.h>
 #include <nstdio.h>
+#include <ioctl.h>
 #include <proc.h>
 #include <arch.h>
 #include <error.h>
@@ -327,19 +328,22 @@ static int vcp_read(FILE*, char *, int);
 static int vcp_getchar(FILE*);
 static int vcp_noop(FILE*);
 static int vcp_status(FILE*);
+static int vcp_ioctl(FILE*, int, void*);
 
 const static struct io_fs vcp_port_fs = {
     vcp_putchar,
     vcp_getchar,
-    0,
-    0,
+    0, // close
+    0, // flush
     vcp_status,
     vcp_read,
     vcp_write,
-    0,
-    0,
-    0,
-    0
+    0, // bread
+    0, // bwrite
+    0, // seek
+    0, // tell
+    0, // stat
+    vcp_ioctl,
 };
 
 
@@ -360,6 +364,10 @@ static struct VCP {
     uint8_t rblen, tblen, ntlen, nt2len;
     uint8_t ready;
     uint8_t is_hs;
+
+#ifdef USE_IOCONNECT
+    struct io_connect *iocrx, *ioctx;
+#endif
 
 } vcom[ N_VCP ];
 
@@ -473,6 +481,7 @@ vcp_configure(struct VCP *p){
 int
 vcp_recv_setup(struct VCP *p, const char *buf, int len){
     usb_device_request_t *req = buf;
+    struct io_line_state cf;
 
     if( (req->bmRequestType & 0x7F) != (USB_REQ_TYPE_INTERFACE | USB_REQ_TYPE_CLASS)) return 0;
 
@@ -488,6 +497,29 @@ vcp_recv_setup(struct VCP *p, const char *buf, int len){
         trace_crumb2("vcp", "set/lcod", len, req->wLength);
         memcpy( &p->line_state, buf+8, sizeof(p->line_state) );
         // trace_data("vcp", "linestate", len, buf);
+
+#ifdef USE_IOCONNECT
+        cf.rate = p->line_state.dwDTERate;
+        cf.databits = p->line_state.bDataBits;
+
+        switch( p->line_state.bCharFormat ){
+        case UCDC_STOP_BIT_1:    cf.stopbits = 2; break;
+        case UCDC_STOP_BIT_1_5:  cf.stopbits = 3; break;
+        case UCDC_STOP_BIT_2:    cf.stopbits = 4; break;
+        default:                 cf.stopbits = 2; break;
+        }
+
+        switch( p->line_state.bParityType ){
+        case UCDC_PARITY_NONE:	cf.parity = 0; break;
+        case UCDC_PARITY_ODD:   cf.parity = 1; break;
+        case UCDC_PARITY_EVEN:  cf.parity = 2; break;
+        default:                cf.parity = 0; break;
+        }
+
+        if( p->ioctx && p->ioctx->conf )
+            p->ioctx->conf( p->ioctx->warg, 0, &cf );
+#endif
+
         usbd_reply(p->usbd, 0, "", 0, 0);
         return 1;
     case UCDC_GET_LINE_CODING:
@@ -495,6 +527,10 @@ vcp_recv_setup(struct VCP *p, const char *buf, int len){
         usbd_reply(p->usbd, 0, &p->line_state, sizeof(p->line_state), req->wLength);
         return 1;
     case UCDC_SEND_BREAK:
+#ifdef USE_IOCONNECT
+        if( p->ioctx && p->ioctx->conf )
+            p->ioctx->conf( p->ioctx->warg, 1, 0 );
+#endif
         usbd_reply(p->usbd, 0, "", 0, 0);
         return 1;
     }
@@ -733,6 +769,32 @@ vcp_write(FILE *f, const char *buf, int len){
     return n;
 }
 
+static int
+vcp_write_nbp(struct VCP *p, const char *buf, int len){
+    int n = 0;
+    int plx;
+
+    if( len == 0 ) return 0;
+
+    plx = spldisk();
+
+    while( !qfull(&p->txq) ){
+        int i = qwrite(&p->txq, buf, len);
+
+        buf += i;
+        len -= i;
+        n   += i;
+
+        if( len == 0 ) break;
+    }
+
+    maybe_tx(p);
+    splx(plx);
+
+    return n;
+}
+
+
 
 static void
 maybe_dequeue(struct VCP* p){
@@ -741,6 +803,27 @@ maybe_dequeue(struct VCP* p){
     trace_crumb1("vcp", "dequeue", p->rblen);
 
     if( !p->rblen ) return;
+
+    if( !p->ready ){
+        vcp_send_ntf_initial(p);
+        p->ready = 1;
+    }
+
+#ifdef USE_IOCONNECT
+    if( p->ioctx && p->ioctx->write ){
+        // send data to connected dev
+        i = p->ioctx->write( p->ioctx->warg, p->rxbuf, p->rblen );
+        if( i == 0 ) return;
+        bcopy( p->rxbuf + i, p->rxbuf, p->rblen - i );
+        p->rblen -= i;
+
+        if( p->rblen == 0 )
+            usb_recv_ack( p->usbd, p->rxep );
+
+        return;
+    }
+#endif
+
     if( p->rblen > RX_QUEUE_SIZE - p->rxq.len ) return;
 
     for(i=0; i<p->rblen; i++){
@@ -748,11 +831,13 @@ maybe_dequeue(struct VCP* p){
         // trace_crumb1("vcp", "recvchar", c);
 
         /* special control char ? */
-        for(j=0; j<sizeof(p->file.cchars); j++){
-            if(p->file.cchars[j] && c == p->file.cchars[j]){
-                sigunblock( p->file.ccpid );
-                ksendmsg( p->file.ccpid, MSG_CCHAR_0 + j );
-                goto skip;
+        if( !(p->file.flags & F_IGNCTL) ){
+            for(j=0; j<sizeof(p->file.cchars); j++){
+                if(p->file.cchars[j] && c == p->file.cchars[j]){
+                    sigunblock( p->file.ccpid );
+                    ksendmsg( p->file.ccpid, MSG_CCHAR_0 + j );
+                    goto skip;
+                }
             }
         }
 
@@ -762,13 +847,15 @@ maybe_dequeue(struct VCP* p){
     }
 
     p->rblen = 0;
-
     usb_recv_ack( p->usbd, p->rxep );
 
-    if( !p->ready ){
-        vcp_send_ntf_initial(p);
-        p->ready = 1;
-    }
+}
+
+static void
+maybe_dequeue_hinted(struct VCP* p, int avail){
+    int plx = spldisk();
+    maybe_dequeue(p);
+    splx(plx);
 }
 
 static int
@@ -816,6 +903,38 @@ vcp_read(FILE *f, char *buf, int len){
 
 }
 
+int
+vcp_ioctl(FILE* f, int cmd, void* a){
+    struct VCP *p = (struct VCP*)f->d;
+    struct io_connect *ioc = a;
+
+    switch( cmd ){
+
+#ifdef USE_IOCONNECT
+    case IOC_CONNECT_SRC:	// send data from cdc -> to X
+        p->ioctx  = ioc;
+        ioc->more = maybe_dequeue_hinted;
+        ioc->marg = p;
+        ioc->asksize = 4;
+        return 0;
+
+    case IOC_CONNECT_DST:	// recv from X -> to cdc
+        p->iocrx   = ioc;
+        ioc->warg  = p;
+        ioc->write = vcp_write_nbp;
+
+        if( ioc->asksize > p->txq.size )
+            ioc->asksize = p->txq.size;
+        return 0;
+
+#endif
+
+    default:
+        return -1;
+    }
+}
+
+
 void
 vcp_recv_chars(struct VCP *p, int ep, int len){
 
@@ -833,6 +952,8 @@ vcp_recv_chars(struct VCP *p, int ep, int len){
     wakeup( &p->rxq );
 
 }
+
+// ****************************************************************
 
 #ifdef KTESTING
 

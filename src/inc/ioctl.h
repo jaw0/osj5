@@ -12,6 +12,8 @@
 
 #define _IOC(x,y)	(((x)<<8) | (y))
 
+#define IOC_CONNECT_DST	_IOC('c', 'd')		/* struct ioconnect* */
+#define IOC_CONNECT_SRC	_IOC('c', 's')		/* struct ioconnect* */
 
 #define IOC_ERASE	_IOC('m', 'e')		/* param = offset to erase */
 #define IOC_FLINFO	_IOC('m', 'i')		/* get flash info [write size, erase size] */

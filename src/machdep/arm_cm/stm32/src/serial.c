@@ -8,6 +8,7 @@
 
 #include <conf.h>
 #include <nstdio.h>
+#include <ioctl.h>
 #include <proc.h>
 #include <arch.h>
 #include <error.h>
@@ -41,19 +42,22 @@ int serial_status(FILE*);
 void serial_setbaud(int, int);
 int serial_read(FILE*, char *, int);
 int serial_write(FILE*, const char *, int);
+int serial_ioctl(FILE*, int, void*);
 
 const struct io_fs serial_port_fs = {
     serial_putchar,
     serial_getchar,
-    0,
-    0,
+    0, // close
+    0, // flush
     serial_status,
     serial_read,
     serial_write,
-    0,
-    0,
-    0,
-    0
+    0, // bread
+    0, // bwrite
+    0, // seek
+    0, // tell
+    0, // stat
+    serial_ioctl,
 };
 
 struct Com {
@@ -67,6 +71,9 @@ struct Com {
 
     int portno;
     USART_TypeDef * addr;
+#ifdef USE_IOCONNECT
+    struct io_connect *iocrx, *ioctx;
+#endif
 } com[ N_SERIAL ];
 
 
@@ -322,6 +329,31 @@ serial_write(FILE *f, const char *buf, int len){
     return n;
 }
 
+static int
+serial_write_nbp(struct Com *p, const char *buf, int len){
+    int n = 0;
+    int plx;
+
+    if( len == 0 ) return 0;
+
+    plx = spltty();
+
+    while( !qfull(&p->txq) ){
+        int i = qwrite(&p->txq, buf, len);
+
+        buf += i;
+        len -= i;
+        n   += i;
+
+        if( len == 0 ) break;
+    }
+
+    p->addr->CR1 |= CR1_TXEIE;	/* enable TXE irq */
+    splx(plx);
+
+    return n;
+}
+
 int
 serial_read(FILE *f, char *buf, int len){
     int n = 0;
@@ -349,11 +381,44 @@ serial_read(FILE *f, char *buf, int len){
     return n;
 }
 
+int
+serial_ioctl(FILE* f, int cmd, void* a){
+    struct Com *p = (struct Com*)f->d;
+    struct io_connect *ioc = a;
+
+    switch( cmd ){
+#ifdef USE_IOCONNECT
+    case IOC_CONNECT_SRC:	// send data from uart -> to X
+        p->ioctx  = ioc;
+        ioc->more = 0;		// no flow control
+        ioc->marg = 0;
+        ioc->asksize = 0;
+        return 0;
+
+    case IOC_CONNECT_DST:	// recv from X -> to uart
+        p->iocrx   = ioc;
+        ioc->warg  = p;
+        ioc->write = serial_write_nbp;
+        ioc->conf  = serial_set_conf;
+
+        if( ioc->asksize > p->txq.size )
+            ioc->asksize = p->txq.size;
+
+        return 0;
+
+#endif
+
+    default:
+        return -1;
+    }
+}
+
 /****************************************************************/
 
 static void
 serial_irq(int unit){
-    volatile USART_TypeDef *addr = com[unit].addr;
+    struct Com *p = com + unit;
+    volatile USART_TypeDef *addr = p->addr;
 
     int sr = SERIAL_STATUS(addr);
 
@@ -363,12 +428,21 @@ serial_irq(int unit){
         /* transmitter empty */
         //blink(1);
 
-        if( com[unit].txq.len != 0 ){
-            int ch = qpop( &com[unit].txq );
+        if( !qempty(&p->txq) ){
+            int ch = qpop( &p->txq );
             SERIAL_PUT(addr, ch);
-        }else{
+        }
+#ifdef USE_IOCONNECT
+        int space = p->txq.size - p->txq.len;
+        if( p->iocrx && p->iocrx->more ){
+            if( (space >= (p->txq.size>>1)) && (space >= p->iocrx->asksize) ){
+                p->iocrx->more( p->iocrx->marg, space );
+            }
+        }
+#endif
+        if( qempty(&p->txq) ){
             addr->CR1 &= ~ CR1_TXEIE;	// disable TXE irq
-            wakeup( &com[unit].txq );
+            wakeup( &p->txq );
         }
     }
 
@@ -378,13 +452,24 @@ serial_irq(int unit){
         int i;
 
         /* special control char ? */
-        for(i=0; i<sizeof(com[unit].file.cchars); i++){
-            if(com[unit].file.cchars[i] && ch == com[unit].file.cchars[i]){
-                sigunblock( com[unit].file.ccpid );
-                ksendmsg( com[unit].file.ccpid, MSG_CCHAR_0 + i );
-                return;
+        if( !(p->file.flags & F_IGNCTL) ){
+            for(i=0; i<sizeof(p->file.cchars); i++){
+                if(p->file.cchars[i] && ch == p->file.cchars[i]){
+                    sigunblock( p->file.ccpid );
+                    ksendmsg( p->file.ccpid, MSG_CCHAR_0 + i );
+                    return;
+                }
             }
         }
+
+#ifdef USE_IOCONNECT
+        if( p->ioctx && p->ioctx->write ){
+            p->ioctx->write( p->ioctx->warg, &ch, 1);
+            // ignore errors, drop if buffer full
+
+        }else
+#endif
+
 
         if( !qfull( &com[unit].rxq) ){
             /* queue it up */

@@ -12,6 +12,7 @@
 #include <conf.h>
 #include <nstdio.h>
 #include <proc.h>
+#include <ioctl.h>
 #include <error.h>
 
 static const char * const bad_f = "invalid FILE*";
@@ -283,3 +284,18 @@ int fioctl(FILE *f, int c, void *a){
     return (f->fs->ioctl)(f, c, a);
 }
 
+#ifdef USE_IOCONNECT
+int fioconnect(FILE *from, FILE *to, struct io_connect *ioc){
+    int err;
+
+    bzero( ioc, sizeof(struct io_connect) );
+    from->flags |= F_IGNCTL;
+
+    err = fioctl(from, IOC_CONNECT_SRC, ioc);
+    if( err ) return err;
+
+    err = fioctl(to, IOC_CONNECT_DST, ioc);
+    return err;
+
+}
+#endif
