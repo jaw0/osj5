@@ -35,6 +35,11 @@ static int logmode  = 0;
 # define TRACE_BUFSIZE 8192
 #endif
 
+#ifndef TRACE_CLOCK
+# define TRACE_CLOCK get_hrtime
+#endif
+extern utime_t TRACE_CLOCK();
+
 
 struct trace_info {
     const char *tag;
@@ -81,7 +86,7 @@ trace_msgf(const char *fmt, ...){
     _lock();
     struct trace_info *ti = (struct trace_info*)(logbuf + logpos);
     ti->type = LRT_MSG;
-    ti->when = get_hrtime();
+    ti->when = TRACE_CLOCK();
 
     u_char *p = (u_char*)(ti + 1);
 
@@ -107,7 +112,7 @@ trace_data(const char *tag, const char *evt, int len, const char *dat){
     ti->type = LRT_DATA;
     ti->tag  = tag;
     ti->msg  = evt;
-    ti->when = get_hrtime();
+    ti->when = TRACE_CLOCK();
     ti->len  = len;
 
     u_char *p = (u_char*)(ti + 1);
@@ -132,7 +137,7 @@ trace_fdata(const char *tag, const char *fmt, int narg, ...){
     ti->type = LRT_FDATA;
     ti->tag  = tag;
     ti->msg  = fmt;
-    ti->when = get_hrtime();
+    ti->when = TRACE_CLOCK();
     ti->len  = narg * sizeof(int);
 
     int *p = (int *)(ti + 1);
@@ -157,7 +162,7 @@ trace_crumb(const char *tag, const char *evt, int narg, ...){
     ti->type = LRT_CRUMB;
     ti->tag  = tag;
     ti->msg  = evt;
-    ti->when = get_hrtime();
+    ti->when = TRACE_CLOCK();
     ti->len  = narg * sizeof(int);
 
     int *p = (int *)(ti + 1);
@@ -178,7 +183,7 @@ trace_mark_start(const char *tag){
     struct trace_info *ti = (struct trace_info*)(logbuf + logpos);
     ti->type = LRT_MARK_START;
     ti->tag  = tag;
-    ti->when = get_hrtime();
+    ti->when = TRACE_CLOCK();
     ti->len  = 0;
     ti->msg  = 0;
 
@@ -197,7 +202,7 @@ trace_mark_stop(const char *tag){
     struct trace_info *ti = (struct trace_info*)(logbuf + logpos);
     ti->type = LRT_MARK_STOP;
     ti->tag  = tag;
-    ti->when = get_hrtime();
+    ti->when = TRACE_CLOCK();
     ti->len  = 0;
     ti->msg  = 0;
 
