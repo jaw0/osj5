@@ -159,8 +159,8 @@ mco_enable(){
     // RSN - choice of clock
     gpio_init( GPIO_A8, GPIO_AF(0) | GPIO_SPEED_2MHZ | GPIO_PUSH_PULL );
     RCC->CFGR1 &= ~(0xFF << 24);
-    //RCC->CFGR1 |= (4 << 28) | (5 << 24);	    // PLL / 16
-    RCC->CFGR1 |= (4 << 28) | (6 << 24);	    // LSI / 16
+    RCC->CFGR1 |= (4 << 28) | (5 << 24);	    // PLL / 16
+    //RCC->CFGR1 |= (4 << 28) | (6 << 24);	    // LSI / 16
     //RCC->CFGR1 |= (4 << 28) | (7 << 24);	    // LSE / 16
 
 #endif
@@ -223,7 +223,11 @@ clock_init(void){
 #  define PLLSRC	3
 
     /* enable HSE */
+#ifdef HSE_IS_OSC
+    RCC->CR |= (1<<16) | (1<<18) | (1<<20);
+#else
     RCC->CR |= (1<<16);
+#endif
     while( RCC->CR & (1<<17) == 0 ){} /* wait for it */
     freq_sys = HSECLOCK;
     freq_src = "HSE";
