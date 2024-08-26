@@ -15,7 +15,8 @@
 
 #define SERIAL_CR1_EN 	(\
     0x0C 		/* enable rx/tx, no parity, 8 bit, ...*/        \
-    | 0x20 	 	/* enable RX irq */                             \
+    | 0x20 	 	/* enable RX irq */ \
+    | USART_CR1_FIFOEN \
     | 1)		/* enable */
 
 
@@ -33,17 +34,20 @@ _serial_set_config(USART_TypeDef *addr, int brr, int datab, int stopb, int parit
     switch( datab ){
     case 7:   	cr1 |= USART_CR1_M1; break;
     case 9:   	cr1 |= USART_CR1_M0; break;
+    case 8:     break;
     }
 
     switch( parity ){
     case 1:	cr1 |= USART_CR1_PCE | USART_CR1_PS; break;
     case 2:	cr1 |= USART_CR1_PCE; 		     break;
+    case 0:     break;
     }
 
     switch( stopb ){
     case 1:	cr2 |= 1 << USART_CR2_STOP_Pos;	     break;
     case 3:	cr2 |= 3 << USART_CR2_STOP_Pos;	     break;
     case 4:	cr2 |= 2 << USART_CR2_STOP_Pos;	     break;
+    case 2:     break;
     }
 
     addr->CR1 = cr1;
@@ -82,14 +86,25 @@ serial_pins_init(int i, int altpins){
         break;
     case 2:
         RCC->APB1ENR1 |= 1<<18;
-        if( altpins ){
-            gpio_init( GPIO_C10, GPIO_AF(7) | GPIO_PUSH_PULL );
-            gpio_init( GPIO_C11, GPIO_AF(7) | GPIO_PUSH_PULL );
-        }else{
+        switch( altpins ){
+        case 0:
             gpio_init( GPIO_B10, GPIO_AF(7) | GPIO_PUSH_PULL );
             gpio_init( GPIO_B11, GPIO_AF(7) | GPIO_PUSH_PULL );
+            break;
+        case 1:
+            gpio_init( GPIO_C10, GPIO_AF(7) | GPIO_PUSH_PULL );
+            gpio_init( GPIO_C11, GPIO_AF(7) | GPIO_PUSH_PULL );
+            break;
+        case 2:
+            gpio_init( GPIO_C4, GPIO_AF(7) | GPIO_PUSH_PULL );
+            gpio_init( GPIO_C5, GPIO_AF(7) | GPIO_PUSH_PULL );
+            break;
+        case 3:
+            gpio_init( GPIO_D8, GPIO_AF(7) | GPIO_PUSH_PULL );
+            gpio_init( GPIO_D9, GPIO_AF(7) | GPIO_PUSH_PULL );
+            break;
         }
-        // C4,5; D8,9
+        break;
     case 3:
         RCC->APB1ENR1 |= 1<<19;
         if( altpins ){
@@ -99,6 +114,7 @@ serial_pins_init(int i, int altpins){
             gpio_init( GPIO_A0, GPIO_AF(8) | GPIO_PUSH_PULL );
             gpio_init( GPIO_A1, GPIO_AF(8) | GPIO_PUSH_PULL );
         }
+        break;
     case 4:
         RCC->APB1ENR1 |= 1<<20;
         if( altpins ){
@@ -108,11 +124,27 @@ serial_pins_init(int i, int altpins){
             gpio_init( GPIO_C12, GPIO_AF(8) | GPIO_PUSH_PULL );
             gpio_init( GPIO_D2,  GPIO_AF(8) | GPIO_PUSH_PULL );
         }
+        break;
+    case 5:
+        RCC->APB1ENR1 |= 1<<25;
+        switch( altpins ){
+        case 0:
+            gpio_init( GPIO_C2, GPIO_AF(7) | GPIO_PUSH_PULL );
+            gpio_init( GPIO_C3, GPIO_AF(7) | GPIO_PUSH_PULL );
+            break;
+        case 1:
+            gpio_init( GPIO_C8, GPIO_AF(7) | GPIO_PUSH_PULL );
+            gpio_init( GPIO_C9, GPIO_AF(7) | GPIO_PUSH_PULL );
+            break;
+        case 2:
+            gpio_init( GPIO_E0, GPIO_AF(7) | GPIO_PUSH_PULL );
+            gpio_init( GPIO_E1, GPIO_AF(7) | GPIO_PUSH_PULL );
+            break;
+        }
+        break;
 
         // LPUART1:
         // A2,3; B10,11; C1,0; G7,8
-
-        break;
 
     default:
         PANIC("invalid serial");
@@ -126,13 +158,8 @@ serial_baudclock(int i){
     switch(i){
     case 0:
         return apb2_clock_freq();
-    case 1:
-        return apb1_clock_freq();
-    case 2:
-        return apb1_clock_freq();
     default:
-        PANIC("invalid serial");
-        break;
+        return apb1_clock_freq();
     }
 }
 

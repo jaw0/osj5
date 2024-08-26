@@ -92,18 +92,28 @@ struct serialDevConf {
 #endif
 #if defined(UART4)
     { UART4,  UART4_IRQn  },
+#else
+    { 0, 0 },
 #endif
 #if defined(UART5)
     { UART5,  UART5_IRQn  },
+#else
+    { 0, 0 },
 #endif
 #if defined(USART6)
     { USART6, USART6_IRQn },
+#else
+    { 0, 0 },
 #endif
 #if defined(UART7)
     { UART7,  UART7_IRQn  },
+#else
+    { 0, 0 },
 #endif
 #if defined(UART8)
     { UART8,  UART8_IRQn  },
+#else
+    { 0, 0 },
 #endif
 };
 
@@ -131,15 +141,17 @@ serial_init(struct Device_Conf *dev){
     com[i].portno  = i;
     com[i].file.d  = (void*)&com[i];
 
+
     // enable gpio clock, usart clock, configure pins
     serial_pins_init( i, altpins );
     com[i].baudclock = serial_baudclock(i);
 
-    if( i < ELEMENTSIN(dev_conf) ){
+    if( (i < ELEMENTSIN(dev_conf)) && dev_conf[i].addr ){
         addr = dev_conf[i].addr;
         irq  = dev_conf[i].irq;
     }else{
-        PANIC("invalid serial");
+        kprintf("invalid serial %d", i);
+        return 0;
     }
 
     com[i].addr   = addr;
@@ -167,9 +179,11 @@ serial_init(struct Device_Conf *dev){
 void
 serial_setbaud(int port, int baud){
     int d, i;
-    int plx;
 
-    com[port].addr->BRR = (com[port].baudclock + baud/2) / baud;
+    int brr = (com[port].baudclock + baud/2) / baud;
+    int plx = spltty();
+    _serial_set_config(com[port].addr, brr, 8, 2, 0);
+    splx(plx);
 }
 
 static int
@@ -488,44 +502,49 @@ serial_irq(int unit){
 }
 
 /****************************************************************/
+#if !defined(NO_IRQH_SERIAL0)
 void
 USART1_IRQHandler(void){
     serial_irq(0);
 }
+#endif
+#if !defined(NO_IRQH_SERIAL1)
 void
 USART2_IRQHandler(void){
     serial_irq(1);
 }
+#endif
+#if !defined(NO_IRQH_SERIAL2)
 void
 USART3_IRQHandler(void){
     serial_irq(2);
 }
-
-#ifdef UART4
+#endif
+#if defined(UART4) && !defined(NO_IRQH_SERIAL3)
 void
 UART4_IRQHandler(void){
     serial_irq(3);
 }
 #endif
-#ifdef UART5
+#if defined(UART5) && !defined(NO_IRQH_SERIAL4)
 void
 UART5_IRQHandler(void){
     serial_irq(4);
 }
 #endif
-#ifdef USART6
+#if defined(USART6) && !defined(NO_IRQH_SERIAL5)
 void
 USART6_IRQHandler(void){
     serial_irq(5);
 }
 #endif
-#ifdef UART7
+#if defined(UART7) && !defined(NO_IRQH_SERIAL6)
 void
 UART7_IRQHandler(void){
     serial_irq(6);
 }
 #endif
-#ifdef UART8
+#if defined(UART8) && !defined(NO_IRQH_SERIAL7)
 void
 UART8_IRQHandler(void){
     serial_irq(7);
