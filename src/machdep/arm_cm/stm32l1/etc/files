@@ -14,4 +14,6 @@ adc:    machdep/arm_cm/stm32l1/src/adc.c
 
 gpio:   machdep/arm_cm/stm32f4/src/gpio.c
 
+itmswo: machdep/arm_cm/stm32/src/itmswo.c
+
 usbd:   machdep/arm_cm/stm32/src/usb_fs.c

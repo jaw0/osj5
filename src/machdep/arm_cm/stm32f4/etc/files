@@ -21,5 +21,7 @@ sdio:   machdep/arm_cm/stm32f4/src/sdio.c
 stflash:        machdep/arm_cm/stm32/src/stflash.c
 stflash:        machdep/arm_cm/stm32f4/src/stflashimpl.c
 
+itmswo: machdep/arm_cm/stm32/src/itmswo.c
+
 usbd:   machdep/arm_cm/stm32/src/usb_otg.c
 usbd:   util/trace.c

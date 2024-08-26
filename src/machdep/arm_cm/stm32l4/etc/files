@@ -18,6 +18,8 @@ gpio:   machdep/arm_cm/stm32f4/src/gpio.c
 i2c:    machdep/arm_cm/stm32/src/i2c2.c
 spi:    machdep/arm_cm/stm32/src/spi.c
 
+itmswo: machdep/arm_cm/stm32/src/itmswo.c
+
 usbd:   machdep/arm_cm/stm32/src/usb_fs.c
 usbd:   util/trace.c
 

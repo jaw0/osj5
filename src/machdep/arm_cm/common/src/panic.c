@@ -21,6 +21,10 @@
 void
 panic(const char *m, int l, const char *f){
 
+#ifdef USE_ITMSWO
+    itm_panic(m, l, f);
+#endif
+
     kprintf("PANIC: %s at line %d of %s (currproc=%x)\nhalting\n", m, l, f, currproc);
 
 #ifdef PROJECT_PANIC

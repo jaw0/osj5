@@ -77,6 +77,7 @@ printffnc(char **a, char c){
 void
 trace_msgf(const char *fmt, ...){
     va_list ap;
+    va_start(ap,fmt);
 
     if( !logbuf ) return;
     // if( logmode == LOGMO_OFF ) return;
@@ -90,7 +91,6 @@ trace_msgf(const char *fmt, ...){
 
     u_char *p = (u_char*)(ti + 1);
 
-    va_start(ap,fmt);
     int l = vxprintf( printffnc, &p, fmt, ap);
     // remove newline
     if( logbuf[logpos + l + 2 - 1] == '\n' ) l --;
@@ -151,11 +151,14 @@ trace_fdata(const char *tag, const char *fmt, int narg, ...){
 void
 trace_crumb(const char *tag, const char *evt, int narg, ...){
     va_list ap;
+    va_start(ap, narg);
+
+#ifdef TRACE_ALSO2_ITMSWO
+    itm_trace_crumb( TRACE_ALSO2_ITMSWO, tag, evt, narg, ap);
+#endif
 
     if( !logbuf ) return;
     if( !ROOMFOR(SPACEFOR(narg * sizeof(int))) ) return;
-
-    va_start(ap, narg);
 
     _lock();
     struct trace_info *ti = (struct trace_info*)(logbuf + logpos);
@@ -215,6 +218,10 @@ trace_mark_stop(const char *tag){
 
 void
 trace_init(void){
+
+#ifdef TRACE_ALSO2_ITMSWO
+    itm_port_enable( TRACE_ALSO2_ITMSWO );
+#endif
 
     if( logbuf ) return;
 

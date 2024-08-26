@@ -23,6 +23,8 @@ stflash:        machdep/arm_cm/stm32u5/src/stflashimpl.c
 hash:   machdep/arm_cm/stm32f4/src/hash.c
 aes:    machdep/arm_cm/stm32f7/src/aes.c
 
+itmswo: machdep/arm_cm/stm32/src/itmswo.c
+
 # nb. 3 different usb hardwares: host+dev/fs, otg/fs, otg/hs
 
 usbd: usb/usbd.c machdep/arm_cm/stm32/src/usb_otg.c util/trace.c
