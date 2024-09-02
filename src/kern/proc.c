@@ -40,6 +40,14 @@
 #  endif
 #endif
 
+#ifndef MAINT_STACK
+#  define MAINT_STACK STACK_MIN
+#endif
+#ifndef IDLE_STACK
+#  define IDLE_STACK STACK_MIN
+#endif
+
+
 #ifndef TIMESLICE
 #  define TIMESLICE	5
 #endif
@@ -272,10 +280,10 @@ init_proc(proc_t p){
     bootmsg("proc starting: init");
 
     /* start maint proc in a child process */
-    start_proc(256, sysmaint, "sysmaint");
+    start_proc(MAINT_STACK, sysmaint, "sysmaint");
     bootmsg(" sysmaint");
 
-    idle_proc = start_proc(256, idleloop, "idleloop");
+    idle_proc = start_proc(IDLE_STACK, idleloop, "idleloop");
     bootmsg(" idleloop" );
 
     bootmsg("\nproc starting multiuser\n");

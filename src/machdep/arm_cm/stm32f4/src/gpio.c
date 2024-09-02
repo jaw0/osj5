@@ -16,16 +16,44 @@
 
 
 void
-gpio_init(int pin, int mode){
+_gpio_config(int pin, int mode){
+    GPIO_TypeDef *addr = _gpio_addr(pin);
+    if( !addr ) return;
+
+    int io  = pin >> 4;
+    pin &= 0xF;
+    int pos = (pin & 0x7) << 2;
+
+    addr->MODER   &= ~( 3 << (pin*2) );
+    addr->PUPDR   &= ~( 3 << (pin*2) );
+    addr->OSPEEDR &= ~( 3 << (pin*2) );
+
+    addr->MODER   |= (mode&3) << (pin*2);
+    addr->PUPDR   |= ((mode>>5) & 3) << (pin*2);
+    addr->OSPEEDR |= ((mode>>3) & 3) << (pin*2);
+
+    addr->OTYPER  &= ~( 1<<pin );
+    addr->OTYPER  |= ((mode>>2) & 1) << pin;
+
+    if( pin >= 8 ){
+        addr->AFRH &= ~(0xF << pos);
+        addr->AFRH |= ((mode>>8) & 0xF) << pos;
+    }else{
+        addr->AFRL &= ~(0xF << pos);
+        addr->AFRL |= ((mode>>8) & 0xF) << pos;
+    }
+
+    addr->BSRR = 0x10000 << pin;	// off
+
+}
+
+void
+_gpio_init(int pin, int mode){
 
     GPIO_TypeDef *addr = _gpio_addr(pin);
     if( !addr ) return;
 
-    int plx = splhigh();
     int io  = pin >> 4;
-
-    pin &= 0xF;
-    int pos = (pin & 0x7) << 2;
 
 #if defined(PLATFORM_STM32F4) || defined(PLATFORM_STM32F7)
     RCC->AHB1ENR |= 1 << io;
@@ -51,26 +79,12 @@ gpio_init(int pin, int mode){
 #  error "unknown platform"
 #endif
 
-    addr->MODER   &= ~( 3 << (pin*2) );
-    addr->PUPDR   &= ~( 3 << (pin*2) );
-    addr->OSPEEDR &= ~( 3 << (pin*2) );
-
-    addr->MODER   |= (mode&3) << (pin*2);
-    addr->PUPDR   |= ((mode>>5) & 3) << (pin*2);
-    addr->OSPEEDR |= ((mode>>3) & 3) << (pin*2);
-
-    addr->OTYPER  &= ~( 1<<pin );
-    addr->OTYPER  |= ((mode>>2) & 1) << pin;
-
-    if( pin >= 8 ){
-        addr->AFRH &= ~(0xF << pos);
-        addr->AFRH |= ((mode>>8) & 0xF) << pos;
-    }else{
-        addr->AFRL &= ~(0xF << pos);
-        addr->AFRL |= ((mode>>8) & 0xF) << pos;
-    }
-
-    addr->BSRR = 0x10000 << pin;	// off
-    splx(plx);
+    _gpio_config(pin, mode);
 }
 
+void
+gpio_init(int pin, int mode){
+    int plx = splhigh();
+    _gpio_init( pin, mode );
+    splx(plx);
+}

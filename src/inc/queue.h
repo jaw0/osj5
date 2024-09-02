@@ -50,7 +50,7 @@ qpush(struct queue *q, int c){
     if( q->len >= q->size ) return -1;
 
     q->d[ q->head ++ ] = c;
-    q->head %= q->size;
+    if( q->head >= q->size ) q->head = 0;
     q->len ++;
     return 0;
 }
@@ -78,7 +78,7 @@ qpop(struct queue *q){
     if( q->len <= 0 ) return -1;
 
     int c = q->d[ q->tail ++ ];
-    q->tail %= q->size;
+    if( q->tail >= q->size ) q->tail = 0;
     q->len --;
 
     if( q->len == 0 ) q->head = q->tail = 0;

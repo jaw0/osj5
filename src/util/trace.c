@@ -52,18 +52,6 @@ struct trace_info {
 
 /****************************************************************/
 
-static inline void
-_lock(void){
-    irq_disable();
-}
-
-static inline void
-_unlock(void){
-    irq_enable();
-}
-
-/****************************************************************/
-
 static int
 printffnc(char **a, char c){
 
@@ -84,7 +72,7 @@ trace_msgf(const char *fmt, ...){
 
     if( !ROOMFOR(64) ) return;	// XXX ~
 
-    _lock();
+    int plx = splhigh();
     struct trace_info *ti = (struct trace_info*)(logbuf + logpos);
     ti->type = LRT_MSG;
     ti->when = TRACE_CLOCK();
@@ -98,7 +86,7 @@ trace_msgf(const char *fmt, ...){
     ti->len = l;
 
     logpos += SPACEFOR(l);
-    _unlock();
+    splx(plx);
 }
 
 void
@@ -107,7 +95,7 @@ trace_data(const char *tag, const char *evt, int len, const char *dat){
     if( !logbuf ) return;
     if( !ROOMFOR(len + sizeof(struct trace_info)) ) return;
 
-    _lock();
+    int plx = splhigh();
     struct trace_info *ti = (struct trace_info*)(logbuf + logpos);
     ti->type = LRT_DATA;
     ti->tag  = tag;
@@ -119,7 +107,7 @@ trace_data(const char *tag, const char *evt, int len, const char *dat){
     memcpy(p, dat, len);
 
     logpos += SPACEFOR(len);
-    _unlock();
+    splx(plx);
 
 }
 
@@ -132,7 +120,7 @@ trace_fdata(const char *tag, const char *fmt, int narg, ...){
 
     va_start(ap, narg);
 
-    _lock();
+    int plx = splhigh();
     struct trace_info *ti = (struct trace_info*)(logbuf + logpos);
     ti->type = LRT_FDATA;
     ti->tag  = tag;
@@ -144,7 +132,7 @@ trace_fdata(const char *tag, const char *fmt, int narg, ...){
     memcpy(p, ap, narg * sizeof(int));
 
     logpos += SPACEFOR(narg * sizeof(int));
-    _unlock();
+    splx(plx);
 
 }
 
@@ -160,7 +148,7 @@ trace_crumb(const char *tag, const char *evt, int narg, ...){
     if( !logbuf ) return;
     if( !ROOMFOR(SPACEFOR(narg * sizeof(int))) ) return;
 
-    _lock();
+    int plx = splhigh();
     struct trace_info *ti = (struct trace_info*)(logbuf + logpos);
     ti->type = LRT_CRUMB;
     ti->tag  = tag;
@@ -172,7 +160,7 @@ trace_crumb(const char *tag, const char *evt, int narg, ...){
     memcpy(p, ap, narg * sizeof(int));
 
     logpos += SPACEFOR(narg * sizeof(int));
-    _unlock();
+    splx(plx);
 }
 
 void
@@ -182,7 +170,7 @@ trace_mark_start(const char *tag){
     if( !logbuf ) return;
     if( !ROOMFOR(0) ) return;
 
-    _lock();
+    int plx = splhigh();
     struct trace_info *ti = (struct trace_info*)(logbuf + logpos);
     ti->type = LRT_MARK_START;
     ti->tag  = tag;
@@ -191,7 +179,7 @@ trace_mark_start(const char *tag){
     ti->msg  = 0;
 
     logpos += SPACEFOR(0);
-    _unlock();
+    splx(plx);
 }
 
 void
@@ -201,7 +189,7 @@ trace_mark_stop(const char *tag){
     if( !logbuf ) return;
     if( !ROOMFOR(0) ) return;
 
-    _lock();
+    int plx = splhigh();
     struct trace_info *ti = (struct trace_info*)(logbuf + logpos);
     ti->type = LRT_MARK_STOP;
     ti->tag  = tag;
@@ -210,7 +198,7 @@ trace_mark_stop(const char *tag){
     ti->msg  = 0;
 
     logpos += SPACEFOR(0);
-    _unlock();
+    splx(plx);
 }
 
 
@@ -225,18 +213,18 @@ trace_init(void){
 
     if( logbuf ) return;
 
-    _lock();
+    int plx = splhigh();
     logbuf  = malloc(TRACE_BUFSIZE);
     logsize = TRACE_BUFSIZE;
-    _unlock();
+    splx(plx);
 }
 
 void
 trace_reset(void){
 
-    _lock();
+    int plx = splhigh();
     logpos = 0;
-    _unlock();
+    splx(plx);
 }
 
 int

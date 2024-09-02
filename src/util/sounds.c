@@ -17,11 +17,14 @@
 int volume_setting = 5;
 int volume         = 16;
 
+#ifndef HWCF_AFUNC_AUDIO
+#  define HWCF_AFUNC_AUDIO 2
+#endif
 
 void
 sounds_init(void){
 
-    gpio_init( HWCF_GPIO_AUDIO,    GPIO_AF(2) | GPIO_SPEED_2MHZ );
+    gpio_init( HWCF_GPIO_AUDIO,    GPIO_AF(HWCF_AFUNC_AUDIO) | GPIO_SPEED_2MHZ );
     pwm_init(  HWCF_TIMER_AUDIO,   440, 255 );
     pwm_set(   HWCF_TIMER_AUDIO,   0 );
 
