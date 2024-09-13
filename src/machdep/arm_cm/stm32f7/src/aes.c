@@ -31,6 +31,7 @@ static int crypto_inbuf;
 static int crypto_bufsz;
 static int crypto_insz;
 static int crypto_aadsz;
+static int crypto_outpend;
 static int crypto_outlen;
 static u_long* crypto_outbuf;
 
@@ -53,12 +54,17 @@ aes_init(void){
 static void
 _reset_crypto(void){
 
+#ifdef PLATFORM_STM32U5
+    AES->CR  &= ~ 0xFF0D787F;
+#else
     AES->CR  &= ~ 0x57FFF;
+#endif
     AES->CR |= 2 << 1; // byte mode
 
-    crypto_inbuf = 0;
-    crypto_bufsz = 0;
-    crypto_insz  = 0;
+    crypto_inbuf   = 0;
+    crypto_bufsz   = 0;
+    crypto_insz    = 0;
+    crypto_outpend = 0;
 }
 
 static void
@@ -100,20 +106,23 @@ _set_key(const u_char *key, int keylen){
         AES->CR |= 1 << 18; // 256 bit key
     }
 
-    int *k = (int*)key;
+    if( key ){
+        int *k = (int*)key;
 
-    if( keylen >= 32 ){
-        AES->KEYR7 = __REV( *k ++ );
-        AES->KEYR6 = __REV( *k ++ );
-        AES->KEYR5 = __REV( *k ++ );
-        AES->KEYR4 = __REV( *k ++ );
+        if( keylen >= 32 ){
+            AES->KEYR7 = __REV( *k ++ );
+            AES->KEYR6 = __REV( *k ++ );
+            AES->KEYR5 = __REV( *k ++ );
+            AES->KEYR4 = __REV( *k ++ );
+        }
+
+        AES->KEYR3 = __REV( *k ++ );
+        AES->KEYR2 = __REV( *k ++ );
+        AES->KEYR1 = __REV( *k ++ );
+        AES->KEYR0 = __REV( *k ++ );
+    }else{
+        AES->CR |= 2 << 24; // shared from SAES
     }
-
-    AES->KEYR3 = __REV( *k ++ );
-    AES->KEYR2 = __REV( *k ++ );
-    AES->KEYR1 = __REV( *k ++ );
-    AES->KEYR0 = __REV( *k ++ );
-
 #ifdef PLATFORM_STM32U5
     _wait_keyvalid();
 #endif
@@ -268,23 +277,45 @@ static void
 _crypto_output(){
 
     _wait_ccf();
-    if( crypto_outbuf == 0 ) return;
-    *crypto_outbuf ++ = AES->DOUTR;
-    *crypto_outbuf ++ = AES->DOUTR;
-    *crypto_outbuf ++ = AES->DOUTR;
-    *crypto_outbuf ++ = AES->DOUTR;
-
-    crypto_outlen -= 16;
+    if( (crypto_outbuf == 0) || (crypto_outlen < 16) ){
+        int x;
+        x = AES->DOUTR;
+        x = AES->DOUTR;
+        x = AES->DOUTR;
+        x = AES->DOUTR;
+    }else{
+        *crypto_outbuf ++ = AES->DOUTR;
+        *crypto_outbuf ++ = AES->DOUTR;
+        *crypto_outbuf ++ = AES->DOUTR;
+        *crypto_outbuf ++ = AES->DOUTR;
+        crypto_outlen  -= 16;
+    }
+    crypto_outpend -= 16;
 }
 
 static inline void
 _crypto_maybe_output(){
 
-    if( crypto_insz == 0 )   return;
-    if( crypto_insz & 0xF )  return;
+    if( crypto_outpend != 16 ) return;
     _crypto_output();
 }
 
+void
+crypto_one_block(const u_long *in, u_long *out){
+
+    AES->DINR = *in ++;
+    AES->DINR = *in ++;
+    AES->DINR = *in ++;
+    AES->DINR = *in ++;
+    _wait_ccf();
+    *out ++ = AES->DOUTR;
+    *out ++ = AES->DOUTR;
+    *out ++ = AES->DOUTR;
+    *out ++ = AES->DOUTR;
+
+    crypto_outpend = 0;
+    crypto_insz += 16;
+}
 
 void
 crypto_add(const u_long *in, int inlen){
@@ -306,9 +337,11 @@ crypto_add(const u_long *in, int inlen){
         if( crypto_bufsz >= 4 ){
             _crypto_maybe_output();
             AES->DINR     = crypto_inbuf;
+            crypto_inbuf = 0;
             crypto_bufsz = 0;
             crypto_inbuf = 0;
             crypto_insz += 4;
+            crypto_outpend += 4;
         }
     }
 
@@ -316,6 +349,7 @@ crypto_add(const u_long *in, int inlen){
         _crypto_maybe_output();
         AES->DINR = *in ++;
         crypto_insz +=4;
+        crypto_outpend += 4;
     }
 
     // save remaining partial
@@ -344,27 +378,32 @@ _crypto_flush_input(int use_pkcs){
 
     if( crypto_bufsz ){
         switch( crypto_bufsz ){
-        case 3: crypto_inbuf |= pl << 16; // and fall through
-        case 2: crypto_inbuf |= pl << 8;  // and fall through
-        case 1: crypto_inbuf |= pl;
+        case 1: crypto_inbuf |= pl << 8;  // and fall through
+        case 2: crypto_inbuf |= pl << 16; // and fall through
+        case 3: crypto_inbuf |= pl << 24;
             break;
         }
 
         _crypto_maybe_output();
         AES->DINR  = crypto_inbuf;
         crypto_insz += 4;
-        len -= crypto_bufsz;
+        crypto_outpend += 4;
+        len += 4 - crypto_bufsz;
+        crypto_inbuf = 0;
+        crypto_bufsz = 0;
     }
 
     // pad?
     if( len ){
-        crypto_inbuf = 0x01010101 * pl;
-        for( ; len > 0; len -= 4 ){
+        crypto_inbuf = use_pkcs ? 0x01010101 * pl : 0;
+        for( ; len < crypto_blksz; len += 4 ){
             _crypto_maybe_output();
             AES->DINR  = crypto_inbuf;
             crypto_insz += 4;
+            crypto_outpend += 4;
         }
     }
+
 
 }
 
@@ -412,13 +451,16 @@ crypto_gcm_start(const u_char *key, int keylen, const u_char *iv, int ivlen){
 void
 crypto_gcm_encrypt(u_char *out, int outlen){
 
+    crypto_aadsz  = crypto_insz + crypto_bufsz;
+    // printf(">>e aadsz %d\n", crypto_aadsz);
+
     _crypto_flush_input(0);
     _crypto_maybe_output();
 
-    crypto_aadsz  = crypto_insz;
     crypto_insz   = 0;
     crypto_outbuf = out;
     crypto_outlen = outlen;
+    crypto_outpend = 0;
 
     AES->CR &= ~ (3<<13);
     AES->CR |= 2 << 13; // CCMPH = payload phase (2)
@@ -429,13 +471,16 @@ crypto_gcm_encrypt(u_char *out, int outlen){
 void
 crypto_gcm_decrypt(u_char *out, int outlen){
 
+    crypto_aadsz  = crypto_insz + crypto_bufsz;
+    // printf(">>d aadsz %d\n", crypto_aadsz);
+
     _crypto_flush_input(0);
     _crypto_maybe_output();
 
-    crypto_aadsz  = crypto_insz;
     crypto_insz   = 0;
     crypto_outbuf = out;
     crypto_outlen = outlen;
+    crypto_outpend = 0;
 
     AES->CR &= ~ (3<<13);
     AES->CR |= 2 << 13; // CCMPH = payload phase (2)
@@ -474,6 +519,8 @@ crypto_gcm_final(u_char *out, int outlen){
     AES->DINR = 0;
     AES->DINR = __REV( crypto_insz << 3 );
 #endif
+
+    printf("aadsz %d, insz %d\n", crypto_aadsz, crypto_insz);
 
     // wait for it
     _wait_ccf();
@@ -668,6 +715,11 @@ DEFUN(cryptotest, "crypto test")
 
     return 0;
 
+    // expect
+    //   8A18.2ADC.E7D1.8072.ED6A.215E.4C85.EB4B.0DAE.2ECD.9B59.01BC.C28B.9C7A.152B.ABE4
+    //   0000.0000.0000.0000.0000.0000.0000.0000.0000.0000.0000.0000.0000.0000.0000.0000
+
+
     // F415:
     // 8A18.2ADC.E7D1.8072.ED6A.215E.4C85.EB4B.0DAE.2ECD.9B59.01BC.C28B.9C7A.152B.ABE4
     // E084.9364.64B4.C4BC.E146.917B.C176.DBC9.D51E.480E.1B32.CC77.CFEA.0D9A.C517.0737 (?)
@@ -695,7 +747,8 @@ DEFUN(gcmtest, "crypto test")
 
     printf("%32,.4H\n", buf);
     printf("%16,.4H\n", mac);
-
+    sleep(1);
+    
     // expect:
     // 3BC0.9531.C63C.8370.768A.8469.B7F0.E391.C770.677C.8C22.8DB2.396A.2ECB.8BEA.0E7B
     // 395B.25BC.AE7C.8BDB.867B.55B7.4CB8.DB3F

@@ -22,6 +22,7 @@ stflash:        machdep/arm_cm/stm32u5/src/stflashimpl.c
 
 hash:   machdep/arm_cm/stm32f4/src/hash.c
 aes:    machdep/arm_cm/stm32f7/src/aes.c
+saes:   machdep/arm_cm/stm32u5/src/saes.c
 
 itmswo: machdep/arm_cm/stm32/src/itmswo.c
 

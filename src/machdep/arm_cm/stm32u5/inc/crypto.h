@@ -29,5 +29,10 @@
 #define CRYPTO_ALG_AES_CCM	4
 #endif
 
+#define SAES_KEY_DHUK		1
+#define SAES_KEY_BHK		2
+#define SAES_KEY_XOR		4
+#define SAES_KEY_TEST		7
+
 
 #endif /* __osj5_stm32f7_crypto_h__ */
