@@ -446,6 +446,42 @@ crypto_gcm_start(const u_char *key, int keylen, const u_char *iv, int ivlen){
     crypto_outlen = 0;
 }
 
+void
+crypto_gcm_encrypt_start(const u_char *key, int keylen, const u_char *iv, int ivlen){
+    crypto_gcm_start(key, keylen, iv, ivlen);
+}
+
+void
+crypto_gcm_decrypt_start(const u_char *key, int keylen, const u_char *iv, int ivlen){
+
+    _reset_crypto();
+
+    _set_key(key, keylen);
+    _set_iv(iv, ivlen);
+    // IV = iv<96 bits> . counter<32 bits> : counter starts at 2
+    AES->IVR0 = 2;
+
+    // (only) when using an SAES shared key, this needs to be done now:
+    AES->CR |= 2<<3;	// decrypt mode
+
+    AES->CR &= ~(3 << 1); // clear datatype
+    AES->CR |= 3 << 5; 	// GCM Mode
+    AES->CR |= 1;	// enable
+
+    _wait_ccf();
+
+    AES->CR |= (2 << 1); // byte mode
+
+    // AAD phase
+    AES->CR |= 1 << 13; // CCMPH = header phase (1)
+    AES->CR |= 1;	// enable
+
+    crypto_blksz = 16;
+    crypto_aadsz = 0;
+    crypto_outbuf = 0;
+    crypto_outlen = 0;
+}
+
 
 
 void

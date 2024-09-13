@@ -219,7 +219,7 @@ DEFUN(testwkey, 0)
 
     // decrypt
     // crypto_gcm_start(test_1, keylen, zero128, 16); // works ok
-    crypto_gcm_start(0, keylen, zero128, 16);	// key, iv
+    crypto_gcm_decrypt_start(0, keylen, zero128, 16);	// key, iv
     // AAD
     crypto_add(azero128, 16 );
 
@@ -230,15 +230,7 @@ DEFUN(testwkey, 0)
     printf("%32,.4H\n", out);
     printf("%16,.4H\n", mac);
 
-    // ****************************************************************
-    // mac error:
-    //   6100.0000.0000.0000.0000.0000.0000.0000.6100.0000.0000.0000.0000.0000.0000.0000
-    //   E9E4.77AB.B219.3FA0.702B.9768.6D6E.17BE
-
-    //   ^mac == mac of encrypting instead of decrypting
-    // ****************************************************************
-
-    // results are correct, if using the key directly for decrypt (not via saes)
+    // expect:
     //   6100.0000.0000.0000.0000.0000.0000.0000.6100.0000.0000.0000.0000.0000.0000.0000
     //   65C5.4A9C.77D0.743C.AE51.E77E.86E9.8A76
 
