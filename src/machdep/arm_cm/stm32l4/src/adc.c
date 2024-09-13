@@ -38,6 +38,9 @@ _adc_addr(int adc){
 #ifdef ADC3
     case 2:	return (ADC_TypeDef*)ADC3;
 #endif
+#ifdef ADC4
+    case 3:	return (ADC_TypeDef*)ADC4;
+#endif
     default:
         PANIC("invalid ADC");
     }
@@ -46,12 +49,17 @@ _adc_addr(int adc){
 static inline void
 _adc12_conf_gpio(int cn){
 
-    if( cn < 5 )  return;  // internal Vref on 0
-    if( cn > 16 ) return;  // internal Temp on 17, Vbat on 18
+    if( cn < 1 )  return;  // internal Vref on 0
+    if( cn > 17 ) return;  // internal Temp on 17, Vbat on 18
 
-    if( cn < 13 ){
+    if( cn < 5 ){
+        gpio_init( GPIO_C0 + cn - 1, GPIO_ANALOG );
+    } else if( cn < 13 ){
         // adc5..12 -> A0..7
         gpio_init( GPIO_A0 + cn - 5, GPIO_ANALOG );
+    }else if( cn < 15 ){
+        // adc13,14 -> C4,5
+        gpio_init( GPIO_C0 + cn - 9,  GPIO_ANALOG );
     }else if( cn < 17 ){
         // adc15,16 -> B0,1
         gpio_init( GPIO_B0 + cn - 15,  GPIO_ANALOG );
@@ -60,11 +68,17 @@ _adc12_conf_gpio(int cn){
     }
 }
 
+static const int prescale[] = {
+    1, 2, 4, 6, 8, 10, 12, 16, 32, 64, 128, 256
+};
 
 void
 adc_init(int chan, int samp){
     ADC_TypeDef *dev = _adc_addr(chan);
     int cn = chan & 0x1F;
+    int i;
+
+    if( !dev ) return;
 
 #ifdef PLATFORM_STM32U5
     RCC->AHB2ENR1 |= 1<<10;
@@ -72,39 +86,53 @@ adc_init(int chan, int samp){
     RCC->AHB2ENR |= 1<<13;
 #endif
 
-    switch(chan>>5){
-    case 0:
-        if( cn < 16 )
-            _adc12_conf_gpio( cn );
-        break;
-    default:
-        PANIC("invalid ADC");
-    }
+    if( (chan >> 5) < 3 )
+        _adc12_conf_gpio( cn );
 
     // adc starts in deep sleep - wake it, enable regulator
     if( dev->CR & CR_DEEPPWD ){
         dev->CR &= ~CR_DEEPPWD;
         dev->CR |= CR_ADVREGEN;
-        // must wait 20us
-        int i=1600;
-        while(i-->0){
+
+#ifdef PLATFORM_STM32U5
+        // wait for it
+        while( (dev->ISR & ADC_ISR_LDORDY) == 0) {}
+#else
+        // no rdy bit, must wait 20us
+        i=1600;
+        while(i-- > 0){
             __asm("nop");
+        }
+#endif
+
+        // configure clock prescaler
+        COMMON->CCR &= ~(0xF << 18);
+
+        for(i=0; i<12; i++){
+            if( ADCMAX * prescale[i] >= ahb_clock_freq() ){
+                COMMON->CCR |= i << 18;
+                break;
+            }
         }
 
         // use default clock (from RCC)
         // enable vref, temp
-        COMMON->CCR = (0<<16) | (0<<18) | (3 <<22);
+        COMMON->CCR |= (7 <<22);
 
         dev->ISR = 0;
 
-        ADC1->CR |= 1<<31; // calibrate
-        while( ADC1->CR & (1<<31) ){}
+        dev->CR |= 1<<31; // calibrate
+        while( dev->CR & (1<<31) ){}
 
         dev->CR |= CR_ADON;	/* enable */
         while( (dev->ISR & SR_ARDY) == 0 ){} // wait for it
     }
 
     chan &= 0x1F;
+
+#ifdef PLATFORM_STM32U5
+    dev->PCSEL |= 1 << chan;
+#endif
 
     if( samp > 7 ) samp = 7;
 
@@ -118,10 +146,19 @@ adc_init(int chan, int samp){
     }
 }
 
+/* init channel on ADC1+2 */
+void
+adc_init2(int chan, int samp){
+    adc_init(chan, samp);
+    adc_init(chan + ADC_2_0, samp);
+}
+
 
 int
 adc_get(int chan){
     ADC_TypeDef *dev = _adc_addr(chan);
+
+    chan &= 0x1F;
 
     int v = dev->DR;	// clear any previous result
     dev->SQR1 = chan << 6;
@@ -137,3 +174,28 @@ adc_get(int chan){
     return dev->DR;
 }
 
+// dual simultaneous ADC
+int
+adc_get2(int chan1, int chan2){
+    chan1 &= 0x1F;
+    chan2 &= 0x1F;
+
+    int v = ADC1->DR;	// clear any previous result
+    v = ADC2->DR;
+
+    ADC1->SQR1 = chan1 << 6;
+    ADC2->SQR1 = chan2 << 6;
+
+    COMMON->CCR  |= 6;	// simultaneous regular mode
+    ADC1->CR |= CR_START;
+
+    while(1){
+        // ~ 2usec
+        if( (ADC1->ISR & SR_EOC) && (ADC2->ISR & SR_EOC) ) break;
+    }
+
+    COMMON->CCR &= ~0xF;	// disable simultaneous mode
+
+    // NB: CDR is only available using DMA
+    return (ADC1->DR & 0xFFFF) | (ADC2->DR << 16);
+}
