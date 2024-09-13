@@ -124,6 +124,7 @@ extern void putWord(u_short);
 extern u_char getByte(void);
 extern u_short getWord(void);
 extern int fclose(FILE *);
+extern void fputs(const char *, FILE *);
 extern int fread(FILE*, char*, int);
 extern int fwrite(FILE*, const char*, int);
 extern int fbread(FILE*, char*, int, offset_t);

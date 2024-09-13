@@ -26,6 +26,11 @@ queue_init_buf(struct queue *q, QUEUE_TYPE *d, int size){
 }
 
 static void
+queue_reset(struct queue *q){
+    q->head = q->tail = q->len = 0;
+}
+
+static void
 queue_init(struct queue *q, int size){
     QUEUE_TYPE *d = malloc(size * sizeof(QUEUE_TYPE));
     if( !d ){
@@ -131,7 +136,7 @@ qread(struct queue *q, QUEUE_TYPE *dst, int maxlen){
 }
 
 static int
-qxfer(struct queue *src, struct queue *dst){
+qxfer(struct queue *src, struct queue *dst, int len){
     int r, n = 0;
 
     if( qempty(src) ) return n;
@@ -140,23 +145,28 @@ qxfer(struct queue *src, struct queue *dst){
     // tail .. end
     int s = src->size - src->tail;
     if( s > src->len ) s = src->len;
+    if( s > len ) s = len;
     r = qwrite(dst, src->d + src->tail, s);
     src->tail += r;
     if( src->tail == src->size ) src->tail = 0;
     src->len -= r;
+    len -= r;
     n += r;
 
+    if( len == 0 )    return n;
     if( qempty(src) ) return n;
     if( qfull(dst)  ) return n;
 
     // start .. head
     s = src->size - src->tail;
     if( s > src->len ) s = src->len;
+    if( s > len ) s = len;
     r = qwrite(dst, src->d + src->tail, s);
     src->tail += r;
     if( src->tail == src->size ) src->tail = 0;
     src->len -= r;
     n += r;
+    len -= s;
 
     return n;
 }

@@ -26,6 +26,10 @@
 #define ADC_1_16	0x10
 #define ADC_1_17	0x11
 #define ADC_1_18	0x12
+#define ADC_1_19	0x13
+#define ADC_1_20	0x14
+#define ADC_1_21	0x15
+#define ADC_1_22	0x16
 
 #define ADC_2_0		0x20
 #define ADC_2_1		0x21
@@ -43,6 +47,13 @@
 #define ADC_2_13	0x2D
 #define ADC_2_14	0x2E
 #define ADC_2_15	0x2F
+#define ADC_2_16	0x30
+#define ADC_2_17	0x31
+#define ADC_2_18	0x32
+#define ADC_2_19	0x33
+#define ADC_2_20	0x34
+#define ADC_2_21	0x35
+#define ADC_2_22	0x36
 
 #define ADC_3_0		0x40
 #define ADC_3_1		0x41
@@ -60,8 +71,40 @@
 #define ADC_3_13	0x4D
 #define ADC_3_14	0x4E
 #define ADC_3_15	0x4F
+#define ADC_3_16	0x50
+#define ADC_3_17	0x51
+#define ADC_3_18	0x52
+#define ADC_3_19	0x53
+#define ADC_3_20	0x54
+#define ADC_3_21	0x55
+#define ADC_3_22	0x56
+
+#define ADC_4_0		0x60
+#define ADC_4_1		0x61
+#define ADC_4_2		0x62
+#define ADC_4_3		0x63
+#define ADC_4_4		0x64
+#define ADC_4_5		0x65
+#define ADC_4_6		0x66
+#define ADC_4_7		0x67
+#define ADC_4_8		0x68
+#define ADC_4_9		0x69
+#define ADC_4_10	0x6A
+#define ADC_4_11	0x6B
+#define ADC_4_12	0x6C
+#define ADC_4_13	0x6D
+#define ADC_4_14	0x6E
+#define ADC_4_15	0x6F
+#define ADC_4_16	0x70
+#define ADC_4_17	0x71
+#define ADC_4_18	0x72
+#define ADC_4_19	0x73
+#define ADC_4_20	0x74
+#define ADC_4_21	0x75
+#define ADC_4_22	0x76
 
 void adc_init(int, int);
+void adc_init2(int, int);
 int adc_get(int);
 int adc_get2(int, int);
 

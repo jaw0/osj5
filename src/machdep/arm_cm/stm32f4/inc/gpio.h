@@ -242,6 +242,15 @@ gpio_clear(int pin){
     _gpio_addr(pin)->BSRR = 0x10000 << (pin&0xF);
 }
 
+static inline void
+gpio_setv(int pin, int v){
+    if(v)
+        _gpio_addr(pin)->BSRR = 1 << (pin&0xF);
+    else
+        _gpio_addr(pin)->BSRR = 0x10000 << (pin&0xF);
+}
+
+
 static inline int
 gpio_get(int pin){
     return (_gpio_addr(pin)->IDR & (1 << (pin&0xF))) ? 1 : 0;
